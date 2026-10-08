@@ -241,14 +241,14 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=$HOME/path/to/your/vault"],
           "timeout": 60000
         }
       }
     }
     ```
 
-    `timeout` is in milliseconds. [Gemini CLI MCP docs](https://www.geminicli.com/docs/tools/mcp-server).
+    Gemini expands `$VAR` in the string values of `settings.json`, so `$HOME` works inside `args`; `timeout` is in milliseconds. [Gemini CLI MCP docs](https://www.geminicli.com/docs/tools/mcp-server).
 
 ??? info "Warp"
 
