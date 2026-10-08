@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 40 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 45 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-40 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+45 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -778,6 +778,89 @@ Response fields:
 
 > *"Use `index_status` to check whether semantic search is ready and see how many chunks were skipped in the last reindex."*
 
+### `find_broken_links`
+
+Scan note bodies for `[[wikilinks]]` that do not resolve. A link is broken when its target note does not exist (`note_not_found`, the links the index stores as `_stub/` edges), or when the target exists but lacks the `#heading` (`heading_not_found`) or `#^block` id (`block_not_found`) the link names. Heading matches ignore case, as Obsidian does. Links inside code, embeds, and links to attachments that exist on disk are skipped. Each result gives the source path, the 1-based line in the file, and the raw link text. Read-only.
+
+<!-- GENERATED:tool:find_broken_links -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `folder` | string? | Only scan notes under this folder. |
+| `excludeFolders` | array? | Folders to skip. |
+| `limit` | number? | Max broken links returned. Default 100. |
+<!-- /GENERATED:tool:find_broken_links -->
+
+> *"Use `find_broken_links` to list every link in my Projects folder that points at a missing note or heading."*
+
+### `find_orphaned_notes`
+
+List notes that no other note links to. Self-links do not count, and unresolved link targets (stubs) are not notes. `excludeFolders` hides notes from the result, but links from those folders still count as incoming links. Each result gives the path, the title, and the number of outgoing links, so you can tell a dead end from a hub nobody points at. Read-only.
+
+<!-- GENERATED:tool:find_orphaned_notes -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `folder` | string? | Only report notes under this folder. |
+| `excludeFolders` | array? | Folders whose notes are not reported. Their links still count. |
+| `limit` | number? | Max orphans returned. Default 100. |
+<!-- /GENERATED:tool:find_orphaned_notes -->
+
+> *"Use `find_orphaned_notes` to show notes nothing links to, ignoring my templates folder."*
+
+### `search_and_replace`
+
+Find and replace text in note bodies across the vault or one folder. The pattern is plain text by default; with `regex: true` it is a JavaScript regex where `^`/`$` match at line ends and `$1`, `$<name>` and `$&` expand in the replacement. Frontmatter and fenced code blocks stay untouched unless `includeFrontmatter` or `includeCode` is set. Patterns over 500 characters and patterns with nested quantifiers are refused. `dryRun` defaults to `true` and returns per-file match counts with up to three before/after line samples. A write is refused when more than `maxFiles` files match; files are written atomically and the index refreshes once afterwards.
+
+<!-- GENERATED:tool:search_and_replace -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `pattern` | string | Text to find, or a JavaScript regex when `regex` is true. `^`/`$` match at line ends. |
+| `replacement` | string | Replacement text. With `regex`, `$1`, `$<name>` and `$&` expand. |
+| `regex` | boolean? | Treat `pattern` as a regex. Default false. |
+| `caseSensitive` | boolean? | Default true. |
+| `folder` | string? | Only touch notes under this folder. |
+| `includeFrontmatter` | boolean? | Also replace inside YAML frontmatter. Default false. |
+| `includeCode` | boolean? | Also replace inside fenced code blocks. Default false. |
+| `dryRun` | boolean? | Default true. Pass false to write. |
+| `maxFiles` | number? | Refuse to write when more files match. Default 200. |
+<!-- /GENERATED:tool:search_and_replace -->
+
+> *"Use `search_and_replace` to preview replacing 'Acme Corp' with 'Acme Inc' everywhere, then apply it."*
+
+### `rename_tag`
+
+Rename a tag everywhere: inline `#tag` occurrences in note bodies and entries in the `tags` / `tag` frontmatter keys (lists, flow lists or strings, with or without `#`). Tags match case-insensitively and as whole tags, so `#old` never touches `#older`. With `includeNested` (default `true`), `#old/child` becomes `#new/child`. Tags in code, URL fragments and headings are left alone. `dryRun` defaults to `true` and returns per-file inline and frontmatter counts. Files are written atomically and the index refreshes once afterwards.
+
+<!-- GENERATED:tool:rename_tag -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `from` | string | Tag to rename, `#` optional. Case-insensitive. |
+| `to` | string | New tag name, `#` optional. |
+| `includeNested` | boolean? | Also rename `#from/child` to `#to/child`. Default true. |
+| `dryRun` | boolean? | Default true. Pass false to write. |
+<!-- /GENERATED:tool:rename_tag -->
+
+> *"Use `rename_tag` to rename #proj to #project, including its nested tags."*
+
+### `rename_heading`
+
+Rename one heading in a note and rewrite every link to it across the vault: `[[Note#Old]]`, `[[Note#Old|alias]]`, `![[Note#Old]]` embeds, `[[#Old]]` inside the note itself, and heading paths such as `[[Note#Parent#Old]]`. The tool fails when `from` is not a heading in the note, appears more than once, or when `to` already exists in the note. Returns the files changed and the number of links rewritten; `dryRun: true` reports the same without writing. Files are written atomically and the index refreshes once afterwards.
+
+<!-- GENERATED:tool:rename_heading -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match of the note. |
+| `from` | string | Current heading text, without `#`. |
+| `to` | string | New heading text, without `#`. |
+| `dryRun` | boolean? | If true, report the changes without writing. Default false. |
+<!-- /GENERATED:tool:rename_heading -->
+
+> *"Use `rename_heading` to rename the 'Notes' heading in my Weekly Review note to 'Reflections' and fix the links to it."*
+
 ---
 
 ## Capability matrix
@@ -823,3 +906,8 @@ Response fields:
 | `update_properties` | ✅ | — | ✅ |
 | `reindex` | ✅ | — | — |
 | `index_status` | ✅ | — | — |
+| `find_broken_links` | ✅ | — | — |
+| `find_orphaned_notes` | ✅ | — | — |
+| `search_and_replace` | ✅ | — | ✅ |
+| `rename_tag` | ✅ | — | ✅ |
+| `rename_heading` | ✅ | — | ✅ |

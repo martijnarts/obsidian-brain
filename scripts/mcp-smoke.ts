@@ -60,6 +60,11 @@ const EXPECTED_TOOLS = [
   'list_tasks',
   'set_task_status',
   'ensure_block_id',
+  'find_broken_links',
+  'find_orphaned_notes',
+  'search_and_replace',
+  'rename_tag',
+  'rename_heading',
 ] as const;
 
 const FAST_TIMEOUT_MS = 5_000;
@@ -388,6 +393,31 @@ async function main(): Promise<number> {
 
     await runCall('ensure_block_id (dryRun)', results, () =>
       callTool(client, 'ensure_block_id', { name: 'Welcome', line: 5, dryRun: true }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('find_broken_links', results, () =>
+      callTool(client, 'find_broken_links', { limit: 10 }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('find_orphaned_notes', results, () =>
+      callTool(client, 'find_orphaned_notes', { limit: 10 }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('search_and_replace (dry run)', results, () =>
+      callTool(client, 'search_and_replace', { pattern: 'widget', replacement: 'gizmo' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('rename_tag (dry run)', results, () =>
+      callTool(client, 'rename_tag', { from: 'smoke', to: 'smoked' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('rename_heading (dry run)', results, () =>
+      callTool(
+        client,
+        'rename_heading',
+        { name: 'Widgets', from: 'Widgets', to: 'Widget Notes', dryRun: true },
+        FAST_TIMEOUT_MS,
+      ),
     );
 
     await runCall('create_note', results, () =>
