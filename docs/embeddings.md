@@ -37,9 +37,8 @@ Set one env var and restart. The multilingual path Just Works via transformers.j
   "mcpServers": {
     "obsidian-brain": {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
       "env": {
-        "VAULT_PATH": "/absolute/path/to/your/vault",
         "EMBEDDING_PRESET": "multilingual"
       }
     }

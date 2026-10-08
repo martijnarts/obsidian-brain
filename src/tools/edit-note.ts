@@ -124,6 +124,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
           const previewId = `prev_${randomUUID()}`;
           previewStore.set({
             previewId,
+            vaultPath: ctx.config.vaultPath,
             path: first.nodeId,
             originalContent: original,
             proposedContent: proposed,
@@ -159,7 +160,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
 
       let editMode: EditMode;
       if (isBufferRetry) {
-        const buffered = editBuffer.get(first.nodeId);
+        const buffered = editBuffer.get(join(ctx.config.vaultPath, first.nodeId));
         if (!buffered) {
           throw new Error(
             `No buffered edit found for "${first.nodeId}". Buffer TTL is 30 minutes. Re-issue the edit with explicit content.`,
@@ -194,6 +195,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
         const previewId = `prev_${randomUUID()}`;
         previewStore.set({
           previewId,
+          vaultPath: ctx.config.vaultPath,
           path: first.nodeId,
           originalContent: original,
           proposedContent: applied.next,
@@ -219,7 +221,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
           args.search !== undefined
         ) {
           editBuffer.push({
-            path: first.nodeId,
+            path: join(ctx.config.vaultPath, first.nodeId),
             content: args.content,
             search: args.search,
             mode: args.mode,
@@ -231,7 +233,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
       }
 
       // Clear the buffer on successful non-dryRun edit.
-      editBuffer.remove(first.nodeId);
+      editBuffer.remove(join(ctx.config.vaultPath, first.nodeId));
 
       // Also clear on from_buffer success (already covered by remove above,
       // but being explicit improves readability).

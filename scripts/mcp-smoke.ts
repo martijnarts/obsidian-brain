@@ -1,7 +1,7 @@
 /**
  * mcp-smoke.ts — end-to-end stdio smoke test for the obsidian-brain MCP server.
  *
- * Spawns `node dist/server.js` against a throwaway tmp vault, speaks the
+ * Spawns `obsidian-brain server` against a throwaway tmp vault, speaks the
  * JSON-RPC protocol by hand, and calls every registered tool in a realistic
  * order. Exits 0 on all-pass, 1 on any failure.
  *
@@ -21,7 +21,10 @@ import { McpStdioClient, type JsonRpcResponse } from './mcp-client.js';
 // Config
 // ---------------------------------------------------------------------------
 
+const SMOKE_VAULT = 'smoke';
+
 const EXPECTED_TOOLS = [
+  'list_vaults',
   'search',
   'read_note',
   'list_notes',
@@ -172,7 +175,9 @@ function callTool(
   args: Record<string, unknown>,
   timeoutMs: number,
 ): Promise<JsonRpcResponse> {
-  return client.sendRequest('tools/call', { name, arguments: args }, timeoutMs);
+  // Every tool but list_vaults names the vault it works in.
+  const withVault = name === 'list_vaults' ? args : { vault: SMOKE_VAULT, ...args };
+  return client.sendRequest('tools/call', { name, arguments: withVault }, timeoutMs);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +186,7 @@ function callTool(
 
 async function main(): Promise<number> {
   const repoRoot = process.cwd();
-  const serverScript = resolve(repoRoot, 'dist', 'server.js');
+  const serverScript = resolve(repoRoot, 'dist', 'cli', 'index.js');
 
   // Sanity-check the build output up front so we give a clear error instead
   // of a cryptic spawn failure.
@@ -200,11 +205,15 @@ async function main(): Promise<number> {
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    VAULT_PATH: vaultPath,
     DATA_DIR: dataDir,
   };
 
-  const client = new McpStdioClient('node', [serverScript], env, repoRoot);
+  const client = new McpStdioClient(
+    'node',
+    [serverScript, 'server', '--vault', `${SMOKE_VAULT}=${vaultPath}`],
+    env,
+    repoRoot,
+  );
   const results: TestResult[] = [];
 
   try {
@@ -248,6 +257,10 @@ async function main(): Promise<number> {
     }
 
     // ---- tool call sequence ------------------------------------------------
+    await runCall('list_vaults', results, () =>
+      callTool(client, 'list_vaults', {}, FAST_TIMEOUT_MS),
+    );
+
     // reindex first — seeds the graph store. Slow: loads the embedder.
     await runCall('reindex (seed)', results, () => callTool(client, 'reindex', {}, SLOW_TIMEOUT_MS), {
       allowError: false,

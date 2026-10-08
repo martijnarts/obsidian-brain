@@ -42,7 +42,6 @@
   ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
     "cli": "tsx src/cli/index.ts",
     "dev": "tsx src/cli/index.ts server",
     "test": "vitest run",

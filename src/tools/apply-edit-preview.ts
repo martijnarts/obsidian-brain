@@ -15,7 +15,7 @@ export function registerApplyEditPreviewTool(server: McpServer, ctx: ServerConte
     { previewId: z.string().describe('The previewId returned by `edit_note` with `dryRun: true`.') },
     async (args) => {
       const preview = previewStore.get(args.previewId);
-      if (!preview) {
+      if (!preview || preview.vaultPath !== ctx.config.vaultPath) {
         throw new Error(
           `Preview "${args.previewId}" not found or expired (TTL: 5 minutes). Re-run the original edit_note call with dryRun: true to generate a fresh preview.`,
         );

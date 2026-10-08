@@ -4,6 +4,7 @@ import { PreviewStore, type PendingEdit } from '../../src/tools/preview-store.js
 function makePreview(overrides: Partial<PendingEdit> = {}): PendingEdit {
   return {
     previewId: 'prev_test-id',
+    vaultPath: '/vault',
     path: 'note.md',
     originalContent: 'original',
     proposedContent: 'proposed',

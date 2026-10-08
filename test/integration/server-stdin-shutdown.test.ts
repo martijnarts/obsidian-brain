@@ -26,10 +26,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 function spawnServer(vault: string) {
   const cliPath = join(process.cwd(), 'dist', 'cli', 'index.js');
-  return spawn(process.execPath, [cliPath, 'server'], {
+  return spawn(process.execPath, [cliPath, 'server', '--vault', `notes=${vault}`], {
     env: {
       ...process.env,
-      VAULT_PATH: vault,
+      // Keep the index in the temp vault, not in ~/.local/share.
+      DATA_DIR: join(vault, '.obsidian-brain'),
       OBSIDIAN_BRAIN_NO_WATCH: '1',
       OBSIDIAN_BRAIN_NO_CATCHUP: '1',
       // Skip the embedder download for test speed. This also means ONNX
@@ -147,10 +148,9 @@ describe.skipIf(!runRealEmbedder)('server shutdown — real reindex mid-flight (
         );
       }
 
-      const child = spawn(process.execPath, [cliPath, 'server'], {
+      const child = spawn(process.execPath, [cliPath, 'server', '--vault', `notes=${vault}`], {
         env: {
           ...process.env,
-          VAULT_PATH: vault,
           DATA_DIR: dataDir,
           // Force the local default embedder (bge-small-en-v1.5, ~34 MB).
           // Explicit so the test isn't at the mercy of inherited env vars.
@@ -214,7 +214,7 @@ describe.skipIf(!runRealEmbedder)('server shutdown — real reindex mid-flight (
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/call',
-        params: { name: 'reindex', arguments: {} },
+        params: { name: 'reindex', arguments: { vault: 'notes' } },
       };
       child.stdin.write(JSON.stringify(reindexReq) + '\n');
 
@@ -252,7 +252,7 @@ describe.skipIf(!runRealEmbedder)('server shutdown — real reindex mid-flight (
       // the indexer made forward progress before being interrupted —
       // i.e. the shutdown drain actually let committed writes survive
       // instead of slamming the DB closed mid-transaction.
-      const dbPath = join(dataDir, 'kg.db');
+      const dbPath = join(dataDir, 'notes', 'kg.db');
       expect(existsSync(dbPath)).toBe(true);
 
       const require_ = createRequire(import.meta.url);

@@ -54,7 +54,9 @@ Incremental by default — only files whose `mtime` has changed go through parse
 
 ## Why stdio, not HTTP
 
-The single most consequential decision. `src/server.ts:56` instantiates a `StdioServerTransport` and nothing else — there is no HTTP listener, no SSE endpoint, no port binding anywhere in the codebase.
+The single most consequential decision. `obsidian-brain server` speaks stdio by default: `startServer` in `src/server.ts` instantiates a `StdioServerTransport` and nothing else.
+
+The one exception is `obsidian-brain server --transport http` (`src/http-server.ts`), a long-running server for a remote client. It binds to loopback by default and has no authentication of its own, so an authenticating proxy must sit in front of it. Everything below still holds for the default stdio transport.
 
 Arguments for stdio:
 
@@ -62,7 +64,13 @@ Arguments for stdio:
 - **Process lifetime tracks the client.** The MCP host (Claude Desktop, Claude Code, Jan, etc.) spawns the server as a child. When the client exits, the server exits. There is no "I closed Obsidian but the server is still holding a port" failure class, and no orphaned daemons to reap.
 - **Immune to a whole class of MCP transport bugs.** The most topical example is [modelcontextprotocol/rust-sdk#468](https://github.com/modelcontextprotocol/rust-sdk/issues/468): rmcp's Streamable-HTTP client mis-parses SSE frames emitted by TypeScript-SDK servers, so the first request works and every subsequent request fails with "Transport closed." That bug is what causes the aaronsb Obsidian MCP plugin to break when paired with Jan. See [Appendix: the rmcp / SSE bug](#appendix-the-rmcp-sse-bug-in-detail) below.
 
-Tradeoff given up: you cannot run obsidian-brain on a remote host and connect to it over LAN. If you need that topology, wrap the stdio server in `mcp-proxy` or similar — the vault is local anyway, and the desktop MCP client is almost always on the same box, so this rarely bites in practice.
+Tradeoff given up: a stdio server cannot run on a remote host. For that topology, use `--transport http` behind an authenticating proxy.
+
+## Several vaults, one server
+
+`server` takes one or more `--vault <name>=<path>` flags. Each vault gets its own `ServerContext`: DB, embedder, search, writer, pipeline and watcher. `src/vaults.ts` registers every tool once per vault on a capturing shim, then exposes each tool once, with a required `vault` argument whose schema is an enum of the vault names. A call goes to the handler of the vault it names. The tool modules stay single-vault and know nothing of this.
+
+There is no default vault, so a wrong-vault write is always an explicit choice by the caller. `list_vaults` reports each vault and its index state. To give a client only some of the vaults, run a separate server with just those vaults.
 
 ## Why SQLite with FTS5 + sqlite-vec
 
@@ -218,7 +226,7 @@ When to disable (`OBSIDIAN_BRAIN_NO_WATCH=1`): vault on SMB/NFS/iCloud where FSE
 **Write-safety infrastructure.** Three tool modules support the `dryRun` / `apply_edit_preview` / `edits[]` / `from_buffer` flow:
 
 - `src/tools/preview-store.ts` — in-memory `Map<previewId, PendingEdit>` with 5-minute TTL and 50-entry cap. Process-global (stdio MCP is single-client per process).
-- `src/tools/apply-edit-preview.ts` — one of the 18 MCP tools. Reads the cached preview, guards against file-changed-since-preview, writes via temp+rename, reindexes.
+- `src/tools/apply-edit-preview.ts` — one of the MCP tools. Reads the cached preview, guards against file-changed-since-preview, writes via temp+rename, reindexes.
 - `src/tools/edit-buffer.ts` — per-path buffer (30-min TTL, 20-entry cap, 512 KB per entry) of last-failed `replace_window` content for `from_buffer: true` retries.
 - `src/vault/editor.ts` exports `applyEdit` + `bulkEditNote`; the latter chains edit modes in memory and writes atomically at the end.
 - New runtime dependency: `diff@^8` (kpdecker/jsdiff) for unified-diff generation.
@@ -227,9 +235,11 @@ When to disable (`OBSIDIAN_BRAIN_NO_WATCH=1`): vault on SMB/NFS/iCloud where FSE
 
 The directory layout is:
 
-- `src/server.ts` — MCP server bootstrap. Instantiates `McpServer`, wires `StdioServerTransport`, registers every tool, and starts the live watcher.
+- `src/server.ts` — MCP server bootstrap over stdio. Opens the vaults, registers the tools, connects `StdioServerTransport`, and starts the watchers. Exports the per-vault helpers (`registerTools`, `runStartupIndex`, `closeContext`).
+- `src/vaults.ts` — opens, indexes, watches and closes a set of vaults, and `VaultTools`, which adds the required `vault` argument to every tool and routes each call.
+- `src/http-server.ts` — `server --transport http`: the same vaults and tools over stateless streamable HTTP at `/mcp`.
 - `src/config.ts` / `src/context.ts` — env parsing and the shared `ServerContext` object (DB handle, embedder, vault path, pipeline, writer, search) passed to every tool.
-- `src/cli/` — the `obsidian-brain` CLI entry point: `server`, `index`, `watch`, `search` subcommands.
+- `src/cli/` — the `obsidian-brain` CLI entry point: `server`, `http`, `index`, `watch`, `search` subcommands.
 - `src/store/` — SQLite schema and per-table CRUD (`db`, `nodes`, `edges`, `embeddings`, `fulltext`, `communities`, `sync`).
 - `src/embeddings/` — embedder backends (`embedder.ts` for TransformersEmbedder + `ollama.ts` for OllamaEmbedder), the metadata-resolution chain (`metadata-resolver.ts`, `metadata-cache.ts`, `seed-loader.ts`, `hf-metadata.ts`), the user-config layer (`overrides.ts`, `user-config.ts`), the chunker (`chunker.ts`), the auto-recommend heuristic (`auto-recommend.ts`), the preset table (`presets.ts`), the embedder factory (`factory.ts`), and per-model adaptive capacity (`capacity.ts`).
 - `src/graph/` — graph construction (`builder`), centrality (`centrality`), Louvain community detection (`communities`), shortest paths (`pathfinding`), and the graphology-compat shim.

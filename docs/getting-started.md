@@ -19,12 +19,13 @@ Wire obsidian-brain into your MCP client. Example for **Claude Desktop** (`~/Lib
   "mcpServers": {
     "obsidian-brain": {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
-      "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
   }
 }
 ```
+
+`--vault <name>=<path>` tells the server which vault to serve. The name may contain letters, digits, `-` and `_`. Repeat the flag to serve several vaults; every tool then takes a `vault` argument naming one of them, and `list_vaults` lists them.
 
 Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 
@@ -40,12 +41,11 @@ No system-level prerequisites beyond Node 22.12+. The `better-sqlite3`, `sqlite-
 
 ## Environment variables
 
-All configuration is via environment variables. Only `VAULT_PATH` is required.
+The vaults are given with `--vault <name>=<path>` flags on `obsidian-brain server`. Everything else is configured with environment variables, and none of them is required. The `index`, `watch` and `search` subcommands still read the vault from `VAULT_PATH`.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `VAULT_PATH` | **yes** | — | Absolute path to the vault (folder of `.md` files). |
-| `DATA_DIR` | no | `$XDG_DATA_HOME/obsidian-brain` or `$HOME/.local/share/obsidian-brain` | Where the SQLite index + embedding cache live. |
+| `DATA_DIR` | no | `$XDG_DATA_HOME/obsidian-brain` or `$HOME/.local/share/obsidian-brain` | Where the SQLite indexes + embedding cache live. Each vault's index is `<DATA_DIR>/<name>/kg.db`. |
 | `EMBEDDING_PRESET` | no | `english` | Preset name. Options: `english` (default), `english-fast`, `english-quality`, `multilingual`, `multilingual-quality`, `multilingual-ollama`. See [Models](models.md) for the full table. Ignored if `EMBEDDING_MODEL` is set. |
 | `EMBEDDING_MODEL` | no | *(resolved from preset)* | Power-user override: any transformers.js checkpoint (with `EMBEDDING_PROVIDER=transformers`) or Ollama model name (with `EMBEDDING_PROVIDER=ollama`). Takes precedence over `EMBEDDING_PRESET`. Switching models (or providers) triggers an automatic reindex on next boot — no `--drop` required. |
 | `EMBEDDING_PROVIDER` | no | `transformers` | Embedder backend: `transformers` (local, zero setup) or `ollama` (routes through a local Ollama server via `/api/embeddings`). |
@@ -62,13 +62,13 @@ All configuration is via environment variables. Only `VAULT_PATH` is required.
 | `OBSIDIAN_BRAIN_DEBUG` | no | unset | Set to `1` for a verbose synchronous startup trace on stderr — every preflight, createContext, server.connect, and shutdown step is logged with a monotonic timestamp. The last line before any silent failure pinpoints exactly which step the server reached. No-op when unset (zero output, zero overhead). Diagnostic-only — leave unset under normal use. |
 | `OBSIDIAN_BRAIN_LOG_FORMAT` | no | unset | Set to `ndjson` for one-JSON-object-per-line stderr output (timestamp + level + message + structured fields). Default is human-readable plain text. Useful when piping logs into aggregators (Datadog, Loki, Vector, journald). |
 
-`KG_VAULT_PATH` is accepted as a legacy alias for `VAULT_PATH`.
+`KG_VAULT_PATH` is accepted as a legacy alias for `VAULT_PATH` by the `index`, `watch` and `search` subcommands.
 
 This table covers the knobs typical users need. For the full reference (including `OBSIDIAN_BRAIN_CONFIG_DIR`, `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS`, etc.) see [Configuration](configuration.md).
 
 ## Next steps
 
-- Browse the [tool reference](tools.md) — 18 tools grouped by intent.
+- Browse the [tool reference](tools.md) — 19 tools grouped by intent.
 - Install the optional [companion plugin](plugin.md) to unlock `active_note`, `dataview_query`, and `base_query`.
 - Read [Architecture](architecture.md) for *why* stdio, SQLite, and local embeddings.
 - See [Configuration](configuration.md) for the full environment-variable reference.

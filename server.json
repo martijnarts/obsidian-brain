@@ -25,6 +25,15 @@
         {
           "type": "positional",
           "value": "server"
+        },
+        {
+          "type": "named",
+          "name": "--vault",
+          "description": "Vault to serve, as <name>=<absolute path>. The name may contain letters, digits, '-' and '_'. Repeat the flag to serve several vaults; every tool takes a `vault` argument naming one of them.",
+          "isRequired": true,
+          "isRepeated": true,
+          "format": "string",
+          "valueHint": "notes=/absolute/path/to/your/vault"
         }
       ],
       "transport": {
@@ -32,14 +41,8 @@
       },
       "environmentVariables": [
         {
-          "name": "VAULT_PATH",
-          "description": "Absolute path to your Obsidian vault (or any folder of .md files).",
-          "isRequired": true,
-          "format": "string"
-        },
-        {
           "name": "DATA_DIR",
-          "description": "Where to store the SQLite index + embedding cache. Defaults to $XDG_DATA_HOME/obsidian-brain or ~/.local/share/obsidian-brain.",
+          "description": "Where to store the SQLite indexes (one per vault, at <DATA_DIR>/<name>/kg.db) + embedding cache. Defaults to $XDG_DATA_HOME/obsidian-brain or ~/.local/share/obsidian-brain.",
           "isRequired": false,
           "format": "string"
         },

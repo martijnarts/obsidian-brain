@@ -361,6 +361,11 @@ fi
 
 ok "Vault: $VAULT"
 
+# The server addresses vaults by name (--vault <name>=<path>). Derive it from
+# the folder name, keeping only [A-Za-z0-9_-]; fall back to "notes".
+VAULT_NAME="$(basename "$VAULT" | LC_ALL=C tr -c 'A-Za-z0-9_-' '-' | sed -e 's/^-*//' -e 's/-*$//')"
+[[ -n "$VAULT_NAME" ]] || VAULT_NAME="notes"
+
 # ---------------------------- Step 5: pre-warm npx cache ---------------- #
 
 CURRENT_STEP="prewarm-npx"
@@ -400,7 +405,7 @@ if [[ -f "$CLAUDE_CFG" ]]; then
   note "Existing config backed up to $backup"
 fi
 
-CFG_PATH="$CLAUDE_CFG" VAULT_PATH_VAL="$VAULT" /usr/local/bin/node -e '
+CFG_PATH="$CLAUDE_CFG" VAULT_PATH_VAL="$VAULT" VAULT_NAME_VAL="$VAULT_NAME" /usr/local/bin/node -e '
   const fs = require("fs");
   const p = process.env.CFG_PATH;
   let cfg = {};
@@ -415,16 +420,23 @@ CFG_PATH="$CLAUDE_CFG" VAULT_PATH_VAL="$VAULT" /usr/local/bin/node -e '
   cfg.mcpServers = cfg.mcpServers || {};
   const prev = cfg.mcpServers["obsidian-brain"];
   // Preserve any user-customized env vars (EMBEDDING_PRESET, EMBEDDING_PROVIDER,
-  // OLLAMA_BASE_URL, OBSIDIAN_BRAIN_*, etc.) on re-install. Only VAULT_PATH is
-  // authoritatively set by the installer — everything else flows through.
+  // OLLAMA_BASE_URL, OBSIDIAN_BRAIN_*, etc.) on re-install. The vault is
+  // authoritatively set by the installer through the --vault argument —
+  // everything else flows through. A VAULT_PATH left by an older install is
+  // dropped, because the server no longer reads it.
   const prevEnv = (prev && typeof prev.env === "object" && prev.env !== null && !Array.isArray(prev.env))
-    ? prev.env
+    ? { ...prev.env }
     : {};
-  cfg.mcpServers["obsidian-brain"] = {
+  delete prevEnv.VAULT_PATH;
+  const entry = {
     command: "npx",
-    args: ["-y", "obsidian-brain@latest", "server"],
-    env: { ...prevEnv, VAULT_PATH: process.env.VAULT_PATH_VAL }
+    args: [
+      "-y", "obsidian-brain@latest", "server",
+      "--vault", process.env.VAULT_NAME_VAL + "=" + process.env.VAULT_PATH_VAL
+    ]
   };
+  if (Object.keys(prevEnv).length > 0) entry.env = prevEnv;
+  cfg.mcpServers["obsidian-brain"] = entry;
   fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
   console.log(prev ? "replaced" : "added");
 ' > /tmp/obsidian-brain-cfg.out

@@ -16,9 +16,13 @@ import '../global-handlers.js';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
-import { Command } from 'commander';
+import { resolve as resolvePath } from 'node:path';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import { createContext } from '../context.js';
 import { startServer } from '../server.js';
+import { runHttpServer } from '../http-server.js';
+import type { VaultSpec } from '../vaults.js';
+import { resolveDataConfig } from '../config.js';
 import { debugLog } from '../util/debug-log.js';
 import { dropEmbeddingState } from '../store/db.js';
 import { startWatcher } from '../pipeline/watcher.js';
@@ -63,12 +67,46 @@ export function buildProgram(): Command {
 program
   .command('server')
   .description(
-    'Start the stdio MCP server (spawned by Claude Desktop, Claude Code, Jan, etc.)',
+    'Start the MCP server. Every tool takes a required `vault` argument naming one of the --vault names. Indexes live in <DATA_DIR>/<name>.',
   )
-  .action(async () => {
-    debugLog("cli: 'server' subcommand action entered, calling startServer()");
-    await startServer();
-    debugLog('cli: startServer() returned (server is now running, awaiting transport messages)');
+  .option(
+    '--vault <name=path>',
+    'A vault to serve. Repeat for more vaults. At least one is required.',
+    (value: string, previous: VaultSpec[] = []) => [...previous, parseVaultSpec(value)],
+  )
+  .addOption(
+    new Option(
+      '--transport <transport>',
+      'stdio for an MCP client that spawns the server; http for a long-running server at /mcp',
+    )
+      .choices(['stdio', 'http'])
+      .default('stdio'),
+  )
+  .option('--listen <host:port>', 'Address to listen on with --transport http (default: 127.0.0.1:8080)')
+  .action(async (opts: { vault?: VaultSpec[]; transport: 'stdio' | 'http'; listen?: string }) => {
+    const vaults = opts.vault ?? [];
+    debugLog("cli: 'server' subcommand action entered");
+    if (vaults.length === 0) {
+      throw new UserError('Give at least one vault with --vault <name=path>.', {
+        hint: 'Example: obsidian-brain server --vault notes=/path/to/vault',
+      });
+    }
+    const names = vaults.map((v) => v.name);
+    const duplicate = names.find((name, i) => names.indexOf(name) !== i);
+    if (duplicate) {
+      throw new UserError(`Vault name "${duplicate}" is given more than once.`);
+    }
+    const dataDir = resolveDataConfig().dataDir;
+    if (opts.transport === 'stdio') {
+      if (opts.listen !== undefined) {
+        throw new UserError('--listen only applies with --transport http.');
+      }
+      await startServer({ vaults, dataDir });
+    } else {
+      const { host, port } = parseListen(opts.listen ?? '127.0.0.1:8080');
+      await runHttpServer({ host, port, vaults, dataDir });
+    }
+    debugLog('cli: server started, awaiting transport messages');
   });
 
 program
@@ -167,6 +205,30 @@ program
   return program;
 }
 
+const VAULT_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+function parseVaultSpec(value: string): VaultSpec {
+  const eq = value.indexOf('=');
+  const name = value.slice(0, eq);
+  const path = value.slice(eq + 1);
+  if (eq < 0 || !VAULT_NAME_RE.test(name) || path === '') {
+    throw new InvalidArgumentError(
+      'Expected <name>=<path>, with a name of letters, digits, "-" and "_".',
+    );
+  }
+  return { name, vaultPath: resolvePath(path) };
+}
+
+function parseListen(value: string): { host: string; port: number } {
+  const colon = value.lastIndexOf(':');
+  const host = value.slice(0, colon);
+  const port = Number(value.slice(colon + 1));
+  if (colon <= 0 || !Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new UserError(`--listen expects <host>:<port>, got "${value}".`);
+  }
+  return { host, port };
+}
+
 // Script entry-point: only fires when the file is executed directly (e.g.
 // via the `obsidian-brain` bin shim or `node dist/cli/index.js …`), NOT
 // when imported by tests.
@@ -232,7 +294,7 @@ if (isMainEntry()) {
       // so bugs remain debuggable.
       // Synchronous fs.writeSync(2, …) instead of process.stderr.write so
       // the bytes reach the OS pipe before process.exit(1) can race with
-      // Node's async stderr buffer. Same rationale as src/server.ts and
+      // Node's async stderr buffer. Same rationale as
       // src/preflight.ts.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const writeSync = (msg: string): void => {

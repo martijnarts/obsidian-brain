@@ -13,7 +13,7 @@ For architecture context (how the indexer, SQLite cache, and MCP server fit toge
 
 - [Connector has no tools available in Claude Desktop](#connector-has-no-tools-available-in-claude-desktop)
 - [ERR_DLOPEN_FAILED: NODE_MODULE_VERSION mismatch](#err_dlopen_failed-node_module_version-mismatch)
-- [Vault path not configured](#vault-path-not-configured)
+- [No vault given](#no-vault-given)
 - [First run very slow or appears to hang](#first-run-very-slow-or-appears-to-hang)
 - [Index stale after a manual edit outside Claude](#index-stale-after-a-manual-edit-outside-claude)
 - [tools/call returns "No node found matching X"](#toolscall-returns-no-node-found-matching-x)
@@ -109,10 +109,7 @@ Then re-run the rebuild command above. To avoid this happening again, prefer the
   "mcpServers": {
     "obsidian-brain": {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
-      "env": {
-        "VAULT_PATH": "/absolute/path/to/vault"
-      }
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/vault"]
     }
   }
 }
@@ -120,19 +117,13 @@ Then re-run the rebuild command above. To avoid this happening again, prefer the
 
 ---
 
-## Vault path not configured
+## No vault given
 
-**Summary.** The server aborts on startup with `Vault path not configured`.
+**Summary.** The server aborts on startup with `Give at least one vault with --vault <name=path>.`
 
-**Cause.** The `VAULT_PATH` environment variable is not set in the server's process environment.
+**Cause.** `obsidian-brain server` takes its vaults from `--vault` flags. It does not read `VAULT_PATH`.
 
-**Fix.** Provide it via one of:
-
-- Export in the shell that launches the server: `export VAULT_PATH=/path/to/vault`.
-- Add `VAULT_PATH=/path/to/vault` to a `.env` file in the project root.
-- Set it in the `env` block of your MCP client config (see the JSON snippet above).
-
-`KG_VAULT_PATH` is also accepted as a legacy alias and takes precedence if both are set.
+**Fix.** Add `--vault <name>=<path>` to the server arguments in your MCP client config (see the JSON snippet above), or to the command line: `obsidian-brain server --vault notes=/path/to/vault`. Repeat the flag to serve more than one vault. The name may contain letters, digits, `-` and `_`.
 
 ---
 
@@ -285,9 +276,9 @@ passed via `search`. For pure concept queries, force semantic:
 If you want better semantic retrieval overall, switch to a larger model — the server stores the active embedding model/dim/provider in `index_metadata` and **auto-reindexes from scratch the next time it boots under a new identifier**. No `--drop` needed:
 
 ```bash
-EMBEDDING_MODEL=Xenova/bge-base-en-v1.5 obsidian-brain server
+EMBEDDING_MODEL=Xenova/bge-base-en-v1.5 obsidian-brain server --vault notes=/path/to/vault
 # or for the Ollama path:
-EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text obsidian-brain server
+EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text obsidian-brain server --vault notes=/path/to/vault
 ```
 
 On the next startup the server logs a single reason line ("Embedding model changed: X(d) → Y(d'). Auto-reindexing.") and rebuilds per-chunk embeddings. See [Architecture → Why local embeddings](./architecture.md#why-local-embeddings) for the bootstrap flow.
@@ -486,7 +477,7 @@ If that line is missing, check `OBSIDIAN_BRAIN_NO_WATCH`. If it's present, the i
 **Fix.** Upgrade to a current release — `src/pipeline/bootstrap.ts` records the active model/dim/provider in the `index_metadata` table and, when any of those differs on startup, automatically drops the vec tables + sync mtimes and rebuilds per-chunk embeddings against the new model on next boot. No `--drop` flag required; just set the new env var and restart:
 
 ```bash
-EMBEDDING_MODEL=Xenova/bge-base-en-v1.5 obsidian-brain server
+EMBEDDING_MODEL=Xenova/bge-base-en-v1.5 obsidian-brain server --vault notes=/path/to/vault
 ```
 
 If you are stuck on an older release and cannot upgrade, wipe `$DATA_DIR` and let the fresh index build under the new model (vault content is untouched):
@@ -542,9 +533,9 @@ If request `id=N` has a `Message from client` and then a `Message from server` w
 
 ## Running multiple MCP clients against the same vault
 
-**Summary.** You have `obsidian-brain` configured in two clients (e.g. Claude Desktop AND Cursor) pointing at the same `VAULT_PATH`.
+**Summary.** You have `obsidian-brain` configured in two clients (e.g. Claude Desktop AND Cursor) pointing at the same vault.
 
-**How it works.** Each MCP client spawns its own `obsidian-brain server` process. Both processes share the vault directory and the default `DATA_DIR`, which means they share the SQLite index file.
+**How it works.** Each MCP client spawns its own `obsidian-brain server` process. Both processes share the vault directory and the default `DATA_DIR`, which means they share the SQLite index file (`<DATA_DIR>/<name>/kg.db`, where `<name>` is the vault name from `--vault`). Give the vault the same name in both clients so they use the same index.
 
 **Correctness.** Fine. SQLite is in WAL mode plus a 5-second `busy_timeout`, so concurrent writers serialise cleanly instead of throwing `SQLITE_BUSY`. Reads from one process don't block writes from the other.
 
@@ -742,9 +733,8 @@ Then restart the client. First boot will re-download (~34 MB for the english pre
      "mcpServers": {
        "obsidian-brain": {
          "command": "npx",
-         "args": ["-y", "obsidian-brain@latest", "server"],
+         "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/path/to/your/vault"],
          "env": {
-           "VAULT_PATH": "/path/to/your/vault",
            "OBSIDIAN_BRAIN_DEBUG": "1"
          }
        }
@@ -765,7 +755,7 @@ Then restart the client. First boot will re-download (~34 MB for the english pre
 
 3. **If debug mode shows the server reached `server.connect returned` but nothing happened after that** — and you're using `npx -y obsidian-brain@latest` — you're hitting the npm 11.x stdio bug. Workaround: change `args` to a local install path:
    ```jsonc
-   "args": ["-y", "/Users/you/path/to/dist/cli/index.js", "server"]
+   "args": ["-y", "/Users/you/path/to/dist/cli/index.js", "server", "--vault", "notes=/path/to/your/vault"]
    ```
    `npx` skips the install/postinstall wrapper when given an absolute path, which sidesteps the bug.
 

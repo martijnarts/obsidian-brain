@@ -13,8 +13,8 @@
  * indexer / watcher / embedder paths fire well after preflight returns and
  * well before any crash. The race that v1.7.7 documents (async stderr buffer
  * vs process.exit) only matters for the crash-path sites in
- * `src/preflight.ts`, `src/global-handlers.ts`, and the writeSync fallback
- * in `src/server.ts:287`. Those sites stay on `fs.writeSync(2, …)` — this
+ * `src/preflight.ts`, `src/global-handlers.ts`, and the CLI error handler
+ * in `src/cli/index.ts`. Those sites stay on `fs.writeSync(2, …)` — this
  * module is explicitly NOT for them.
  *
  * **Why read env on every call.** Tests need to override

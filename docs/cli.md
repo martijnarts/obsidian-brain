@@ -13,12 +13,29 @@ obsidian-brain [options] [command]
 
 ## Commands
 
-### `obsidian-brain server`
+### `obsidian-brain server [options]`
 
-Start the stdio MCP server. This is what Claude Desktop / Claude Code / Jan / etc. spawn behind the scenes — you rarely run it by hand. No flags; configuration is via env vars (see [Configuration](configuration.md)).
+Start the MCP server. By default it speaks stdio: this is what Claude Desktop / Claude Code / Jan / etc. spawn behind the scenes, so you rarely run it by hand. Give it one or more vaults with `--vault`. Embedding and other settings come from env vars (see [Configuration](configuration.md)).
+
+| Flag | Description |
+|---|---|
+| `--vault <name=path>` | A vault to serve. Repeat for more vaults. The name may contain letters, digits, `-` and `_`. At least one is required |
+| `--transport <stdio\|http>` | `stdio` (default) for a client that spawns the server; `http` for a long-running server |
+| `--listen <host:port>` | Address to listen on with `--transport http`. Default `127.0.0.1:8080`. Port `0` picks a free port |
 
 ```bash
-obsidian-brain server
+obsidian-brain server --vault notes=/path/to/vault
+```
+
+Every tool takes a required `vault` argument, which must be one of the `--vault` names; there is no default vault. The `list_vaults` tool lists them. Each vault has its own index, graph and watcher, and nothing crosses between vaults. Indexes live in `<DATA_DIR>/<name>/kg.db`. The startup index runs one vault at a time. To give a client access to only some vaults, run a separate server with just those vaults.
+
+With `--transport http` the server answers at `/mcp`. It has no authentication, so bind it to loopback and put an authenticating proxy in front of it if anything else must reach it. The transport is stateless: every POST is answered on its own, and GET and DELETE return 405.
+
+```bash
+DATA_DIR=/var/lib/obsidian-brain obsidian-brain server \
+  --transport http --listen 127.0.0.1:8091 \
+  --vault personal=/srv/vaults/personal \
+  --vault dnd=/srv/vaults/dnd
 ```
 
 Common env-var combinations:

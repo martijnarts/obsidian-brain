@@ -83,31 +83,6 @@ export default defineConfig({
         // auto-heal pair if a future bug surfaces in the dispatch logic.
         '**/src/preflight.ts',
 
-        // v1.7.7: createContext() now contains ONLY the hard-to-test glue
-        // (vault path resolution, DB open + native module load, embedder
-        // factory wiring, search/writer/pipeline construction). The
-        // well-tested auto-heal block was extracted to src/auto-heal.ts
-        // (covered by test/auto-heal.test.ts). What remains in context.ts
-        // is exercised end-to-end by the smoke test
-        // (scripts/mcp-smoke.ts) and by test/integration/* but those
-        // spawn real subprocesses that V8 coverage can't follow into.
-        // TODO: add a vitest-level integration test that constructs a
-        // ServerContext against a real temp vault + DB and exercises the
-        // remaining branches.
-        '**/src/context.ts',
-
-        // Subprocess blind spot — V8 coverage does NOT follow into child
-        // processes. Signal handlers, main-entry guards, stdin-EOF shutdown
-        // (v1.6.8), and orderly-native-teardown code in src/server.ts are
-        // exercised ONLY by test/integration/server-stdin-shutdown.test.ts,
-        // which spawns a real subprocess. Those lines are always reported
-        // as uncovered regardless of whether they're actually tested.
-        // Coverage is the wrong instrument for this file's correctness —
-        // the subprocess test IS the gate for this code. If the file is
-        // ever refactored so a meaningful portion becomes in-process
-        // testable, remove this exclusion and set a real threshold.
-        '**/src/server.ts',
-
         // Watcher — genuinely untested. No test/pipeline/watcher.test.ts
         // exists. Real gap surfaced by baseline.
         // TODO: write test/pipeline/watcher.test.ts, remove exclusion.
