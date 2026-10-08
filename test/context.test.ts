@@ -107,13 +107,13 @@ describe('createContext() — Node ABI mismatch guard + auto-heal', () => {
       return { ...actual, unlinkSync: vi.fn() };
     });
 
-    await withEnv({ DATA_DIR: tmpDataDir, VAULT_PATH: tmpVaultDir }, async () => {
+    await withEnv({ DATA_DIR: tmpDataDir }, async () => {
       const { createContext } = await import('../src/context.js');
 
       // Invoke ONCE and capture the thrown error — subsequent calls would
       // hit the marker we just wrote and get the "already attempted" path,
       // so we can't re-call createContext() for multiple assertions.
-      const err = await createContext().then(
+      const err = await createContext({ vaultPath: tmpVaultDir }).then(
         () => null,
         (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
       );
@@ -158,11 +158,11 @@ describe('createContext() — Node ABI mismatch guard + auto-heal', () => {
     const spawnMock = vi.fn();
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }));
 
-    await withEnv({ DATA_DIR: tmpDataDir, VAULT_PATH: tmpVaultDir }, async () => {
+    await withEnv({ DATA_DIR: tmpDataDir }, async () => {
       const { createContext } = await import('../src/context.js');
       if (process.platform === 'win32') return;
 
-      const err = await createContext().then(
+      const err = await createContext({ vaultPath: tmpVaultDir }).then(
         () => null,
         (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
       );
@@ -185,9 +185,9 @@ describe('createContext() — Node ABI mismatch guard + auto-heal', () => {
       };
     });
 
-    await withEnv({ DATA_DIR: tmpDataDir, VAULT_PATH: tmpVaultDir }, async () => {
+    await withEnv({ DATA_DIR: tmpDataDir }, async () => {
       const { createContext } = await import('../src/context.js');
-      const err = await createContext().then(
+      const err = await createContext({ vaultPath: tmpVaultDir }).then(
         () => null,
         (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
       );

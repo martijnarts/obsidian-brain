@@ -141,7 +141,7 @@ PATH=/opt/homebrew/bin:$PATH npm rebuild better-sqlite3
 The server auto-indexes on first boot and downloads the default embedding model (~34 MB). If Jan's spawn timeout is shorter than this (some versions: 30 s) the first connection attempt may fail. Warm the index from a shell first so the model is cached locally:
 
 ```bash
-VAULT_PATH="/absolute/path/to/your/vault" obsidian-brain index
+obsidian-brain index --vault notes=/absolute/path/to/your/vault
 ```
 
 After that, subsequent connections from Jan start in well under a second.

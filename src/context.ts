@@ -73,7 +73,7 @@ export interface ServerContext {
   lastManualReindexReason: string | null;
 }
 
-export async function createContext(overrides: ConfigOverrides = {}): Promise<ServerContext> {
+export async function createContext(overrides: ConfigOverrides): Promise<ServerContext> {
   debugLog('createContext: entry, calling resolveConfig');
   const config = resolveConfig(overrides);
   debugLog(`createContext: resolveConfig OK (dataDir=${config.dataDir}, vault=${config.vaultPath})`);

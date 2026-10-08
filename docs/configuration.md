@@ -7,7 +7,7 @@ description: Every environment variable obsidian-brain reads, with defaults and 
 
 `obsidian-brain server` takes its vaults from `--vault <name>=<path>` flags. Everything else is configured through environment variables, and all of them have sensible defaults.
 
-The `index`, `watch` and `search` subcommands read the vault from the `VAULT_PATH` environment variable instead. `server` does not read it.
+The `index`, `watch` and `search` subcommands take the vault the same way, with `--vault <name>=<path>`. `search` takes exactly one. `models recommend` takes the vault folder as a positional argument. No command reads the vault from an environment variable.
 
 ## Environment variables
 
@@ -48,4 +48,4 @@ See [Models](models.md) for the preset table, performance benchmarks, and the Ol
 
 ## Legacy aliases
 
-`KG_VAULT_PATH` is accepted as a legacy alias for `VAULT_PATH` by the `index`, `watch` and `search` subcommands. New configs should use `VAULT_PATH`.
+`KG_DATA_DIR` is accepted as an alias for `DATA_DIR`.

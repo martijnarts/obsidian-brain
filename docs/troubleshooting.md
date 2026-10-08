@@ -121,7 +121,7 @@ Then re-run the rebuild command above. To avoid this happening again, prefer the
 
 **Summary.** The server aborts on startup with `Give at least one vault with --vault <name=path>.`
 
-**Cause.** `obsidian-brain server` takes its vaults from `--vault` flags. It does not read `VAULT_PATH`.
+**Cause.** `obsidian-brain server` takes its vaults from `--vault` flags. It does not read the vault from an environment variable.
 
 **Fix.** Add `--vault <name>=<path>` to the server arguments in your MCP client config (see the JSON snippet above), or to the command line: `obsidian-brain server --vault notes=/path/to/vault`. Repeat the flag to serve more than one vault. The name may contain letters, digits, `-` and `_`.
 
@@ -153,10 +153,10 @@ The next run will re-download cleanly.
 
 ```bash
 # npm-installed:
-VAULT_PATH=/path/to/vault obsidian-brain index
+obsidian-brain index --vault notes=/path/to/vault
 
 # local source clone:
-cd /absolute/path/to/obsidian-brain && VAULT_PATH=/path/to/vault node dist/cli/index.js index
+cd /absolute/path/to/obsidian-brain && node dist/cli/index.js index --vault notes=/path/to/vault
 ```
 
 ---
@@ -195,7 +195,7 @@ cd /absolute/path/to/obsidian-brain && VAULT_PATH=/path/to/vault node dist/cli/i
 
 **Summary.** You set up a launchd agent for periodic reindexing on macOS, but the index never refreshes.
 
-**Cause.** Usually the `PATH` inside the plist does not include the directory containing your `node` binary, or `VAULT_PATH` in the plist's `EnvironmentVariables` block points somewhere wrong.
+**Cause.** Usually the `PATH` inside the plist does not include the directory containing your `node` binary, or the `--vault` path in the plist's `ProgramArguments` points somewhere wrong, or its name or `DATA_DIR` differs from the server's so the job indexes a different `kg.db`.
 
 **Fix.** Check the stderr log and reload the job:
 
@@ -206,7 +206,7 @@ launchctl load ~/Library/LaunchAgents/com.you.obsidian-brain.plist
 launchctl list | grep obsidian-brain
 ```
 
-If `launchctl list` shows a non-zero exit status in the second column, the most recent run failed; the stderr log will tell you why. See [launchd.md](./launchd.md) for the full plist template, including the correct `PATH` and `EnvironmentVariables` entries.
+If `launchctl list` shows a non-zero exit status in the second column, the most recent run failed; the stderr log will tell you why. See [launchd.md](./launchd.md) for the full plist template, including the correct `PATH` and `--vault` entries.
 
 ---
 
@@ -326,9 +326,12 @@ Output looks like:
 
 ```json
 {
-  "dbPath": "/Users/you/.local/share/obsidian-brain/kg.db",
+  "dataDir": "/Users/you/.local/share/obsidian-brain",
   "scope": "all",
   "rowsCleared": 2,
+  "vaults": [
+    { "dbPath": "/Users/you/.local/share/obsidian-brain/notes/kg.db", "rowsCleared": 2 }
+  ],
   "nextBoot": "will refetch via metadata-resolver chain (cache miss → seed → live HF). Restart the server for the change to take effect."
 }
 ```
@@ -377,7 +380,7 @@ Both files live in `~/.config/obsidian-brain/` (or `$XDG_CONFIG_HOME/obsidian-br
 - **You want to force a rebuild right now** without waiting for the next pull:
 
   ```bash
-  obsidian-brain index --drop
+  obsidian-brain index --vault notes=/path/to/vault --drop
   ```
 
 **Pinning a tag if you want stricter identity.** Ollama tags like `bge-m3` resolve to whatever the registry currently calls "latest." If you want a stable pin that obsidian-brain treats as a different model whenever it changes, pin the explicit tag:
@@ -563,7 +566,7 @@ If request `id=N` has a `Message from client` and then a `Message from server` w
 To clean up existing ghosts after upgrading, run once:
 
 ```bash
-VAULT_PATH=/path/to/vault obsidian-brain index --resolution 1.0
+obsidian-brain index --vault notes=/path/to/vault --resolution 1.0
 ```
 
 The `--resolution` argument is the explicit-intent signal that forces the community refresh. Any positive value works — `1.0` is the default Louvain resolution.

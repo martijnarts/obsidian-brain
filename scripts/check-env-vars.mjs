@@ -52,12 +52,8 @@ const ALLOWLIST = new Set([
   // IS declared in server.json); these are platform conventions, not our API.
   'XDG_CONFIG_HOME',
   'APPDATA',
-  // Read by the index, watch and search subcommands. `server` takes its
-  // vaults from --vault flags, so server.json does not declare it.
-  'VAULT_PATH',
-  // Legacy aliases preserved for backwards compat — pre-v1.4 envs.
-  // src/config.ts treats these as fallbacks for the canonical names.
-  'KG_VAULT_PATH',
+  // Legacy alias preserved for backwards compat — pre-v1.4 envs.
+  // src/config.ts treats it as a fallback for DATA_DIR.
   'KG_DATA_DIR',
   // Internal debug-logging gate (read in metadata-resolver). Not a public
   // contract; surfaces failed background refetches when set to 'debug'.

@@ -119,13 +119,13 @@ npx obsidian-brain models check Alibaba-NLP/gte-modernbert-base
 | Command | What it does |
 |---|---|
 | `models list [--all] [--filter <q>]` | Lists the 6 presets by default. `--all` surfaces every entry in the bundled seed (~348 models). `--filter` narrows by id substring. Zero network calls. |
-| `models recommend` | Scans your vault and recommends `english` or `multilingual` based on non-Latin character ratio |
+| `models recommend <vault-path>` | Scans the vault folder and recommends `english` or `multilingual` based on non-Latin character ratio |
 | `models prefetch [preset]` | Downloads ONNX weights for a preset's model so first `index` doesn't pay download cost |
 | `models check <id>` | Fetches HF metadata directly (~2s). Skips the cache/seed chain — always live HF. Add `--load` to also download + load. |
 | `models add <id>` | Register a new model not in the seed (writes to `~/.config/obsidian-brain/model-overrides.json`). Refuses if id already in seed or overrides |
 | `models override <id>` | Patch fields on an existing model id (writes to overrides file). Survives `npm update`. `--list` dumps every override; `--remove [--field name]` clears |
 | `models fetch-seed` | Download latest seed from `main` branch on GitHub. Bypasses npm-release wait. Schema-version-aware |
-| `models refresh-cache [--model <id>]` | Invalidate cached metadata. Cheap (~0 HF calls for seeded models). Does NOT require `VAULT_PATH` |
+| `models refresh-cache [--model <id>]` | Invalidate cached metadata. Cheap (~0 HF calls for seeded models). Clears the cache in every `<DATA_DIR>/<name>/kg.db`. Needs no vault flag |
 
 **`EmbedderLoadError` kinds:**
 

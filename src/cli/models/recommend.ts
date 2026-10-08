@@ -10,19 +10,9 @@ export function registerRecommendCommand(parent: Command): void {
   // models recommend
   // -------------------------------------------------------------------------
   parent
-    .command('recommend')
-    .description(
-      'Inspect the vault and recommend the best embedding preset. Reads VAULT_PATH from env.',
-    )
-    .action(async () => {
-      const vaultPath = process.env.VAULT_PATH;
-      if (!vaultPath) {
-        process.stderr.write(
-          'obsidian-brain: VAULT_PATH is not set. Cannot recommend a preset without a vault to inspect.\n',
-        );
-        process.exit(1);
-      }
-
+    .command('recommend <vault-path>')
+    .description('Inspect the vault folder and recommend the best embedding preset.')
+    .action(async (vaultPath: string) => {
       const result = await autoRecommendPreset(process.env, vaultPath, undefined);
 
       if (result === null) {

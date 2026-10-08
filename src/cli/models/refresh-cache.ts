@@ -1,7 +1,9 @@
 import type { Command } from 'commander';
 import { clearMetadataCache } from '../../embeddings/metadata-cache.js';
 import { openDb } from '../../store/db.js';
-import { resolveDataConfig } from '../../config.js';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { resolveDataDir } from '../../config.js';
 import { printJson } from './output.js';
 
 export function registerRefreshCacheCommand(parent: Command): void {
@@ -18,7 +20,7 @@ export function registerRefreshCacheCommand(parent: Command): void {
   parent
     .command('refresh-cache')
     .description(
-      'Invalidate the metadata cache so the next server boot refetches ' +
+      'Invalidate the metadata cache of every vault index in DATA_DIR so the next server boot refetches ' +
       'from the seed → HF chain. Cheap for seeded models (~0 HF calls — the ' +
       'bundled seed repopulates the cache instantly); 1 HF call per ' +
       'non-seeded BYOM id. The prefix-strategy hash auto-detects any prefix ' +
@@ -30,24 +32,31 @@ export function registerRefreshCacheCommand(parent: Command): void {
     )
     .option('--model <id>', 'Refresh cache for one model id only (default: all entries)')
     .action((opts: { model?: string }) => {
-      // Use resolveDataConfig (not resolveConfig) so this doesn't fail on
-      // a missing VAULT_PATH. Cache invalidation is a vault-agnostic op
-      // — it writes to the SQLite DB at the user's data dir, which is
-      // derivable from XDG_DATA_HOME alone.
-      const config = resolveDataConfig();
-      const db = openDb(config.dbPath);
-      try {
-        const cleared = clearMetadataCache(db, opts.model);
-        printJson({
-          dbPath: config.dbPath,
-          scope: opts.model ?? 'all',
-          rowsCleared: cleared,
-          nextBoot:
-            'will refetch via metadata-resolver chain (cache miss → seed → live HF). ' +
-            'Restart the server for the change to take effect.',
-        });
-      } finally {
-        db.close();
-      }
+      // Every vault keeps its own index, and with it its own metadata
+      // cache, at <DATA_DIR>/<name>/kg.db. Clear them all.
+      const dataDir = resolveDataDir();
+      const dbPaths = existsSync(dataDir)
+        ? readdirSync(dataDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory() && existsSync(join(dataDir, d.name, 'kg.db')))
+            .map((d) => join(dataDir, d.name, 'kg.db'))
+            .sort()
+        : [];
+      const vaults = dbPaths.map((dbPath) => {
+        const db = openDb(dbPath);
+        try {
+          return { dbPath, rowsCleared: clearMetadataCache(db, opts.model) };
+        } finally {
+          db.close();
+        }
+      });
+      printJson({
+        dataDir,
+        scope: opts.model ?? 'all',
+        rowsCleared: vaults.reduce((sum, v) => sum + v.rowsCleared, 0),
+        vaults,
+        nextBoot:
+          'will refetch via metadata-resolver chain (cache miss → seed → live HF). ' +
+          'Restart the server for the change to take effect.',
+      });
     });
 }

@@ -41,7 +41,7 @@ No system-level prerequisites beyond Node 22.12+. The `better-sqlite3`, `sqlite-
 
 ## Environment variables
 
-The vaults are given with `--vault <name>=<path>` flags on `obsidian-brain server`. Everything else is configured with environment variables, and none of them is required. The `index`, `watch` and `search` subcommands still read the vault from `VAULT_PATH`.
+The vaults are given with `--vault <name>=<path>` flags on `obsidian-brain server`. Everything else is configured with environment variables, and none of them is required. The `index`, `watch` and `search` subcommands take the same `--vault <name>=<path>` flag.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
@@ -61,8 +61,6 @@ The vaults are given with `--vault <name>=<path>` flags on `obsidian-brain serve
 | `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS` | no | `30000` | Per-tool-call timeout. |
 | `OBSIDIAN_BRAIN_DEBUG` | no | unset | Set to `1` for a verbose synchronous startup trace on stderr — every preflight, createContext, server.connect, and shutdown step is logged with a monotonic timestamp. The last line before any silent failure pinpoints exactly which step the server reached. No-op when unset (zero output, zero overhead). Diagnostic-only — leave unset under normal use. |
 | `OBSIDIAN_BRAIN_LOG_FORMAT` | no | unset | Set to `ndjson` for one-JSON-object-per-line stderr output (timestamp + level + message + structured fields). Default is human-readable plain text. Useful when piping logs into aggregators (Datadog, Loki, Vector, journald). |
-
-`KG_VAULT_PATH` is accepted as a legacy alias for `VAULT_PATH` by the `index`, `watch` and `search` subcommands.
 
 This table covers the knobs typical users need. For the full reference (including `OBSIDIAN_BRAIN_CONFIG_DIR`, `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS`, etc.) see [Configuration](configuration.md).
 
