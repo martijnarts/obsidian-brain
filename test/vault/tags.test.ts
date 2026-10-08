@@ -41,3 +41,16 @@ describe('vault/tags', () => {
     expect(sortTagCounts(counts).map((t) => t.tag)).toEqual(['c', 'a', 'b']);
   });
 });
+
+describe('tag case', () => {
+  it('treats tags that differ only in case as one tag, like Obsidian', () => {
+    expect(noteTags({ tags: ['Project', 'project'], inline_tags: ['PROJECT'] })).toEqual(['Project']);
+    expect(tagMatches('Project/Alpha', 'project')).toBe(true);
+    expect(tagMatches('project', '#PROJECT')).toBe(true);
+    const counts = countTags([{ tags: ['Project'] }, { tags: ['project/a'] }], true);
+    expect([...counts]).toEqual([
+      ['Project', 2],
+      ['project/a', 1],
+    ]);
+  });
+});
