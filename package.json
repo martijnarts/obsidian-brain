@@ -66,6 +66,7 @@
     "promote": "node scripts/promote.mjs",
     "setup:protection": "node scripts/setup-branch-protection.mjs",
     "prepublishOnly": "npm run build",
+    "postinstall": "npm rebuild better-sqlite3 || (echo 'obsidian-brain: postinstall rebuild of better-sqlite3 FAILED — your install may crash on first boot. Run `npm rebuild better-sqlite3` manually, or `rm -rf ~/.npm/_npx` and retry. See https://sweir1.github.io/obsidian-brain/troubleshooting/#err_dlopen_failed-node_module_version-mismatch' 1>&2; exit 1)",
     "preversion": "npm run gen-docs -- --check && npm run gen-tools-docs -- --check && npm run gen-readme-recent -- --check && npm run check-plugin",
     "version": "node scripts/sync-server-version.mjs && node scripts/gen-readme-recent.mjs && git add server.json README.md",
     "postversion": "git push --follow-tags"
@@ -76,7 +77,7 @@
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^12.11.1",
     "chokidar": "^5.0.0",
     "commander": "^15.0.0",
     "diff": "^9.0.0",
@@ -89,7 +90,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.6.4",
     "@vitest/coverage-v8": "^5.0.3",
     "fast-check": "^4.10.2",
