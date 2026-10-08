@@ -53,37 +53,40 @@ There are three independent ways to use Ollama: (1) the `multilingual-ollama` pr
 
 ### `obsidian-brain index [options]`
 
-Scan the vault and update the knowledge-graph index incrementally. Reads `VAULT_PATH` from env. Honors the same model / preset config as `server`.
+Scan each vault and update its knowledge-graph index incrementally, one vault at a time. Each vault's index lives in `<DATA_DIR>/<name>/kg.db`, the same index `server` uses for that name. Honors the same model / preset config as `server`. Prints the stats as JSON, keyed by vault name.
 
 | Flag | Description |
 |---|---|
+| `--vault <name=path>` | A vault to index. Repeat for more vaults. At least one is required |
 | `-r, --resolution <n>` | Louvain resolution. Passing this forces a community-cache refresh even if no files changed |
 | `--drop` | Drop all embeddings + sync state before indexing. Mostly an escape hatch — the bootstrap auto-detects `EMBEDDING_MODEL` / `EMBEDDING_PROVIDER` changes and wipes embedding state on its own |
 
 ```bash
-obsidian-brain index
+obsidian-brain index --vault notes=/path/to/vault
 ```
 
 ### `obsidian-brain watch [options]`
 
-Long-running process: keep the index live by reindexing on vault changes. Useful when running the watcher independently from an MCP client (e.g., via launchd / systemd — see [Scheduled indexing (macOS)](launchd.md) / [(Linux)](systemd.md)).
+Long-running process: keep each vault's index live by reindexing on vault changes. Useful when running the watcher independently from an MCP client (e.g., via launchd / systemd — see [Scheduled indexing (macOS)](launchd.md) / [(Linux)](systemd.md)). It keeps a server's index fresh when it uses the same `DATA_DIR` and the same vault names as the server.
 
 | Flag | Default | Description |
 |---|---|---|
+| `--vault <name=path>` | | A vault to watch. Repeat for more vaults. At least one is required |
 | `--debounce <ms>` | `3000` | Per-file reindex debounce |
 | `--community-debounce <ms>` | `60000` | Graph-wide community detection debounce |
 
 ### `obsidian-brain search [options] <query>`
 
-Run a single search against the indexed vault and print results to stdout as JSON. Supports the same three modes the MCP `search_notes` tool exposes.
+Run a single search against one vault's index and print results to stdout as JSON. Supports the same three modes the MCP `search` tool exposes.
 
 | Flag | Default | Description |
 |---|---|---|
+| `--vault <name=path>` | | The vault to search. Exactly one is required |
 | `-l, --limit <n>` | `10` | Maximum results |
 | `-m, --mode <mode>` | `hybrid` | `hybrid` (RRF-fused, the production default) \| `semantic` \| `fulltext` |
 
 ```bash
-obsidian-brain search "semantic search architecture" --mode hybrid --limit 5
+obsidian-brain search --vault notes=/path/to/vault "semantic search architecture" --mode hybrid --limit 5
 ```
 
 ## `obsidian-brain models` — model inspection + management
@@ -122,12 +125,12 @@ Output JSON shape (per entry):
 
 Models in the seed but not aliased to a preset have `"preset": null`.
 
-### `models recommend`
+### `models recommend <vault-path>`
 
-First-boot heuristic. Reads `VAULT_PATH`, walks every `.md` file, samples the first 2 KB of each, counts non-Latin characters (CJK, Cyrillic, Arabic, Devanagari, Hebrew, Thai). If more than 5% of sampled characters are non-Latin → recommends `multilingual`. Otherwise → `english`. Picks from the 6 presets only. Skipped entirely if `EMBEDDING_MODEL` / `EMBEDDING_PRESET` is already set, or if the DB has a stored model from a prior boot.
+First-boot heuristic. Walks every `.md` file in the vault folder, samples the first 2 KB of each, counts non-Latin characters (CJK, Cyrillic, Arabic, Devanagari, Hebrew, Thai). If more than 5% of sampled characters are non-Latin → recommends `multilingual`. Otherwise → `english`. Picks from the 6 presets only. Skipped entirely if `EMBEDDING_MODEL` / `EMBEDDING_PRESET` is already set, or if the DB has a stored model from a prior boot.
 
 ```bash
-VAULT_PATH=/path/to/vault obsidian-brain models recommend
+obsidian-brain models recommend /path/to/vault
 ```
 
 ### `models prefetch [preset]`
@@ -236,7 +239,7 @@ After fetching, run `models refresh-cache` then restart the server to apply to e
 
 ### `models refresh-cache [--model <id>]`
 
-Invalidate the metadata cache so the next server boot re-resolves from the seed → HF chain. Cheap for seeded models (~0 HF calls — the 349-entry seed repopulates the cache instantly); 1 HF call per non-seeded BYOM id.
+Invalidate the metadata cache of every vault index in `DATA_DIR` (each `<DATA_DIR>/<name>/kg.db`) so the next server boot re-resolves from the seed → HF chain. Cheap for seeded models (~0 HF calls — the 349-entry seed repopulates the cache instantly); 1 HF call per non-seeded BYOM id.
 
 The prefix-strategy hash auto-detects any prefix change and triggers a re-embed in bootstrap, so it's safe to run any time you suspect cached metadata is stale. Restart the server after running this.
 

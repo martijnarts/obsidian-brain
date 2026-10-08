@@ -47,14 +47,14 @@ describe('CLI help-text snapshots', () => {
         server [options]          Start the MCP server. Every tool takes a required
                                   \`vault\` argument naming one of the --vault names.
                                   Indexes live in <DATA_DIR>/<name>.
-        index [options]           Scan the vault and update the knowledge-graph index
-                                  (incremental)
-        watch [options]           Long-running process: keep the index live by
+        index [options]           Scan each vault and update its knowledge-graph index
+                                  (incremental), one vault at a time
+        watch [options]           Long-running process: keep each vault index live by
                                   reindexing on vault changes. Use this if you want to
                                   run the watcher independently from an MCP client
                                   (via launchd/systemd).
         search [options] <query>  Hybrid (default), semantic, or full-text search over
-                                  the vault
+                                  one vault
         models                    Inspect and manage embedding models
         help [command]            display help for command
       "
@@ -87,9 +87,12 @@ describe('CLI help-text snapshots', () => {
     expect(cmd.helpInformation()).toMatchInlineSnapshot(`
       "Usage: obsidian-brain index [options]
 
-      Scan the vault and update the knowledge-graph index (incremental)
+      Scan each vault and update its knowledge-graph index (incremental), one vault at
+      a time
 
       Options:
+        --vault <name=path>   A vault to index. Repeat for more vaults. At least one
+                              is required.
         -r, --resolution <n>  Louvain resolution (passing this forces a
                               community-cache refresh even if no files changed)
         --drop                Drop all embeddings + sync state before indexing. Mostly
@@ -108,11 +111,13 @@ describe('CLI help-text snapshots', () => {
     expect(cmd.helpInformation()).toMatchInlineSnapshot(`
       "Usage: obsidian-brain watch [options]
 
-      Long-running process: keep the index live by reindexing on vault changes. Use
-      this if you want to run the watcher independently from an MCP client (via
+      Long-running process: keep each vault index live by reindexing on vault changes.
+      Use this if you want to run the watcher independently from an MCP client (via
       launchd/systemd).
 
       Options:
+        --vault <name=path>        A vault to watch. Repeat for more vaults. At least
+                                   one is required.
         --debounce <ms>            Per-file reindex debounce (ms) (default: 3000)
         --community-debounce <ms>  Graph-wide community detection debounce (ms)
                                    (default: 60000)
@@ -126,13 +131,14 @@ describe('CLI help-text snapshots', () => {
     expect(cmd.helpInformation()).toMatchInlineSnapshot(`
       "Usage: obsidian-brain search [options] <query>
 
-      Hybrid (default), semantic, or full-text search over the vault
+      Hybrid (default), semantic, or full-text search over one vault
 
       Options:
-        -l, --limit <n>    Max results (default: 10)
-        -m, --mode <mode>  hybrid (RRF-fused, the production default) | semantic |
-                           fulltext (default: \"hybrid\")
-        -h, --help         display help for command
+        --vault <name=path>  The vault to search. Exactly one is required.
+        -l, --limit <n>      Max results (default: 10)
+        -m, --mode <mode>    hybrid (RRF-fused, the production default) | semantic |
+                             fulltext (default: "hybrid")
+        -h, --help           display help for command
       "
     `);
   });
@@ -152,25 +158,25 @@ describe('CLI help-text snapshots', () => {
                                  hardcoded presets; pass --all to surface every entry
                                  in the bundled MTEB-derived seed (~348 models).
                                  --filter narrows by substring on model id.
-        recommend                Inspect the vault and recommend the best embedding
-                                 preset. Reads VAULT_PATH from env.
+        recommend <vault-path>   Inspect the vault folder and recommend the best
+                                 embedding preset.
         prefetch [preset]        Warm the HF cache for a preset's model. Defaults to
                                  the "english" preset.
         check [options] <id>     Fetch model metadata from HF without downloading the
                                  model (~1s). Add --load to also download + load via
                                  transformers.js (~30s).
-        refresh-cache [options]  Invalidate the metadata cache so the next server boot
-                                 refetches from the seed → HF chain. Cheap for seeded
-                                 models (~0 HF calls — the bundled seed repopulates
-                                 the cache instantly); 1 HF call per non-seeded BYOM
-                                 id. The prefix-strategy hash auto-detects any prefix
-                                 change and triggers a re-embed in bootstrap, so it is
-                                 safe to run any time you suspect cached metadata is
-                                 stale. Restart the server after running this. Caveat:
-                                 if you run it OFFLINE on a non-seeded BYOM id,
-                                 fallback safe defaults get cached — fix by running
-                                 again online or editing the override file (\`models
-                                 override\`).
+        refresh-cache [options]  Invalidate the metadata cache of every vault index in
+                                 DATA_DIR so the next server boot refetches from the
+                                 seed → HF chain. Cheap for seeded models (~0 HF calls
+                                 — the bundled seed repopulates the cache instantly);
+                                 1 HF call per non-seeded BYOM id. The prefix-strategy
+                                 hash auto-detects any prefix change and triggers a
+                                 re-embed in bootstrap, so it is safe to run any time
+                                 you suspect cached metadata is stale. Restart the
+                                 server after running this. Caveat: if you run it
+                                 OFFLINE on a non-seeded BYOM id, fallback safe
+                                 defaults get cached — fix by running again online or
+                                 editing the override file (\`models override\`).
         add [options] <id>       Register a new model not in the bundled seed.
                                  Required: --max-tokens. Optional: --query-prefix,
                                  --document-prefix (default ""). Asserts the id is not
@@ -243,14 +249,14 @@ describe('CLI help-text snapshots', () => {
     expect(refresh.helpInformation()).toMatchInlineSnapshot(`
       "Usage: obsidian-brain models refresh-cache [options]
 
-      Invalidate the metadata cache so the next server boot refetches from the seed →
-      HF chain. Cheap for seeded models (~0 HF calls — the bundled seed repopulates
-      the cache instantly); 1 HF call per non-seeded BYOM id. The prefix-strategy hash
-      auto-detects any prefix change and triggers a re-embed in bootstrap, so it is
-      safe to run any time you suspect cached metadata is stale. Restart the server
-      after running this. Caveat: if you run it OFFLINE on a non-seeded BYOM id,
-      fallback safe defaults get cached — fix by running again online or editing the
-      override file (\`models override\`).
+      Invalidate the metadata cache of every vault index in DATA_DIR so the next
+      server boot refetches from the seed → HF chain. Cheap for seeded models (~0 HF
+      calls — the bundled seed repopulates the cache instantly); 1 HF call per
+      non-seeded BYOM id. The prefix-strategy hash auto-detects any prefix change and
+      triggers a re-embed in bootstrap, so it is safe to run any time you suspect
+      cached metadata is stale. Restart the server after running this. Caveat: if you
+      run it OFFLINE on a non-seeded BYOM id, fallback safe defaults get cached — fix
+      by running again online or editing the override file (\`models override\`).
 
       Options:
         --model <id>  Refresh cache for one model id only (default: all entries)

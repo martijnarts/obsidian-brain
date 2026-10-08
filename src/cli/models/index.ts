@@ -3,7 +3,7 @@
  *
  * Subcommands:
  *   models list                       — print EMBEDDING_PRESETS as JSON (structured)
- *   models recommend                  — inspect vault, suggest best preset
+ *   models recommend <vault-path>     — inspect vault, suggest best preset
  *   models prefetch [preset]          — warm the HF cache for a preset's model
  *   models check <id>                 — fetch model metadata via HF API (no download).
  *                                       Add --load to also download + load the model.

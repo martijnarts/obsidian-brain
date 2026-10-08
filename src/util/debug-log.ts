@@ -18,7 +18,7 @@
  *
  * **How to enable** (Claude Desktop or any MCP client config):
  * ```json
- * "env": { "OBSIDIAN_BRAIN_DEBUG": "1", "VAULT_PATH": "..." }
+ * "env": { "OBSIDIAN_BRAIN_DEBUG": "1" }
  * ```
  * Output appears in `~/Library/Logs/Claude/mcp-server-obsidian-brain.log`
  * on macOS, prefixed with `obsidian-brain debug:`.

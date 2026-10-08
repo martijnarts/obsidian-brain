@@ -72,10 +72,10 @@ No restart hot-reload — changes take effect next time `server` (or `watch`) st
 If you don't run an MCP client continuously — for example you only launch Claude Desktop occasionally, but still want the index fresh so the first `search` is instant — use the `watch` subcommand. It's the same watcher code as `server`, minus the MCP transport.
 
 ```bash
-VAULT_PATH=/path/to/vault obsidian-brain watch
+obsidian-brain watch --vault notes=/path/to/vault
 ```
 
-Point launchd (macOS) or systemd (Linux) at it and let it run continuously. Templates in [launchd.md](./launchd.md#recommended-run-the-watcher-instead) and [systemd.md](./systemd.md#recommended-run-the-watcher-instead).
+Point launchd (macOS) or systemd (Linux) at it and let it run continuously. `watch` writes to `<DATA_DIR>/<name>/kg.db`, so it keeps a server's index live only when it uses the same `DATA_DIR` and the same vault name as the server. Templates in [launchd.md](./launchd.md#recommended-run-the-watcher-instead) and [systemd.md](./systemd.md#recommended-run-the-watcher-instead).
 
 ## Troubleshooting pointers
 

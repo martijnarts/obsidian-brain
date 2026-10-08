@@ -9,7 +9,7 @@ export class PluginUnavailableError extends Error {
       `obsidian-brain companion plugin unavailable: ${reason}. ` +
         `Install the plugin from https://github.com/sweir1/obsidian-brain-plugin ` +
         `(BRAT: "sweir1/obsidian-brain-plugin") and make sure Obsidian is ` +
-        `running with it enabled against the same vault as VAULT_PATH.`,
+        `running with it enabled against the same vault as the --vault path.`,
     );
     this.name = 'PluginUnavailableError';
   }

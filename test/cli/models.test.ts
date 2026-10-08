@@ -222,26 +222,18 @@ describe('models list', () => {
 // ---------------------------------------------------------------------------
 
 describe('models recommend', () => {
-  const origVaultPath = process.env.VAULT_PATH;
-
   afterEach(() => {
-    if (origVaultPath === undefined) {
-      delete process.env.VAULT_PATH;
-    } else {
-      process.env.VAULT_PATH = origVaultPath;
-    }
     mockAutoRecommendPreset.mockReset();
   });
 
-  it('calls autoRecommendPreset with env, VAULT_PATH, undefined and prints JSON', async () => {
-    process.env.VAULT_PATH = '/test/vault';
+  it('calls autoRecommendPreset with env, the vault path, undefined and prints JSON', async () => {
     mockAutoRecommendPreset.mockResolvedValue({
       preset: 'english',
       reason: 'no non-Latin characters detected',
       skipped: false,
     });
 
-    const { stdout } = await runModels(['recommend']);
+    const { stdout } = await runModels(['recommend', '/test/vault']);
 
     expect(mockAutoRecommendPreset).toHaveBeenCalledWith(
       process.env,
@@ -255,27 +247,23 @@ describe('models recommend', () => {
   });
 
   it('renders skipped result with skipped=true when model already set', async () => {
-    process.env.VAULT_PATH = '/test/vault';
     mockAutoRecommendPreset.mockResolvedValue({
       preset: 'english',
       reason: 'explicit env var set',
       skipped: true,
     });
 
-    const { stdout } = await runModels(['recommend']);
+    const { stdout } = await runModels(['recommend', '/test/vault']);
     const parsed = JSON.parse(stdout);
     expect(parsed.skipped).toBe(true);
     expect(parsed.preset).toBe('english');
   });
 
-  it('exits with error when VAULT_PATH is not set', async () => {
-    delete process.env.VAULT_PATH;
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
-
-    await runModels(['recommend']).catch(() => {});
-
-    expect(mockExit).toHaveBeenCalledWith(1);
-    mockExit.mockRestore();
+  it('requires the vault path argument', async () => {
+    await expect(runModels(['recommend'])).rejects.toMatchObject({
+      code: 'commander.missingArgument',
+    });
+    expect(mockAutoRecommendPreset).not.toHaveBeenCalled();
   });
 });
 
@@ -455,7 +443,7 @@ describe('models refresh-cache', () => {
     const os = await import('node:os');
     const path = await import('node:path');
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'obs-cli-cache-'));
-    process.env = { ...origEnv, VAULT_PATH: '/tmp/fake-vault', DATA_DIR: tmpDir };
+    process.env = { ...origEnv, DATA_DIR: tmpDir };
   });
 
   afterEach(async () => {
@@ -469,7 +457,9 @@ describe('models refresh-cache', () => {
     const { openDb } = await import('../../src/store/db.js');
     const { upsertCachedMetadata, loadCachedMetadata } = await import('../../src/embeddings/metadata-cache.js');
     const path = await import('node:path');
-    const dbPath = path.join(tmpDir, 'kg.db');
+    const fs = await import('node:fs');
+    fs.mkdirSync(path.join(tmpDir, 'notes'));
+    const dbPath = path.join(tmpDir, 'notes', 'kg.db');
     const db = openDb(dbPath);
     upsertCachedMetadata(db, {
       modelId: 'a/b', dim: 384, maxTokens: 512, queryPrefix: '', documentPrefix: '',
@@ -497,7 +487,9 @@ describe('models refresh-cache', () => {
     const { openDb } = await import('../../src/store/db.js');
     const { upsertCachedMetadata, loadCachedMetadata } = await import('../../src/embeddings/metadata-cache.js');
     const path = await import('node:path');
-    const dbPath = path.join(tmpDir, 'kg.db');
+    const fs = await import('node:fs');
+    fs.mkdirSync(path.join(tmpDir, 'notes'));
+    const dbPath = path.join(tmpDir, 'notes', 'kg.db');
     const db = openDb(dbPath);
     upsertCachedMetadata(db, {
       modelId: 'keep/me', dim: 384, maxTokens: 512, queryPrefix: '', documentPrefix: '',
@@ -520,10 +512,46 @@ describe('models refresh-cache', () => {
     db2.close();
   });
 
-  it('returns rowsCleared=0 when the cache is already empty', async () => {
+  it('returns rowsCleared=0 when no vault has an index yet', async () => {
     const { stdout } = await runModels(['refresh-cache']);
     const parsed = JSON.parse(stdout);
     expect(parsed.rowsCleared).toBe(0);
+    expect(parsed.vaults).toEqual([]);
+  });
+
+  it('clears the cache of every vault index in DATA_DIR, and skips other entries', async () => {
+    const { openDb } = await import('../../src/store/db.js');
+    const { upsertCachedMetadata, loadCachedMetadata } = await import('../../src/embeddings/metadata-cache.js');
+    const path = await import('node:path');
+    const fs = await import('node:fs');
+    const row = (modelId: string) => ({
+      modelId, dim: 384, maxTokens: 512, queryPrefix: '', documentPrefix: '',
+      prefixSource: 'metadata' as const, baseModel: null, sizeBytes: 100, fetchedAt: 1000,
+    });
+    const dbPaths = ['alpha', 'beta'].map((name) => {
+      fs.mkdirSync(path.join(tmpDir, name));
+      const dbPath = path.join(tmpDir, name, 'kg.db');
+      const db = openDb(dbPath);
+      upsertCachedMetadata(db, row(`${name}/model`));
+      db.close();
+      return dbPath;
+    });
+    // Neither is a vault index.
+    fs.mkdirSync(path.join(tmpDir, 'empty'));
+    fs.writeFileSync(path.join(tmpDir, 'stray.txt'), '');
+
+    const { stdout } = await runModels(['refresh-cache']);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.rowsCleared).toBe(2);
+    expect(parsed.vaults).toEqual([
+      { dbPath: dbPaths[0], rowsCleared: 1 },
+      { dbPath: dbPaths[1], rowsCleared: 1 },
+    ]);
+    for (const [i, name] of ['alpha', 'beta'].entries()) {
+      const db = openDb(dbPaths[i]!);
+      expect(loadCachedMetadata(db, `${name}/model`)).toBeNull();
+      db.close();
+    }
   });
 });
 

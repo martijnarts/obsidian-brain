@@ -23,8 +23,7 @@ After=network.target
 
 [Service]
 Type=simple
-Environment=VAULT_PATH=/absolute/path/to/your/vault
-ExecStart=/usr/bin/obsidian-brain watch
+ExecStart=/usr/bin/obsidian-brain watch --vault notes=/absolute/path/to/your/vault
 Restart=always
 RestartSec=5
 StandardOutput=append:%h/.local/state/obsidian-brain-watch.log
@@ -43,7 +42,7 @@ systemctl --user enable --now obsidian-brain-watch.service
 systemctl --user status obsidian-brain-watch.service
 ```
 
-Adjust `/usr/bin/obsidian-brain` to match `which obsidian-brain`. If you want the service to survive logout, run `sudo loginctl enable-linger $USER` once. The timer-based flow below is the fallback if you set `OBSIDIAN_BRAIN_NO_WATCH=1` or your vault lives on a filesystem where inotify doesn't fire (SMB, some NFS setups).
+Adjust `/usr/bin/obsidian-brain` to match `which obsidian-brain`. The service keeps a server's index live only when it uses the same `DATA_DIR` and the same vault name as the server. If you want the service to survive logout, run `sudo loginctl enable-linger $USER` once. The timer-based flow below is the fallback if you set `OBSIDIAN_BRAIN_NO_WATCH=1` or your vault lives on a filesystem where inotify doesn't fire (SMB, some NFS setups).
 
 ## What it does (scheduled fallback)
 
@@ -52,7 +51,7 @@ A systemd user timer runs `obsidian-brain index` every 30 minutes as your user a
 ## Prerequisites
 
 - `npm install -g obsidian-brain` — puts the `obsidian-brain` binary on your `PATH`. Confirm with `which obsidian-brain` and note the path (commonly `/usr/bin/obsidian-brain`, `/usr/local/bin/obsidian-brain`, or an nvm-scoped variant).
-- You know the absolute path to your Obsidian vault (`VAULT_PATH`).
+- You know the absolute path to your Obsidian vault and the name your server uses for it (`--vault <name>=<path>`).
 - A systemd-based Linux distribution (most modern distros: Ubuntu, Debian, Fedora, Arch, openSUSE, etc.).
 
 If you're running from a local source clone instead of npm, see the [source install variant](#variant-running-from-a-local-clone) at the bottom of this file.
@@ -68,8 +67,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-Environment=VAULT_PATH=/absolute/path/to/your/vault
-ExecStart=/usr/bin/obsidian-brain index
+ExecStart=/usr/bin/obsidian-brain index --vault notes=/absolute/path/to/your/vault
 StandardOutput=append:%h/.local/state/obsidian-brain-index.log
 StandardError=append:%h/.local/state/obsidian-brain-index.err
 ```
@@ -78,6 +76,7 @@ Notes:
 
 - `%h` is expanded by systemd to your `$HOME` directory.
 - Adjust `/usr/bin/obsidian-brain` to match wherever `which obsidian-brain` reports on your system. If you installed node via `nvm`, the binary will be under `/absolute/path/to/.nvm/versions/node/vXX.Y.Z/bin/obsidian-brain` — use that full path; systemd does **not** expand `~` inside `ExecStart`.
+- The job writes to `<DATA_DIR>/<name>/kg.db`. It keeps a server's index fresh only when it uses the same `DATA_DIR` and the same vault name as the server. Add `Environment=DATA_DIR=...` if the server sets one.
 - `Type=oneshot` is correct here: the reindex runs to completion and exits; the timer will trigger the next run.
 
 ## 2. Create the timer unit
@@ -177,7 +176,7 @@ Log files under `~/.local/state/` are left in place — remove them manually if 
   PATH=/absolute/path/to/node/bin:$PATH npm rebuild -g better-sqlite3
   ```
 
-- **Environment looks empty** — systemd user services start with a minimal environment. If your indexer needs extra variables beyond `VAULT_PATH`, add more `Environment=KEY=VALUE` lines to the `[Service]` section, one per line.
+- **Environment looks empty** — systemd user services start with a minimal environment. If your indexer needs extra variables (for example `DATA_DIR`), add `Environment=KEY=VALUE` lines to the `[Service]` section, one per line.
 
 ## Variant: running from a local clone
 
@@ -187,8 +186,7 @@ If you're developing obsidian-brain from a source clone rather than the npm pack
 [Service]
 Type=oneshot
 WorkingDirectory=/absolute/path/to/obsidian-brain
-Environment=VAULT_PATH=/absolute/path/to/your/vault
-ExecStart=/usr/bin/node dist/cli/index.js index
+ExecStart=/usr/bin/node dist/cli/index.js index --vault notes=/absolute/path/to/your/vault
 StandardOutput=append:%h/.local/state/obsidian-brain-index.log
 StandardError=append:%h/.local/state/obsidian-brain-index.err
 ```

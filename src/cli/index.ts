@@ -18,11 +18,10 @@ import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { Command, InvalidArgumentError, Option } from 'commander';
-import { createContext } from '../context.js';
-import { startServer } from '../server.js';
+import { closeContext, startServer } from '../server.js';
 import { runHttpServer } from '../http-server.js';
-import type { VaultSpec } from '../vaults.js';
-import { resolveDataConfig } from '../config.js';
+import { closeVaults, openVaults, type VaultSpec } from '../vaults.js';
+import { resolveDataDir } from '../config.js';
 import { debugLog } from '../util/debug-log.js';
 import { dropEmbeddingState } from '../store/db.js';
 import { startWatcher } from '../pipeline/watcher.js';
@@ -69,11 +68,7 @@ program
   .description(
     'Start the MCP server. Every tool takes a required `vault` argument naming one of the --vault names. Indexes live in <DATA_DIR>/<name>.',
   )
-  .option(
-    '--vault <name=path>',
-    'A vault to serve. Repeat for more vaults. At least one is required.',
-    (value: string, previous: VaultSpec[] = []) => [...previous, parseVaultSpec(value)],
-  )
+  .option(VAULT_FLAG, 'A vault to serve. Repeat for more vaults. At least one is required.', collectVault)
   .addOption(
     new Option(
       '--transport <transport>',
@@ -84,19 +79,9 @@ program
   )
   .option('--listen <host:port>', 'Address to listen on with --transport http (default: 127.0.0.1:8080)')
   .action(async (opts: { vault?: VaultSpec[]; transport: 'stdio' | 'http'; listen?: string }) => {
-    const vaults = opts.vault ?? [];
     debugLog("cli: 'server' subcommand action entered");
-    if (vaults.length === 0) {
-      throw new UserError('Give at least one vault with --vault <name=path>.', {
-        hint: 'Example: obsidian-brain server --vault notes=/path/to/vault',
-      });
-    }
-    const names = vaults.map((v) => v.name);
-    const duplicate = names.find((name, i) => names.indexOf(name) !== i);
-    if (duplicate) {
-      throw new UserError(`Vault name "${duplicate}" is given more than once.`);
-    }
-    const dataDir = resolveDataConfig().dataDir;
+    const vaults = requireVaults(opts.vault);
+    const dataDir = resolveDataDir();
     if (opts.transport === 'stdio') {
       if (opts.listen !== undefined) {
         throw new UserError('--listen only applies with --transport http.');
@@ -111,31 +96,38 @@ program
 
 program
   .command('index')
-  .description('Scan the vault and update the knowledge-graph index (incremental)')
+  .description('Scan each vault and update its knowledge-graph index (incremental), one vault at a time')
+  .option(VAULT_FLAG, 'A vault to index. Repeat for more vaults. At least one is required.', collectVault)
   .option('-r, --resolution <n>', 'Louvain resolution (passing this forces a community-cache refresh even if no files changed)', parseFloat)
   .option(
     '--drop',
     'Drop all embeddings + sync state before indexing. Mostly an escape hatch — the bootstrap auto-detects EMBEDDING_MODEL / EMBEDDING_PROVIDER changes and wipes embedding state on its own; `--drop` is for forcing a from-scratch rebuild when something else has gone wrong.',
     false,
   )
-  .action(async (opts: { resolution?: number; drop: boolean }) => {
-    const ctx = await createContext();
-    if (opts.drop) {
-      dropEmbeddingState(ctx.db);
-      process.stderr.write(
-        'obsidian-brain: dropped existing embeddings + sync state\n',
-      );
+  .action(async (opts: { vault?: VaultSpec[]; resolution?: number; drop: boolean }) => {
+    const vaults = await openVaults(requireVaults(opts.vault), resolveDataDir(), closeContext);
+    try {
+      const stats: Record<string, unknown> = {};
+      for (const { name, ctx } of vaults) {
+        if (opts.drop) {
+          dropEmbeddingState(ctx.db);
+          process.stderr.write(`obsidian-brain: dropped existing embeddings + sync state of "${name}"\n`);
+        }
+        await ctx.ensureEmbedderReady();
+        stats[name] = await ctx.pipeline.index(ctx.config.vaultPath, opts.resolution);
+      }
+      process.stdout.write(`${JSON.stringify(stats, null, 2)}\n`);
+    } finally {
+      await closeVaults(vaults, closeContext);
     }
-    await ctx.ensureEmbedderReady();
-    const stats = await ctx.pipeline.index(ctx.config.vaultPath, opts.resolution);
-    process.stdout.write(`${JSON.stringify(stats, null, 2)}\n`);
   });
 
 program
   .command('watch')
   .description(
-    'Long-running process: keep the index live by reindexing on vault changes. Use this if you want to run the watcher independently from an MCP client (via launchd/systemd).',
+    'Long-running process: keep each vault index live by reindexing on vault changes. Use this if you want to run the watcher independently from an MCP client (via launchd/systemd).',
   )
+  .option(VAULT_FLAG, 'A vault to watch. Repeat for more vaults. At least one is required.', collectVault)
   .option('--debounce <ms>', 'Per-file reindex debounce (ms)', (v) => parseInt(v, 10), 3000)
   .option(
     '--community-debounce <ms>',
@@ -144,19 +136,21 @@ program
     60000,
   )
   .action(
-    async (opts: { debounce: number; communityDebounce: number }) => {
-      const ctx = await createContext();
-      await ctx.ensureEmbedderReady();
-      const handle = startWatcher(ctx, {
-        debounceMs: opts.debounce,
-        communityDebounceMs: opts.communityDebounce,
-      });
+    async (opts: { vault?: VaultSpec[]; debounce: number; communityDebounce: number }) => {
+      const vaults = await openVaults(requireVaults(opts.vault), resolveDataDir(), closeContext);
+      for (const vault of vaults) {
+        await vault.ctx.ensureEmbedderReady();
+        vault.watcher = startWatcher(vault.ctx, {
+          debounceMs: opts.debounce,
+          communityDebounceMs: opts.communityDebounce,
+        });
+      }
       let shuttingDown = false;
       const shutdown = async (reason: string): Promise<void> => {
         if (shuttingDown) return;
         shuttingDown = true;
         process.stderr.write(`obsidian-brain: shutting down (${reason}).\n`);
-        await handle.close();
+        await closeVaults(vaults, closeContext);
         process.exit(0);
       };
       process.on('SIGINT', () => void shutdown('SIGINT'));
@@ -169,7 +163,8 @@ program
 
 program
   .command('search <query>')
-  .description('Hybrid (default), semantic, or full-text search over the vault')
+  .description('Hybrid (default), semantic, or full-text search over one vault')
+  .option(VAULT_FLAG, 'The vault to search. Exactly one is required.', collectVault)
   .option('-l, --limit <n>', 'Max results', parseInt, 10)
   .option(
     '-m, --mode <mode>',
@@ -179,25 +174,32 @@ program
   .action(
     async (
       query: string,
-      opts: { limit: number; mode: 'hybrid' | 'semantic' | 'fulltext' },
+      opts: { vault?: VaultSpec[]; limit: number; mode: 'hybrid' | 'semantic' | 'fulltext' },
     ) => {
-      const ctx = await createContext();
-      let results;
-      if (opts.mode === 'fulltext') {
-        results = ctx.search.fulltext(query, opts.limit);
-      } else if (opts.mode === 'semantic') {
-        await ctx.ensureEmbedderReady();
-        results = await ctx.search.semantic(query, opts.limit);
-      } else if (opts.mode === 'hybrid') {
-        await ctx.ensureEmbedderReady();
-        results = await ctx.search.hybrid(query, opts.limit);
-      } else {
-        process.stderr.write(
-          `obsidian-brain: unknown --mode '${opts.mode}'. Valid: hybrid, semantic, fulltext.\n`,
-        );
-        process.exit(1);
+      const specs = requireVaults(opts.vault);
+      if (specs.length > 1) {
+        throw new UserError('search takes exactly one --vault.');
       }
-      process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+      if (!['hybrid', 'semantic', 'fulltext'].includes(opts.mode)) {
+        throw new UserError(`Unknown --mode '${opts.mode}'. Valid: hybrid, semantic, fulltext.`);
+      }
+      const vaults = await openVaults(specs, resolveDataDir(), closeContext);
+      try {
+        const { ctx } = vaults[0]!;
+        let results;
+        if (opts.mode === 'fulltext') {
+          results = ctx.search.fulltext(query, opts.limit);
+        } else {
+          await ctx.ensureEmbedderReady();
+          results =
+            opts.mode === 'semantic'
+              ? await ctx.search.semantic(query, opts.limit)
+              : await ctx.search.hybrid(query, opts.limit);
+        }
+        process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+      } finally {
+        await closeVaults(vaults, closeContext);
+      }
     },
   );
 
@@ -206,6 +208,28 @@ program
 }
 
 const VAULT_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+const VAULT_FLAG = '--vault <name=path>';
+
+/** Commander collector for the repeatable --vault flag. */
+function collectVault(value: string, previous: VaultSpec[] = []): VaultSpec[] {
+  return [...previous, parseVaultSpec(value)];
+}
+
+/** At least one vault, with distinct names. */
+function requireVaults(vaults: VaultSpec[] | undefined): VaultSpec[] {
+  if (!vaults || vaults.length === 0) {
+    throw new UserError('Give at least one vault with --vault <name=path>.', {
+      hint: 'Example: obsidian-brain server --vault notes=/path/to/vault',
+    });
+  }
+  const names = vaults.map((v) => v.name);
+  const duplicate = names.find((name, i) => names.indexOf(name) !== i);
+  if (duplicate) {
+    throw new UserError(`Vault name "${duplicate}" is given more than once.`);
+  }
+  return vaults;
+}
 
 function parseVaultSpec(value: string): VaultSpec {
   const eq = value.indexOf('=');
