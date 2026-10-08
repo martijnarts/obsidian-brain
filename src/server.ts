@@ -31,11 +31,14 @@ import { registerFindPathBetweenTool } from './tools/find-path-between.js';
 import { registerDetectThemesTool } from './tools/detect-themes.js';
 import { registerRankNotesTool } from './tools/rank-notes.js';
 import { registerCreateNoteTool } from './tools/create-note.js';
+import { registerCreateNoteFromTemplateTool } from './tools/create-note-from-template.js';
 import { registerEditNoteTool } from './tools/edit-note.js';
 import { registerApplyEditPreviewTool } from './tools/apply-edit-preview.js';
 import { registerLinkNotesTool } from './tools/link-notes.js';
 import { registerMoveNoteTool } from './tools/move-note.js';
 import { registerDeleteNoteTool } from './tools/delete-note.js';
+import { registerReadCanvasTool } from './tools/read-canvas.js';
+import { registerEditCanvasTool } from './tools/edit-canvas.js';
 import { registerReindexTool } from './tools/reindex.js';
 import { registerActiveNoteTool } from './tools/active-note.js';
 import { registerDataviewQueryTool } from './tools/dataview-query.js';
@@ -142,7 +145,7 @@ export async function startServer(opts: ServerOptions): Promise<void> {
   debugLog('startServer: all wiring complete, function returning — server is now live');
 }
 
-/** Registers all 23 tools on `server`, bound to one vault's context. */
+/** Registers every tool on `server`, bound to one vault's context. */
 export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerSearchTool(server, ctx);
   registerReadNoteTool(server, ctx);
@@ -155,11 +158,14 @@ export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerDetectThemesTool(server, ctx);
   registerRankNotesTool(server, ctx);
   registerCreateNoteTool(server, ctx);
+  registerCreateNoteFromTemplateTool(server, ctx);
   registerEditNoteTool(server, ctx);
   registerApplyEditPreviewTool(server, ctx);
   registerLinkNotesTool(server, ctx);
   registerMoveNoteTool(server, ctx);
   registerDeleteNoteTool(server, ctx);
+  registerReadCanvasTool(server, ctx);
+  registerEditCanvasTool(server, ctx);
   registerReindexTool(server, ctx);
   registerActiveNoteTool(server, ctx);
   registerDataviewQueryTool(server, ctx);
