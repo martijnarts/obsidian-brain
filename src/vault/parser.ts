@@ -171,7 +171,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function extractInlineTags(content: string): string[] {
+export function extractInlineTags(content: string): string[] {
   const tags = new Set<string>();
   const pattern = /(?<!\w)#([a-zA-Z][\w-\/]*)/g;
   let match;

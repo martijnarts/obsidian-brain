@@ -49,6 +49,13 @@ import { registerListTagsTool } from './tools/list-tags.js';
 import { registerListBookmarksTool } from './tools/list-bookmarks.js';
 import { registerListPropertyValuesTool } from './tools/list-property-values.js';
 import { registerUpdatePropertiesTool } from './tools/update-properties.js';
+import { registerReadNotesTool } from './tools/read-notes.js';
+import { registerReadNotePartTool } from './tools/read-note-part.js';
+import { registerFileInfoTool } from './tools/file-info.js';
+import { registerCreateFolderTool } from './tools/create-folder.js';
+import { registerDeleteFolderTool } from './tools/delete-folder.js';
+import { registerListAttachmentsTool } from './tools/list-attachments.js';
+import { registerCreateAttachmentTool } from './tools/create-attachment.js';
 
 export interface ServerOptions {
   vaults: VaultSpec[];
@@ -176,6 +183,13 @@ export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerListBookmarksTool(server, ctx);
   registerListPropertyValuesTool(server, ctx);
   registerUpdatePropertiesTool(server, ctx);
+  registerReadNotesTool(server, ctx);
+  registerReadNotePartTool(server, ctx);
+  registerFileInfoTool(server, ctx);
+  registerCreateFolderTool(server, ctx);
+  registerDeleteFolderTool(server, ctx);
+  registerListAttachmentsTool(server, ctx);
+  registerCreateAttachmentTool(server, ctx);
 }
 
 /** Waits briefly for queued indexing, then releases the embedder and the DB. */
