@@ -59,6 +59,11 @@ import { registerCreateAttachmentTool } from './tools/create-attachment.js';
 import { registerListTasksTool } from './tools/list-tasks.js';
 import { registerSetTaskStatusTool } from './tools/set-task-status.js';
 import { registerEnsureBlockIdTool } from './tools/ensure-block-id.js';
+import { registerFindBrokenLinksTool } from './tools/find-broken-links.js';
+import { registerFindOrphanedNotesTool } from './tools/find-orphaned-notes.js';
+import { registerSearchAndReplaceTool } from './tools/search-and-replace.js';
+import { registerRenameTagTool } from './tools/rename-tag.js';
+import { registerRenameHeadingTool } from './tools/rename-heading.js';
 
 export interface ServerOptions {
   vaults: VaultSpec[];
@@ -196,6 +201,11 @@ export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerListTasksTool(server, ctx);
   registerSetTaskStatusTool(server, ctx);
   registerEnsureBlockIdTool(server, ctx);
+  registerFindBrokenLinksTool(server, ctx);
+  registerFindOrphanedNotesTool(server, ctx);
+  registerSearchAndReplaceTool(server, ctx);
+  registerRenameTagTool(server, ctx);
+  registerRenameHeadingTool(server, ctx);
 }
 
 /** Waits briefly for queued indexing, then releases the embedder and the DB. */
