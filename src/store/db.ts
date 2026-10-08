@@ -88,12 +88,7 @@ export function initSchema(db: DatabaseHandle): void {
     CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
     CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
 
-    CREATE TABLE IF NOT EXISTS communities (
-      id INTEGER PRIMARY KEY,
-      label TEXT NOT NULL,
-      summary TEXT NOT NULL DEFAULT '',
-      node_ids TEXT NOT NULL DEFAULT '[]'
-    );
+    DROP TABLE IF EXISTS communities;
 
     CREATE TABLE IF NOT EXISTS sync (
       path TEXT PRIMARY KEY,

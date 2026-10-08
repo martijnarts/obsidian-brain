@@ -59,9 +59,9 @@ Quit Claude (⌘Q), relaunch. First boot auto-indexes your vault and downloads a
 
     ---
 
-    PageRank, Louvain community detection, shortest-path between any two notes in your vault.
+    PageRank, betweenness centrality, shortest-path between any two notes in your vault.
 
-    `find_connections` · `find_path_between` · `detect_themes` · `rank_notes`
+    `find_connections` · `find_path_between` · `rank_notes`
 
 -   :material-pencil-outline: __Write__
 
@@ -106,7 +106,7 @@ Quit Claude (⌘Q), relaunch. First boot auto-indexes your vault and downloads a
 - __Obsidian can be closed__ — obsidian-brain reads `.md` files directly off disk, not through the Obsidian runtime.
 - __Nothing to install inside Obsidian__ for the core feature set.
 - __Chunk-level semantic search__ — LRA has no embeddings.
-- __Graph analytics__ (PageRank, Louvain community detection, shortest-path) — LRA has no graph layer.
+- __Graph analytics__ (PageRank, betweenness centrality, shortest-path) — LRA has no graph layer.
 - __Stdio-only__ — no HTTP server, no port conflicts, no firewall prompts, no transport bugs.
 
 [Architecture deep-dive →](architecture.md) · [Tool reference →](tools.md) · [Changelog →](CHANGELOG.md)

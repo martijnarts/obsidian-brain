@@ -7,27 +7,11 @@ import {
   pageRank,
   betweennessCentralityNormalized,
 } from '../graph/centrality.js';
-import { getCommunity } from '../store/communities.js';
-import type { GraphInstance } from '../graph/graphology-compat.js';
-import { Graph } from '../graph/graphology-compat.js';
 
 interface RankedEntry {
   id: string;
   title: string;
   score: number;
-}
-
-function filterToCommunity(g: GraphInstance, nodeIds: Set<string>): GraphInstance {
-  const out = new Graph({ multi: false, type: 'undirected' });
-  g.forEachNode((id, attrs) => {
-    if (nodeIds.has(id)) out.addNode(id, attrs);
-  });
-  g.forEachEdge((_e, _a, source, target) => {
-    if (nodeIds.has(source) && nodeIds.has(target) && !out.hasEdge(source, target)) {
-      out.addEdge(source, target);
-    }
-  });
-  return out;
 }
 
 export function registerRankNotesTool(server: McpServer, ctx: ServerContext): void {
@@ -38,12 +22,11 @@ export function registerRankNotesTool(server: McpServer, ctx: ServerContext): vo
     {
       metric: z.enum(['influence', 'bridging', 'both']).optional().describe('Ranking metric. Default `"both"`. `"influence"` = PageRank; `"bridging"` = betweenness centrality.'),
       limit: z.number().int().positive().optional().describe('Max results to return. Default 20.'),
-      themeId: z.string().optional().describe('Restrict ranking to members of one theme cluster.'),
       includeStubs: z.boolean().optional().default(false).describe('Default `false`. Set `true` to include unresolved wiki-link target stubs (`frontmatter._stub: true`) in the ranked set. With stubs in, popular link targets dominate eigenvector-style centrality even when they have no real content behind them.'),
       minIncomingLinks: z.number().int().nonnegative().optional().default(2).describe('Minimum incoming links for influence ranking. Default 2. Pass 0 to see unfiltered PageRank.'),
     },
     async (args) => {
-      const { metric, limit, themeId, includeStubs, minIncomingLinks } = args;
+      const { metric, limit, includeStubs, minIncomingLinks } = args;
       // Preserve the Zod default of 2 even when the registered handler is
       // called from a mock server that skips schema parsing (see test harness).
       const minIn = minIncomingLinks ?? 2;
@@ -57,15 +40,7 @@ export function registerRankNotesTool(server: McpServer, ctx: ServerContext): vo
         inCounts[id] = directed.inNeighbors(id).length;
       });
 
-      let g = kg.toUndirected();
-
-      if (themeId !== undefined) {
-        const community = getCommunity(ctx.db, themeId);
-        if (!community) {
-          throw new Error(`No theme found matching "${themeId}"`);
-        }
-        g = filterToCommunity(g, new Set(community.nodeIds));
-      }
+      const g = kg.toUndirected();
 
       const metric_ = metric ?? 'both';
       const lim = limit ?? 20;

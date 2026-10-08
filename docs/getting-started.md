@@ -57,7 +57,6 @@ The vaults are given with `--vault <name>=<path>` flags on `obsidian-brain serve
 | `OBSIDIAN_BRAIN_NO_WATCH` | no | unset | Set to `1` to disable the live watcher and fall back to scheduled re-indexing. |
 | `OBSIDIAN_BRAIN_NO_CATCHUP` | no | unset | Set to `1` to disable the startup catchup reindex. |
 | `OBSIDIAN_BRAIN_WATCH_DEBOUNCE_MS` | no | `3000` | Per-file reindex debounce for the watcher. |
-| `OBSIDIAN_BRAIN_COMMUNITY_DEBOUNCE_MS` | no | `60000` | Graph-wide community-detection debounce. |
 | `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS` | no | `30000` | Per-tool-call timeout. |
 | `OBSIDIAN_BRAIN_DEBUG` | no | unset | Set to `1` for a verbose synchronous startup trace on stderr — every preflight, createContext, server.connect, and shutdown step is logged with a monotonic timestamp. The last line before any silent failure pinpoints exactly which step the server reached. No-op when unset (zero output, zero overhead). Diagnostic-only — leave unset under normal use. |
 | `OBSIDIAN_BRAIN_LOG_FORMAT` | no | unset | Set to `ndjson` for one-JSON-object-per-line stderr output (timestamp + level + message + structured fields). Default is human-readable plain text. Useful when piping logs into aggregators (Datadog, Loki, Vector, journald). |
@@ -66,7 +65,7 @@ This table covers the knobs typical users need. For the full reference (includin
 
 ## Next steps
 
-- Browse the [tool reference](tools.md) — 42 tools grouped by intent.
+- Browse the [tool reference](tools.md) — 41 tools grouped by intent.
 - Read [Architecture](architecture.md) for *why* stdio, SQLite, and local embeddings.
 - See [Configuration](configuration.md) for the full environment-variable reference.
 - See [Models](models.md) for the preset table, MTEB rankings, license catalogue, and BYOM recipes.

@@ -10,9 +10,6 @@ export interface WatcherOptions {
   /** Per-file reindex debounce (ms). Collapses bursts of writes from
    *  Obsidian's autosave into a single reindex. */
   debounceMs?: number;
-  /** Graph-wide Louvain-recompute debounce (ms). Longer than debounceMs so
-   *  community detection runs at most once per quiet period. */
-  communityDebounceMs?: number;
 }
 
 export interface WatcherHandle {
@@ -23,14 +20,11 @@ export interface WatcherHandle {
 }
 
 const DEFAULT_DEBOUNCE_MS = 3_000;
-const DEFAULT_COMMUNITY_DEBOUNCE_MS = 60_000;
 
 /**
  * Watch the vault and keep the index live. Chokidar's awaitWriteFinish +
  * our own per-file debounce collapses Obsidian's ~2s autosave cadence into
- * a single reindex per editing pause. Community detection (Louvain over the
- * whole graph) runs on a separate, longer debounce — it's the only expensive
- * thing and doesn't need to fire for every keystroke.
+ * a single reindex per editing pause.
  */
 export function startWatcher(
   ctx: ServerContext,
@@ -38,13 +32,9 @@ export function startWatcher(
 ): WatcherHandle {
   const vaultPath = ctx.config.vaultPath;
   const debounceMs = opts.debounceMs ?? DEFAULT_DEBOUNCE_MS;
-  const communityDebounceMs =
-    opts.communityDebounceMs ?? DEFAULT_COMMUNITY_DEBOUNCE_MS;
 
   const pendingFiles = new Map<string, NodeJS.Timeout>();
   const inFlight = new Set<Promise<unknown>>();
-  let communityDirty = false;
-  let communityTimer: NodeJS.Timeout | null = null;
   let shuttingDown = false;
 
   const track = <T>(p: Promise<T>): Promise<T> => {
@@ -68,26 +58,6 @@ export function startWatcher(
     awaitWriteFinish: { stabilityThreshold: 2_000, pollInterval: 150 },
     persistent: true,
   });
-
-  const scheduleCommunityRefresh = () => {
-    if (communityTimer) clearTimeout(communityTimer);
-    communityTimer = setTimeout(() => {
-      communityTimer = null;
-      if (!communityDirty || shuttingDown) return;
-      communityDirty = false;
-      track(
-        (async () => {
-          try {
-            const count = ctx.pipeline.refreshCommunities();
-            logger.info(`refreshed ${count} communities`, { communityCount: count });
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            logger.error(`community refresh failed: ${errMsg}`, { error: errMsg });
-          }
-        })(),
-      );
-    }, communityDebounceMs);
-  };
 
   const scheduleFile = (
     absPath: string,
@@ -120,8 +90,6 @@ export function startWatcher(
                     (result.stubsCreated > 0 ? ` (+${result.stubsCreated} stubs)` : ''),
                   { event: verb, path: relPath, stubsCreated: result.stubsCreated },
                 );
-                communityDirty = true;
-                scheduleCommunityRefresh();
               }
             } catch (err) {
               const errMsg = err instanceof Error ? err.message : String(err);
@@ -150,8 +118,6 @@ export function startWatcher(
     shuttingDown = true;
     for (const timer of pendingFiles.values()) clearTimeout(timer);
     pendingFiles.clear();
-    if (communityTimer) clearTimeout(communityTimer);
-    communityTimer = null;
     await watcher.close();
     // Drain in-flight work so the DB isn't closed mid-operation by the caller.
     await Promise.allSettled([...inFlight]);

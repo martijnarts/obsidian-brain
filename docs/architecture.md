@@ -46,8 +46,7 @@ flowchart LR
     Remove --> Store
     Skip --> Done
     Store --> Done
-    Done["All files handled"] --> Comm["Re-detect<br/>communities (Louvain)"]
-    Comm --> Stats["Return IndexStats"]
+    Done["All files handled"] --> Stats["Return IndexStats"]
 ```
 
 Incremental by default — only files whose `mtime` has changed go through parse + embed. That's why a re-index of a 10k-note vault with nothing changed costs roughly one `stat()` per file.
@@ -74,11 +73,11 @@ There is no default vault, so a wrong-vault write is always an explicit choice b
 
 ## Why SQLite with FTS5 + sqlite-vec
 
-The index is a single `better-sqlite3` file that holds everything: graph nodes, edges, communities, full-text index, vector embeddings, and per-file sync state. No separate vector DB (LanceDB, Chroma, Qdrant), no separate search daemon (Meilisearch, Tantivy).
+The index is a single `better-sqlite3` file that holds everything: graph nodes, edges, full-text index, vector embeddings, and per-file sync state. No separate vector DB (LanceDB, Chroma, Qdrant), no separate search daemon (Meilisearch, Tantivy).
 
 Reference points in the code:
 
-- Schema: `src/store/db.ts` — `nodes`, `edges`, `communities`, `sync`, `chunks`, `index_metadata`, plus `embedder_capability` (per-model adaptive capacity + metadata cache) and `failed_chunks` (fault-tolerant skip log); the FTS5 virtual table `nodes_fts` (tokenizer `porter unicode61`); and two sqlite-vec virtual tables: `nodes_vec` (mean-pooled note-level vector, kept for compat) and `chunks_vec` (per-chunk vectors, the main retrieval target). The vec0 dim is reconciled against the embedder at runtime and `index_metadata` records the active embedding model/dim/provider so a mismatch on reboot triggers an auto-reindex (`src/pipeline/bootstrap.ts`). Auto-reindex also fires on schema-version bumps, prefix-strategy changes, and provider switches (Ollama ↔ transformers also wipes `embedder_capability` and `failed_chunks` so stale capacity / metadata can't poison the next pass). `embedder_capability` caches per-model `(advertised_max_tokens, discovered_max_tokens, method, dim, query_prefix, document_prefix, prefix_source, base_model, size_bytes, fetched_at)` keyed on `(embedder_id, model_hash)` so the chunker picks a safe token budget AND the embedder applies the correct query/document prefix without re-probing on every boot; the cache lives forever once written (HF model configs are immutable for a given revision), users invalidate explicitly via `obsidian-brain models refresh-cache`. `fetched_at` is informational — surfaced via `index_status` and used by `clearMetadataCache` as the "is this row populated?" sentinel. `failed_chunks` records `(chunk_id, note_id, reason, error_message, failed_at)` for any chunk the fault-tolerant loop skipped (surfaced via the `index_status` tool); reasons include `too-long`, `embed-error`, `note-too-long`, `note-embed-error`, and `no-embeddable-content` (empty / frontmatter-only / sub-`minChunkChars` notes recorded once, never retried). `deleteNode` cascades to the `communities` table via `pruneNodeFromCommunities` (`src/store/communities.ts`); that prune also regenerates each affected cluster's `summary` string via `buildSummary` so `nodeIds` and `summary` stay consistent.
+- Schema: `src/store/db.ts` — `nodes`, `edges`, `sync`, `chunks`, `index_metadata`, plus `embedder_capability` (per-model adaptive capacity + metadata cache) and `failed_chunks` (fault-tolerant skip log); the FTS5 virtual table `nodes_fts` (tokenizer `porter unicode61`); and two sqlite-vec virtual tables: `nodes_vec` (mean-pooled note-level vector, kept for compat) and `chunks_vec` (per-chunk vectors, the main retrieval target). The vec0 dim is reconciled against the embedder at runtime and `index_metadata` records the active embedding model/dim/provider so a mismatch on reboot triggers an auto-reindex (`src/pipeline/bootstrap.ts`). Auto-reindex also fires on schema-version bumps, prefix-strategy changes, and provider switches (Ollama ↔ transformers also wipes `embedder_capability` and `failed_chunks` so stale capacity / metadata can't poison the next pass). `embedder_capability` caches per-model `(advertised_max_tokens, discovered_max_tokens, method, dim, query_prefix, document_prefix, prefix_source, base_model, size_bytes, fetched_at)` keyed on `(embedder_id, model_hash)` so the chunker picks a safe token budget AND the embedder applies the correct query/document prefix without re-probing on every boot; the cache lives forever once written (HF model configs are immutable for a given revision), users invalidate explicitly via `obsidian-brain models refresh-cache`. `fetched_at` is informational — surfaced via `index_status` and used by `clearMetadataCache` as the "is this row populated?" sentinel. `failed_chunks` records `(chunk_id, note_id, reason, error_message, failed_at)` for any chunk the fault-tolerant loop skipped (surfaced via the `index_status` tool); reasons include `too-long`, `embed-error`, `note-too-long`, `note-embed-error`, and `no-embeddable-content` (empty / frontmatter-only / sub-`minChunkChars` notes recorded once, never retried).
 - Chunking: `src/embeddings/chunker.ts` (~337 LoC) — heading-aware recursive chunker, preserves code fences + `$$…$$` LaTeX via U+E000/U+E001 sentinel masking, dedups unchanged chunks across reindexes via SHA-256 content-hash so edits to a single section skip re-embedding the rest.
 - Vector kNN: `src/store/embeddings.ts` + `src/store/chunks.ts` — `embedding MATCH ? AND k = ?` against `vec0`; chunk-level results group by `node_id` with max-score-per-note unless `unique: 'chunks'` is requested.
 - Full-text: `src/store/fulltext.ts` — FTS5 `MATCH` with `ORDER BY bm25(nodes_fts, 5.0, 1.0)` (5× title weight vs body) and `snippet()` for excerpts.
@@ -99,7 +98,7 @@ Tradeoff: sqlite-vec does a full scan for kNN. This is fine at the vault sizes w
 
 ## Database schema reference
 
-Two SQLite tables that don't have a single owning module ship with their definitions in `src/store/db.ts` and are surfaced here for reference when debugging cache-state issues (e.g. "why does my preset use the wrong dim?", "why isn't the prefix-strategy hash flipping when I'd expect it to?"). For the rest of the schema (`nodes`, `chunks`, `edges`, `chunks_vec`, `nodes_vec`, `communities`, `failed_chunks`, `sync`, `block_refs`), read the source — those are tightly coupled to their consumers in `src/store/`.
+Two SQLite tables that don't have a single owning module ship with their definitions in `src/store/db.ts` and are surfaced here for reference when debugging cache-state issues (e.g. "why does my preset use the wrong dim?", "why isn't the prefix-strategy hash flipping when I'd expect it to?"). For the rest of the schema (`nodes`, `chunks`, `edges`, `chunks_vec`, `nodes_vec`, `failed_chunks`, `sync`, `block_refs`), read the source — those are tightly coupled to their consumers in `src/store/`.
 
 ### `index_metadata`
 
@@ -200,7 +199,7 @@ Tradeoff: quality is measurably below modern API embeddings on hard semantic-sim
 
 ## Why incremental mtime sync
 
-Incremental mtime-based sync is the foundation both the live watcher and the scheduled fallback share. `src/pipeline/indexer.ts:41` implements the full-vault pipeline: parse vault, diff against `sync` state, upsert the diff, re-run community detection if anything changed. "Anything changed" counts deletions and an explicit `resolution` argument as well as mtime drift — without those, a delete-only run or a resolution-change-with-no-mtime-change would silently skip community refresh and leave ghost node ids in the `communities` table.
+Incremental mtime-based sync is the foundation both the live watcher and the scheduled fallback share. `src/pipeline/indexer.ts:41` implements the full-vault pipeline: parse vault, diff against `sync` state, upsert the diff, and delete the nodes of files that no longer exist.
 
 Why mtime-keyed incrementality:
 
@@ -215,11 +214,9 @@ Default behaviour: the watcher keeps the index live as you edit. If you disable 
 
 The scheduled-index model above is still the fallback. The default is a chokidar watcher spawned inside `obsidian-brain server`. See `src/pipeline/watcher.ts`. Chokidar uses the native platform API (FSEvents on macOS, inotify on Linux, ReadDirectoryChangesW on Windows), not polling, so idle CPU cost is effectively zero.
 
-Each change event is keyed by path and fed through a per-file debounce (`src/pipeline/watcher.ts:DEFAULT_DEBOUNCE_MS`, 3000 ms). Obsidian writes files on a ~2s autosave cadence, often multiple times during a single editing burst; the debounce collapses those into a single reindex per pause. When the debounce fires we call `indexSingleNote` (`src/pipeline/indexer.ts:indexSingleNote`) — the same primitive the write tools use, so incremental and batch paths share one code path: parse frontmatter + inline Dataview fields + wiki-links, re-embed, upsert node + edges, mark the graph dirty.
+Each change event is keyed by path and fed through a per-file debounce (`src/pipeline/watcher.ts:DEFAULT_DEBOUNCE_MS`, 3000 ms). Obsidian writes files on a ~2s autosave cadence, often multiple times during a single editing burst; the debounce collapses those into a single reindex per pause. When the debounce fires we call `indexSingleNote` (`src/pipeline/indexer.ts:indexSingleNote`) — the same primitive the write tools use, so incremental and batch paths share one code path: parse frontmatter + inline Dataview fields + wiki-links, re-embed, upsert node + edges.
 
-Community detection is debounced separately on 60 s (`OBSIDIAN_BRAIN_COMMUNITY_DEBOUNCE_MS`). Louvain runs over the entire graph and dominates cost on large vaults, so we batch it across many individual file changes. Per-file reindex stays snappy; community labels lag by up to a minute, which is fine because `detect_themes` is a background-style tool nobody refreshes every second.
-
-Flow in one line: Obsidian saves file → chokidar emits `change` → 3 s debounce → `indexSingleNote` parses, embeds, upserts node + edges → community flagged dirty → 60 s later Louvain re-runs.
+Flow in one line: Obsidian saves file → chokidar emits `change` → 3 s debounce → `indexSingleNote` parses, embeds, upserts node + edges.
 
 When to disable (`OBSIDIAN_BRAIN_NO_WATCH=1`): vault on SMB/NFS/iCloud where FSEvents/inotify don't fire reliably; shared-tenancy machines where you'd rather pay CPU on a fixed schedule than at edit time; or you already run a dedicated `obsidian-brain index` job and don't want two sources of writes.
 
@@ -240,18 +237,18 @@ The directory layout is:
 - `src/http-server.ts` — `server --transport http`: the same vaults and tools over stateless streamable HTTP at `/mcp`.
 - `src/config.ts` / `src/context.ts` — env parsing and the shared `ServerContext` object (DB handle, embedder, vault path, pipeline, writer, search) passed to every tool.
 - `src/cli/` — the `obsidian-brain` CLI entry point: `server`, `http`, `index`, `watch`, `search` subcommands.
-- `src/store/` — SQLite schema and per-table CRUD (`db`, `nodes`, `edges`, `embeddings`, `fulltext`, `communities`, `sync`).
+- `src/store/` — SQLite schema and per-table CRUD (`db`, `nodes`, `edges`, `embeddings`, `fulltext`, `sync`).
 - `src/embeddings/` — embedder backends (`embedder.ts` for TransformersEmbedder + `ollama.ts` for OllamaEmbedder), the metadata-resolution chain (`metadata-resolver.ts`, `metadata-cache.ts`, `seed-loader.ts`, `hf-metadata.ts`), the user-config layer (`overrides.ts`, `user-config.ts`), the chunker (`chunker.ts`), the auto-recommend heuristic (`auto-recommend.ts`), the preset table (`presets.ts`), the embedder factory (`factory.ts`), and per-model adaptive capacity (`capacity.ts`).
-- `src/graph/` — graph construction (`builder`), centrality (`centrality`), Louvain community detection (`communities`), shortest paths (`pathfinding`), and the graphology-compat shim.
+- `src/graph/` — graph construction (`builder`), centrality (`centrality`), shortest paths (`pathfinding`), and the graphology-compat shim.
 - `src/vault/` — reading, writing, parsing, and editing `.md` files on disk; wiki-link resolution; fuzzy filename matching.
 - `src/search/` — unified semantic + full-text search surface.
 - `src/resolve/` — fuzzy note-name resolution used by tools that accept human-typed note titles.
-- `src/pipeline/` — the indexing orchestrator (`indexer.ts`) that stitches vault parsing, store writes, embedding, and community detection together; plus the chokidar watcher (`watcher.ts`) that drives `indexSingleNote` on debounced file-change events.
+- `src/pipeline/` — the indexing orchestrator (`indexer.ts`) that stitches vault parsing, store writes, and embedding together; plus the chokidar watcher (`watcher.ts`) that drives `indexSingleNote` on debounced file-change events.
 - `src/tools/` — one file per MCP tool. `register.ts` is the shared Zod/schema helper + the `{data, context}` envelope wrapper — tools that return a `ContextualResult` get their `context.next_actions` serialised alongside `data`; tools that return a plain payload stay unchanged for backcompat. `hints.ts` holds the per-tool hint generators (`search`, `read_note`, `find_connections`, `delete_note` opt in).
 
 Why this shape:
 
-- **The original obra `graph.ts` was 324 lines** mixing graph construction, pathfinding, centrality, and Louvain into one module. Every change required re-reading the whole file to make sure you hadn't broken something in an unrelated concern. Splitting it along the natural algorithm boundaries made each piece independently greppable, testable, and swappable.
+- **The original obra `graph.ts` was 324 lines** mixing graph construction, pathfinding, and centrality into one module. Every change required re-reading the whole file to make sure you hadn't broken something in an unrelated concern. Splitting it along the natural algorithm boundaries made each piece independently greppable, testable, and swappable.
 - **Swap surface area is small and local.** You can replace `src/graph/centrality.ts` with an approximate-pagerank variant without touching anything else; you can replace `src/store/embeddings.ts` with a HNSW-backed implementation without touching the graph code. Tools never reach into stores directly except via the exported functions.
 - **The tool layer is flat on purpose.** `src/tools/*.ts` is one-file-per-tool because it matches the MCP surface 1:1 — when a user asks "what does `find_connections` do?", you open exactly one file.
 

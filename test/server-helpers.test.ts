@@ -29,7 +29,6 @@ function fakeCtx(
   const index = vi.fn(async () => ({
     nodesIndexed: opts.nodesIndexed ?? 0,
     edgesIndexed: 0,
-    communitiesDetected: 0,
   }));
   const exec = vi.fn(() => {
     if (opts.execThrows) throw new Error('checkpoint failed');

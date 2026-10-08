@@ -20,13 +20,6 @@ export interface StoredEdge extends ParsedEdge {
   id: number;
 }
 
-export interface Community {
-  id: number;
-  label: string;
-  summary: string;
-  nodeIds: string[];
-}
-
 export interface SearchResult {
   nodeId: string;
   title: string;

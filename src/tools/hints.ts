@@ -50,8 +50,6 @@ export interface SearchHintHit {
   score?: number;
 }
 
-const FIND_CONNECTIONS_CLUSTER_THRESHOLD = 10;
-
 export function computeSearchHints(
   query: string,
   results: SearchHintHit[],
@@ -152,15 +150,6 @@ export function computeFindConnectionsHints(
   connections: FindConnectionsHintNeighbor[],
 ): ToolContext {
   const next_actions: NextAction[] = [];
-
-  if (connections.length > FIND_CONNECTIONS_CLUSTER_THRESHOLD) {
-    next_actions.push({
-      description: 'Cluster these connections into themes',
-      tool: 'detect_themes',
-      args: {},
-      reason: `${connections.length} connections — consider clustering to see structure`,
-    });
-  }
 
   if (connections.length > 0) {
     const furthest = connections[connections.length - 1]!;

@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 42 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 41 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-42 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+41 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -575,7 +575,7 @@ N-hop link neighborhood around a note. Returns inbound + outbound links grouped 
 | `includeStubs` | boolean? | Default `false`. Set `true` to include broken-wikilink stub neighbours (`frontmatter._stub: true`). |
 <!-- /GENERATED:tool:find_connections -->
 
-Response is wrapped as `{data, context}` — `context.next_actions` suggests `detect_themes` when the neighbourhood is large (> 10) and `find_path_between` to the furthest neighbour. Clients that ignore `context` keep working.
+Response is wrapped as `{data, context}` — `context.next_actions` suggests `find_path_between` to the furthest neighbour. Clients that ignore `context` keep working.
 
 #### `find_connections` `context` envelope shape
 
@@ -588,7 +588,6 @@ Response is wrapped as `{data, context}` — `context.next_actions` suggests `de
       "last_connections_count": 7
     },
     "next_actions": [
-      { "description": "Cluster this neighbourhood via detect_themes" },
       { "description": "Trace path from Epistemology.md to <furthest>.md via find_path_between" }
     ]
   }
@@ -618,22 +617,6 @@ Shortest link chain(s) between two notes. Optionally return their shared neighbo
 
 > *"Use `find_path_between` to find how `Bayesian updating` connects to `Kelly criterion`."*
 
-### `detect_themes`
-
-Auto-detected topic clusters via [Louvain community detection](https://en.wikipedia.org/wiki/Louvain_method) over the backlink graph. Served from the community-detection cache; to recompute at a different resolution, call `reindex({resolution: X})` first.
-
-<!-- GENERATED:tool:detect_themes -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `themeId` | string? | Drill into a single cluster by its id or label. |
-| `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link targets (`frontmatter._stub: true`) in cluster membership. Older cached community data may still carry stub-dominated clusters until the next reindex regenerates the community table. |
-<!-- /GENERATED:tool:detect_themes -->
-
-Each cluster carries `staleMembersFiltered` — cached `nodeIds` that no longer exist on disk and were filtered on this read; a positive value triggers live regeneration of `summary` so the two fields stay consistent. If the vault's overall Louvain modularity is `< 0.3`, the response wraps as `{clusters, warning, modularity}` — the clusters aren't clearly separable and may not reflect meaningful themes.
-
-> *"Use `detect_themes` to surface the main themes across my vault."*
-
 ### `rank_notes`
 
 Top notes by `influence` (PageRank over backlinks), `bridging` (betweenness centrality, normalized 0–1 so scores compare across vaults), or `both`.
@@ -644,7 +627,6 @@ Top notes by `influence` (PageRank over backlinks), `bridging` (betweenness cent
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `metric` | `"influence"` \| `"bridging"` \| `"both"`? | Ranking metric. Default `"both"`. `"influence"` = PageRank; `"bridging"` = betweenness centrality. |
 | `limit` | number? | Max results to return. Default 20. |
-| `themeId` | string? | Restrict ranking to members of one theme cluster. |
 | `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link target stubs (`frontmatter._stub: true`) in the ranked set. With stubs in, popular link targets dominate eigenvector-style centrality even when they have no real content behind them. |
 | `minIncomingLinks` | number? = 2 | Minimum incoming links for influence ranking. Default 2. Pass 0 to see unfiltered PageRank. |
 <!-- /GENERATED:tool:rank_notes -->
@@ -655,13 +637,12 @@ Top notes by `influence` (PageRank over backlinks), `bridging` (betweenness cent
 
 ### `reindex`
 
-Force a full re-index. You rarely need this — the live watcher picks up file changes automatically. Fall back to `reindex` if your vault lives somewhere FSEvents/inotify can't observe (SMB, NFS), or after bulk edits outside Claude. A bare `reindex({})` call defaults `resolution` to `1.0`, re-runs Louvain community detection, and prunes orphan stubs.
+Force a full re-index. You rarely need this — the live watcher picks up file changes automatically. Fall back to `reindex` if your vault lives somewhere FSEvents/inotify can't observe (SMB, NFS), or after bulk edits outside Claude. It also prunes orphan stubs.
 
 <!-- GENERATED:tool:reindex -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `resolution` | number? | Louvain resolution. Omit to skip community detection on no-op reindexes. Pass a value to force-rerun: 1.0 = equal-weight clusters (default); 0.5 = fewer/broader; 2.0 = more/finer. |
 <!-- /GENERATED:tool:reindex -->
 
 Response includes `stubsPruned: N` — the one-shot migration path for users upgrading from older versions with pre-fix orphan stubs.
@@ -675,7 +656,6 @@ The `reindex` response carries several `*Created` / `*Pruned` / `*Indexed` count
 - `edgesIndexed` — wiki-link edges materialised this run.
 - `stubNodesCreated` — broken-wikilink target stubs (`_stub/Foo.md`) **newly materialised this run**, not the total stub count in the graph. A vault with 2,433 long-standing stubs and zero new ones reports `stubNodesCreated: 0`.
 - `stubsPruned` — orphan stub nodes **deleted this run** (stubs whose only inbound edges came from a note that was just deleted, or stubs that got promoted to real notes because a matching `.md` file appeared).
-- `communitiesDetected` — community count from this run's Louvain pass. Omitted/zero when the no-op guard short-circuits (no nodes/stubs/deletions changed AND no explicit `resolution` was passed).
 
 > *"Use `reindex` to refresh the index after I bulk-edited files outside Claude."*
 
@@ -801,7 +781,6 @@ Rename one heading in a note and rewrite every link to it across the vault: `[[N
 | `query_notes` | ✅ | — |
 | `find_connections` | ✅ | — |
 | `find_path_between` | ✅ | — |
-| `detect_themes` | ✅ | — |
 | `rank_notes` | ✅ | — |
 | `create_note` | ✅ | ✅ |
 | `edit_note` | ✅ | ✅ |

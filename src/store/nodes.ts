@@ -2,7 +2,6 @@ import type { DatabaseHandle } from './db.js';
 import type { ParsedNode } from '../types.js';
 import { deleteEdgesBySource, deleteEdgesByTarget, countEdgesByTarget } from './edges.js';
 import { deleteSyncPath } from './sync.js';
-import { pruneNodeFromCommunities } from './communities.js';
 
 /**
  * Insert or replace a node. Keeps the FTS5 shadow table in sync — FTS5 with
@@ -139,9 +138,6 @@ export function deleteNode(db: DatabaseHandle, id: string): void {
   deleteEdgesBySource(db, id);
   deleteEdgesByTarget(db, id);
   deleteSyncPath(db, id);
-  // Keep the theme / community cache honest — orphaned ids in `node_ids`
-  // arrays were bleeding across sessions before this call landed.
-  pruneNodeFromCommunities(db, id);
 }
 
 /**

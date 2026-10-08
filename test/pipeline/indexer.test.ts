@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { ensureEdgesTargetFragmentColumn, openDb, type DatabaseHandle } from '../../src/store/db.js';
 import { getNode } from '../../src/store/nodes.js';
 import { getEdgesBySource } from '../../src/store/edges.js';
-import { getAllCommunities } from '../../src/store/communities.js';
 import { Embedder } from '../../src/embeddings/embedder.js';
 import { IndexPipeline } from '../../src/pipeline/indexer.js';
 
@@ -46,12 +45,6 @@ describe('IndexPipeline', () => {
     const edges = getEdgesBySource(db, 'Ideas/Acme Project.md');
     const stubEdge = edges.find((e) => e.targetId.includes('Nonexistent'));
     expect(stubEdge).toBeDefined();
-  });
-
-  it('detects communities', async () => {
-    // Communities were detected during the first test's index() call
-    const communities = getAllCommunities(db);
-    expect(communities.length).toBeGreaterThan(0);
   });
 
   it('is incremental (skips unchanged files)', async () => {

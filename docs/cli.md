@@ -58,7 +58,6 @@ Scan each vault and update its knowledge-graph index incrementally, one vault at
 | Flag | Description |
 |---|---|
 | `--vault <name=path>` | A vault to index. Repeat for more vaults. At least one is required |
-| `-r, --resolution <n>` | Louvain resolution. Passing this forces a community-cache refresh even if no files changed |
 | `--drop` | Drop all embeddings + sync state before indexing. Mostly an escape hatch — the bootstrap auto-detects `EMBEDDING_MODEL` / `EMBEDDING_PROVIDER` changes and wipes embedding state on its own |
 
 ```bash
@@ -73,7 +72,6 @@ Long-running process: keep each vault's index live by reindexing on vault change
 |---|---|---|
 | `--vault <name=path>` | | A vault to watch. Repeat for more vaults. At least one is required |
 | `--debounce <ms>` | `3000` | Per-file reindex debounce |
-| `--community-debounce <ms>` | `60000` | Graph-wide community detection debounce |
 
 ### `obsidian-brain search [options] <query>`
 

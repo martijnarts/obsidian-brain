@@ -36,7 +36,6 @@ For architecture context (how the indexer, SQLite cache, and MCP server fit toge
 - [Ollama BYOM model not pulling (custom `EMBEDDING_MODEL`)](#ollama-byom-model-not-pulling-custom-embedding_model)
 - ["Failed to parse GITHUB_REGISTRIES_PROXY" in CI runs](#failed-to-parse-github_registries_proxy-in-ci-runs)
 - [Running multiple MCP clients against the same vault](#running-multiple-mcp-clients-against-the-same-vault)
-- [Ghost entries in detect_themes after deleting a note](#ghost-entries-in-detect_themes-after-deleting-a-note)
 - [`apply_edit_preview` fails with "file has changed since preview"](#apply_edit_preview-fails-with-file-has-changed-since-preview)
 - [`edit_note({ mode: "replace_window" })` returns `NoMatch`](#edit_note-mode-replace_window-returns-nomatch)
 - [Still stuck?](#still-stuck)
@@ -546,29 +545,6 @@ If request `id=N` has a `Message from client` and then a `Message from server` w
 - Each process loads its own embedder (~200 MB RAM, shared model file on disk cached under `DATA_DIR/transformers-cache` so only one download).
 
 **If you hit `SQLITE_BUSY` despite the timeout**: one of your processes is holding a very long write transaction. Most likely a stuck catchup indexing a huge backlog. `OBSIDIAN_BRAIN_NO_CATCHUP=1` in all but one client fixes it.
-
----
-
-## Ghost entries in `detect_themes` after deleting a note
-
-**Summary.** `detect_themes` lists a cluster member that no longer exists on disk — the file was deleted but the id keeps showing up. `reindex` didn't clean it up either.
-
-**Cause.** Older `delete_note` cascaded to nodes, edges, embeddings, and sync state — but NOT to the `communities` table. The deleted note's id stayed in the JSON `node_ids` array of whichever community it belonged to. Since the incremental index run skipped community-refresh when nothing was indexed, the ghost persisted indefinitely.
-
-**Fix.** Upgrade to a current release. The underlying fix:
-
-- `deleteNode` now prunes the id from every community row via `pruneNodeFromCommunities`.
-- `reindex` forces a fresh Louvain pass whenever an explicit `resolution` is passed OR any deletion is detected, so a single reindex will clean up ghosts accumulated on older versions.
-
-To clean up existing ghosts after upgrading, run once:
-
-```bash
-obsidian-brain index --vault notes=/path/to/vault --resolution 1.0
-```
-
-The `--resolution` argument is the explicit-intent signal that forces the community refresh. Any positive value works — `1.0` is the default Louvain resolution.
-
-**Related change.** `detect_themes` no longer accepts a `resolution` parameter — it was silently ignored before. To recompute with a different resolution, call `reindex({ resolution: X })` first, then `detect_themes` to read the updated cache.
 
 ---
 

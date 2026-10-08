@@ -7,14 +7,13 @@ import {
   getEdgesByTarget,
 } from '../../src/store/edges.js';
 import { setSyncMtime, getSyncMtime, getAllSyncPaths } from '../../src/store/sync.js';
-import { upsertCommunity, getAllCommunities } from '../../src/store/communities.js';
 import { renameNode } from '../../src/store/rename.js';
 
 /**
  * Unit coverage for the v1.6.3 rename primitive. `renameNode` atomically
  * rewrites every row keyed on a node id — nodes.id, edges (in/out),
- * chunks.id / chunks.node_id, sync.path, communities.node_ids — so inbound
- * edges and graph membership survive a rename instead of getting dropped by
+ * chunks.id / chunks.node_id, sync.path — so inbound
+ * edges survive a rename instead of getting dropped by
  * the pipeline's delete-then-upsert path.
  */
 describe('renameNode', () => {
@@ -126,41 +125,5 @@ describe('renameNode', () => {
     expect(getSyncMtime(db, 'tracked.md')).toBeUndefined();
     expect(getSyncMtime(db, 'tracked-renamed.md')).toBe(12345);
     expect(getAllSyncPaths(db)).toEqual(['tracked-renamed.md']);
-  });
-
-  it('rewrites community membership JSON arrays', () => {
-    upsertNode(db, { id: 'alpha.md', title: 'A', content: '', frontmatter: {} });
-    upsertNode(db, { id: 'beta.md', title: 'B', content: '', frontmatter: {} });
-    upsertNode(db, { id: 'gamma.md', title: 'G', content: '', frontmatter: {} });
-
-    upsertCommunity(db, {
-      id: 1,
-      label: 'cluster-one',
-      summary: '',
-      nodeIds: ['alpha.md', 'beta.md'],
-    });
-    upsertCommunity(db, {
-      id: 2,
-      label: 'cluster-two',
-      summary: '',
-      nodeIds: ['gamma.md'],
-    });
-
-    renameNode(db, 'alpha.md', 'alpha-renamed.md');
-
-    const communities = getAllCommunities(db);
-    const one = communities.find((c) => c.id === 1);
-    const two = communities.find((c) => c.id === 2);
-    expect(one?.nodeIds).toEqual(['alpha-renamed.md', 'beta.md']);
-    expect(two?.nodeIds).toEqual(['gamma.md']);
-  });
-
-  it('ignores communities whose node_ids are not valid JSON (never throws)', () => {
-    upsertNode(db, { id: 'n.md', title: 'N', content: '', frontmatter: {} });
-    db.prepare(
-      "INSERT INTO communities (id, label, summary, node_ids) VALUES (7, 'broken', '', '{not-json')",
-    ).run();
-
-    expect(() => renameNode(db, 'n.md', 'n-renamed.md')).not.toThrow();
   });
 });

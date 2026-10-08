@@ -3,7 +3,7 @@ import type { DatabaseHandle } from './db.js';
 /**
  * Atomically rewrite every row keyed on `oldId` to use `newId` instead. This
  * is the primitive behind `move_note`: by updating node / edge / chunk / sync
- * / community rows in place, inbound edges survive the rename without the
+ * rows in place, inbound edges survive the rename without the
  * delete-then-upsert dance that the indexer's deletion-detection loop would
  * otherwise do (which drops every inbound edge).
  *
@@ -16,9 +16,6 @@ import type { DatabaseHandle } from './db.js';
  *   4. `nodes`   — the text PK. SQLite rowid is separate and unchanged, so
  *                  `nodes_fts` (content='nodes', content_rowid='rowid') and
  *                  `nodes_vec` (keyed by rowid) stay valid with no action.
- *   5. `communities` — `node_ids` stored as a JSON array; we deserialize,
- *                  swap `oldId` → `newId` in each row that contains it, and
- *                  re-serialize. O(|communities|) rather than O(|rows|).
  *
  * `chunks_vec` is rowid-keyed; `chunks.rowid` doesn't change when we UPDATE
  * the composite id, so no vec-table action is needed.
@@ -57,22 +54,6 @@ export function renameNode(db: DatabaseHandle, oldId: string, newId: string): vo
 
     // 4. nodes.id last. rowid unchanged → nodes_fts + nodes_vec stay valid.
     db.prepare('UPDATE nodes SET id = ? WHERE id = ?').run(newId, oldId);
-
-    // 5. communities.node_ids — JSON array, rewrite entries.
-    const rows = db
-      .prepare('SELECT id, node_ids FROM communities')
-      .all() as Array<{ id: number; node_ids: string }>;
-    const upd = db.prepare('UPDATE communities SET node_ids = ? WHERE id = ?');
-    for (const row of rows) {
-      let ids: string[];
-      try {
-        ids = JSON.parse(row.node_ids) as string[];
-      } catch {
-        continue;
-      }
-      if (!ids.includes(oldId)) continue;
-      upd.run(JSON.stringify(ids.map((x) => (x === oldId ? newId : x))), row.id);
-    }
   });
 
   tx();

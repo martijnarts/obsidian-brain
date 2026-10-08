@@ -16,7 +16,6 @@ export function spyIndexCalls(ctx: ServerContext): { indexCalls: string[] } {
       nodesIndexed: 0,
       nodesSkipped: 0,
       edgesIndexed: 0,
-      communitiesDetected: 0,
       stubNodesCreated: 0,
     };
   };

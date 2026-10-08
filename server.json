@@ -138,13 +138,6 @@
           "default": "3000"
         },
         {
-          "name": "OBSIDIAN_BRAIN_COMMUNITY_DEBOUNCE_MS",
-          "description": "Graph-wide community-detection (Louvain) debounce for the live watcher, in milliseconds. Louvain is the only expensive op \u2014 batching it prevents per-edit CPU spikes.",
-          "isRequired": false,
-          "format": "number",
-          "default": "60000"
-        },
-        {
           "name": "OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS",
           "description": "Unload the local transformers.js embedding model after this many milliseconds without an embed, and load it again on the next one. Frees the ONNX session memory of an idle server; the first search after an idle period waits for the reload. Unset or 0 keeps the model loaded.",
           "isRequired": false,

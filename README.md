@@ -22,7 +22,7 @@ A standalone Node MCP server that gives Claude (and any other MCP client) **sema
 - **Local or remote** — stdio for a client that spawns the server, or `--transport http` for a long-running server behind an authenticating proxy.
 - **Light when idle** — one embedding model shared by every vault, unloaded after an idle period and loaded again on the next search.
 - **Chunk-level semantic search with RRF hybrid retrieval** — embeddings at markdown-heading granularity, fused with FTS5 BM25 via Reciprocal Rank Fusion. Finds the exact chunk, ranks on meaning.
-- **The only Obsidian MCP server with PageRank + Louvain + graph analytics** — ask for your vault's most influential notes, bridging notes, theme clusters. Nobody else ships this.
+- **PageRank and graph analytics** — ask for your vault's most influential notes, bridging notes, and the link paths between notes.
 - **Ollama provider for high-quality local embeddings** — switch to `qwen3-embedding:0.6b`, `nomic-embed-text`, `bge-m3`, etc. with one env var.
 - **All in one `npx` install** — no clone, no build, no API key, no hosted endpoint. Vault content never leaves your machine.
 
@@ -69,7 +69,7 @@ Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 
 ## What you get
 
-42 MCP tools grouped by intent. Every tool except `list_vaults` takes a `vault` argument naming one of the vaults you configured:
+41 MCP tools grouped by intent. Every tool except `list_vaults` takes a `vault` argument naming one of the vaults you configured:
 
 - **Vaults** — `list_vaults`
 - **Find** — `search`, `list_notes`, `read_note`, `find_notes_by_name`, `grep_vault`, `query_notes`
@@ -79,7 +79,7 @@ Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 - **Structure** — `vault_overview`, `list_tags`, `list_bookmarks`
 - **Tasks and blocks** — `list_tasks`, `set_task_status`, `ensure_block_id`
 - **Canvas** — `read_canvas`, `edit_canvas`
-- **Map the graph** — `find_connections`, `find_path_between`, `detect_themes`, `rank_notes`
+- **Map the graph** — `find_connections`, `find_path_between`, `rank_notes`
 - **Maintenance** — `reindex`, `index_status`, `find_broken_links`, `find_orphaned_notes`, `search_and_replace`, `rename_tag`, `rename_heading`
 
 → Arguments, examples, and response shapes: [Tool reference](docs/tools.md)
