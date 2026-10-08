@@ -36,10 +36,13 @@ const EXPECTED_TOOLS = [
   'detect_themes',
   'rank_notes',
   'create_note',
+  'create_note_from_template',
   'edit_note',
   'link_notes',
   'move_note',
   'delete_note',
+  'read_canvas',
+  'edit_canvas',
   'reindex',
   'index_status',
   'vault_overview',
@@ -121,6 +124,17 @@ function seedVault(vaultPath: string): void {
       '',
     ].join('\n'),
   );
+
+  writeFileSync(
+    join(vaultPath, 'Board.canvas'),
+    JSON.stringify({
+      nodes: [{ id: '0123456789abcdef', type: 'text', text: 'Start', x: 0, y: 0, width: 250, height: 60 }],
+      edges: [],
+    }),
+  );
+
+  mkdirSync(join(vaultPath, 'Templates'), { recursive: true });
+  writeFileSync(join(vaultPath, 'Templates', 'Daily.md'), '# {{title}}\n\nCreated {{date}} {{time}}.\n');
 }
 
 /** A single call: returns pass/fail + error message. Records timing. */
@@ -399,6 +413,28 @@ async function main(): Promise<number> {
         'delete_note',
         { name: 'Smoke Moved', confirm: true },
         SLOW_TIMEOUT_MS,
+      ),
+    );
+
+    await runCall('create_note_from_template', results, () =>
+      callTool(
+        client,
+        'create_note_from_template',
+        { template: 'Daily', title: 'Smoke Daily', date: '2026-01-02' },
+        SLOW_TIMEOUT_MS,
+      ),
+    );
+
+    await runCall('read_canvas', results, () =>
+      callTool(client, 'read_canvas', { path: 'Board.canvas' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('edit_canvas (add_node)', results, () =>
+      callTool(
+        client,
+        'edit_canvas',
+        { path: 'Board.canvas', operation: 'add_node', type: 'file', file: 'Welcome.md' },
+        FAST_TIMEOUT_MS,
       ),
     );
 

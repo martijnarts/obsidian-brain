@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 27 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 30 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-27 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+30 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -241,6 +241,23 @@ Creating a note that matches an existing `[[ForwardRef]]` stub automatically rep
 
 > *"Use `create_note` to create `Meetings/2026-04-21 standup.md` with tags `[meeting, standup]`."*
 
+### `create_note_from_template`
+
+Create a note from an Obsidian core Templates template. The template is looked up by name in the templates folder set in `.obsidian/templates.json` (default `Templates/`), or by vault-relative path. `{{title}}`, `{{date}}`, `{{time}}` and `{{date:FORMAT}}` / `{{time:FORMAT}}` are filled with moment-style tokens, defaulting to the `dateFormat` / `timeFormat` in that settings file (`YYYY-MM-DD`, `HH:mm`). `variables` fills other `{{key}}` placeholders. The note is written and indexed the same way as `create_note`, and the call fails if the note exists. Templater `<% %>` code is not run: it stays in the note as written, and the result says so. Placeholders nothing filled are listed in `unresolved`.
+
+<!-- GENERATED:tool:create_note_from_template -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `template` | string | Template name in the templates folder, or a vault-relative path. `.md` is optional. |
+| `title` | string | Note title. Used as the filename base and for `{{title}}`. |
+| `directory` | string? | Vault-relative subdirectory to create the note in. |
+| `variables` | object? | Extra `{{key}}` substitutions. |
+| `date` | string? | ISO date or date-time to use instead of now. |
+<!-- /GENERATED:tool:create_note_from_template -->
+
+> *"Use `create_note_from_template` with the `Meeting` template to create `Meetings/Kickoff` with `attendees: 'Ann, Bo'`."*
+
 ### `edit_note`
 
 Modify an existing note. Six modes: `append`, `prepend`, `replace_window` (find-and-replace; optionally fuzzy), `patch_heading`, `patch_frontmatter`, `at_line`.
@@ -346,6 +363,54 @@ When the delete removed inbound edges, the response is wrapped in a `{data, cont
 `dryRun: true` reports what would be deleted. Real deletes surface `deletedFromIndex.stubsPruned: N` when the deleted note's orphan-stub targets were cleaned up.
 
 > *"Use `delete_note` with `confirm: true` to delete `Inbox/obsolete.md`."*
+
+## Canvas
+
+### `read_canvas`
+
+Read a `.canvas` file (JSON Canvas 1.0) and return its nodes and edges as stored, including fields this server does not model. An empty file reads as an empty canvas.
+
+<!-- GENERATED:tool:read_canvas -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `path` | string | Vault-relative path of the `.canvas` file. The extension is optional. |
+<!-- /GENERATED:tool:read_canvas -->
+
+> *"Use `read_canvas` to show me what is on `Projects/Roadmap.canvas`."*
+
+### `edit_canvas`
+
+Make one change to a canvas per call. `add_node` adds a `text`, `file`, `link` or `group` node; without `x`/`y` it goes right of the right-most node, at 400×200 unless sized, and a missing canvas is created. `update_node` changes only the fields passed, and `null` removes `color`, `label` or `subpath`. `delete_node` also removes the node's edges. `connect` adds an edge between two existing nodes, and `disconnect` removes one by id. Ids are 16 hex characters, as Obsidian makes them. Every other field of existing nodes and edges is kept. A `file` node whose target is missing gets a warning, not an error. The file is written atomically in Obsidian's layout: tab-indented, one node or edge per line.
+
+<!-- GENERATED:tool:edit_canvas -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `path` | string | Vault-relative path of the `.canvas` file. The extension is optional. |
+| `operation` | `"add_node"` \| `"update_node"` \| `"delete_node"` \| `"connect"` \| `"disconnect"` |  |
+| `nodeId` | string? | Node to change (`update_node`, `delete_node`). |
+| `type` | `"text"` \| `"file"` \| `"link"` \| `"group"`? | Node type (`add_node`). |
+| `text` | string? | Markdown content of a `text` node. |
+| `file` | string? | Vault-relative file a `file` node shows. |
+| `subpath` | string \| null? | Heading or block of a `file` node, e.g. `#Heading`. `null` removes it. |
+| `url` | string? | URL of a `link` node. |
+| `label` | string \| null? | Label of a `group` node or an edge. `null` removes it. |
+| `color` | string \| null? | Preset `"1"`-`"6"` or hex like `"#ff0000"`. `null` removes it. |
+| `x` | number? |  |
+| `y` | number? |  |
+| `width` | number? | Default 400. |
+| `height` | number? | Default 200. |
+| `fromNode` | string? | Edge start node id (`connect`). |
+| `toNode` | string? | Edge end node id (`connect`). |
+| `fromSide` | `"top"` \| `"right"` \| `"bottom"` \| `"left"`? |  |
+| `toSide` | `"top"` \| `"right"` \| `"bottom"` \| `"left"`? |  |
+| `fromEnd` | `"none"` \| `"arrow"`? | Default `none`. |
+| `toEnd` | `"none"` \| `"arrow"`? | Default `arrow`. |
+| `edgeId` | string? | Edge to remove (`disconnect`). |
+<!-- /GENERATED:tool:edit_canvas -->
+
+> *"Use `edit_canvas` to add a text node 'Open questions' to `Projects/Roadmap.canvas` and connect it to the `Launch` node."*
 
 ## Live editor
 
@@ -570,7 +635,10 @@ Response fields:
 | `apply_edit_preview` | ✅ | — | ✅ |
 | `link_notes` | ✅ | — | ✅ |
 | `move_note` | ✅ | — | ✅ |
+| `create_note_from_template` | ✅ | — | ✅ |
 | `delete_note` | ✅ | — | ✅ |
+| `read_canvas` | ✅ | — | — |
+| `edit_canvas` | ✅ | — | ✅ |
 | `active_note` | — | ✅ | — |
 | `dataview_query` | — | ✅ + Dataview community plugin | — |
 | `base_query` | — | ✅ + Obsidian ≥ 1.10.0 + Bases core plugin | — |

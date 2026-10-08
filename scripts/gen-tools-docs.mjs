@@ -118,6 +118,7 @@ function typeLabel(inner) {
     case 'record':  return 'object';
     case 'never':   return 'never';
     case 'null':    return 'null';
+    case 'nullable': return `${typeLabel(inner._def.innerType)} \\| null`;
     default:        return t || 'unknown';
   }
 }
