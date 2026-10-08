@@ -38,6 +38,11 @@ import { registerActiveNoteTool } from './tools/active-note.js';
 import { registerDataviewQueryTool } from './tools/dataview-query.js';
 import { registerBaseQueryTool } from './tools/base-query.js';
 import { registerIndexStatusTool } from './tools/index-status.js';
+import { registerVaultOverviewTool } from './tools/vault-overview.js';
+import { registerListTagsTool } from './tools/list-tags.js';
+import { registerListBookmarksTool } from './tools/list-bookmarks.js';
+import { registerListPropertyValuesTool } from './tools/list-property-values.js';
+import { registerUpdatePropertiesTool } from './tools/update-properties.js';
 
 export interface ServerOptions {
   vaults: VaultSpec[];
@@ -134,7 +139,7 @@ export async function startServer(opts: ServerOptions): Promise<void> {
   debugLog('startServer: all wiring complete, function returning — server is now live');
 }
 
-/** Registers all 18 tools on `server`, bound to one vault's context. */
+/** Registers all 23 tools on `server`, bound to one vault's context. */
 export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerSearchTool(server, ctx);
   registerReadNoteTool(server, ctx);
@@ -154,6 +159,11 @@ export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerDataviewQueryTool(server, ctx);
   registerBaseQueryTool(server, ctx);
   registerIndexStatusTool(server, ctx);
+  registerVaultOverviewTool(server, ctx);
+  registerListTagsTool(server, ctx);
+  registerListBookmarksTool(server, ctx);
+  registerListPropertyValuesTool(server, ctx);
+  registerUpdatePropertiesTool(server, ctx);
 }
 
 /** Waits briefly for queued indexing, then releases the embedder and the DB. */

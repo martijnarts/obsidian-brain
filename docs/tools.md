@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 19 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 24 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-19 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+24 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -47,14 +47,15 @@ The response is wrapped as `{data, context}` — `context.next_actions` suggests
 
 ### `list_notes`
 
-List notes, optionally filtered by directory, tag, or link-target status.
+List notes, optionally filtered by directory, tag, or link-target status. The tag filter reads frontmatter and inline tags, and a parent tag matches its nested tags (`tag: 'project'` matches `project/alpha`). Results are in path order; `sortBy: 'mtime'` puts the most recently modified notes first.
 
 <!-- GENERATED:tool:list_notes -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `directory` | string? | Restrict to notes under this subdirectory prefix. |
-| `tag` | string? | Restrict to notes containing this frontmatter tag. |
+| `tag` | string? | Restrict to notes with this tag or a tag nested below it. |
+| `sortBy` | `"path"` \| `"mtime"`? | Default `path`. `mtime` sorts newest first and adds `mtime` to each result. |
 | `limit` | number? | Max results to return. Default 100. |
 | `includeStubs` | boolean? | Default `true`. Set `false` to exclude unresolved wiki-link targets. |
 <!-- /GENERATED:tool:list_notes -->
@@ -367,6 +368,84 @@ Supported expression subset: tree ops (`and` / `or` / `not`), comparisons (`==`,
 
 > *"Use `base_query` on `Bases/Books.base` with view `active-books` to list everything I'm currently reading."*
 
+## Structure
+
+### `vault_overview`
+
+One-call orientation for a vault: note count, attachment count (non-Markdown files outside hidden folders), notes per top-level folder (`(root)` for notes at the top), the most used tags with note counts, and the most recently modified notes with their index mtime. Use `list_tags` or `list_notes` with `sortBy: "mtime"` for more than the snapshot.
+
+<!-- GENERATED:tool:vault_overview -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `topTags` | number? | Tags to include. Default 15. |
+| `recent` | number? | Recently modified notes to include. Default 10. |
+<!-- /GENERATED:tool:vault_overview -->
+
+> *"Use `vault_overview` to get a quick picture of my vault before we start."*
+
+### `list_tags`
+
+Every tag with the number of notes that carry it. Reads frontmatter `tags` and `tag` (a list or a comma-separated string, with or without `#`) and inline `#tags` in the body. By default a note tagged `a/b` also counts toward `a`; pass `includeParents: false` to count each nested tag only under its own name.
+
+<!-- GENERATED:tool:list_tags -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `sort` | `"count"` \| `"name"`? | Default `count` (descending). `name` sorts alphabetically. |
+| `limit` | number? | Max tags to return. Default 100. |
+| `prefix` | string? | Only tags starting with this text, e.g. `project/`. |
+| `includeParents` | boolean? | Default `true`: a note tagged `a/b` also counts toward `a`. |
+<!-- /GENERATED:tool:list_tags -->
+
+> *"Use `list_tags` with `prefix: 'project/'` to show which project tags I use most."*
+
+### `list_bookmarks`
+
+The bookmarks of the Obsidian core Bookmarks plugin, read from `.obsidian/bookmarks.json`, as a tree of groups, files, folders, searches, headings and blocks. Returns an empty list with a `note` when the file is absent or not valid. A `types` filter without `group` flattens group contents to the top level.
+
+<!-- GENERATED:tool:list_bookmarks -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `types` | array? | Only these bookmark types. Without `group`, group contents are flattened. |
+<!-- /GENERATED:tool:list_bookmarks -->
+
+> *"Use `list_bookmarks` to show the notes I bookmarked."*
+
+## Properties
+
+### `list_property_values`
+
+The distinct values of one frontmatter property across notes, with how often each occurs, ordered by count. Each element of a list value counts separately, and a number stays distinct from the same text as a string. `notesWithKey` tells how many notes have the key at all.
+
+<!-- GENERATED:tool:list_property_values -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `key` | string | Frontmatter key, e.g. `status`. |
+| `folder` | string? | Only notes under this folder. |
+| `limit` | number? | Max distinct values to return. Default 100. |
+<!-- /GENERATED:tool:list_property_values -->
+
+> *"Use `list_property_values` for `status` under `Projects/` to see which statuses I use."*
+
+### `update_properties`
+
+Set and remove several frontmatter properties of one note in a single atomic write. Creates the frontmatter block when the note has none and drops it when the last key goes. The body and keys not named stay as they are; the YAML is re-serialised the same way as `edit_note`'s `patch_frontmatter`. A key named in both `set` and `remove` is set. `dryRun: true` returns the new frontmatter without writing.
+
+<!-- GENERATED:tool:update_properties -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match of the note. |
+| `set` | object? | Keys to write, with their values. A `null` value removes the key. |
+| `remove` | array? | Keys to remove. Absent keys are skipped. |
+| `dryRun` | boolean? | Return the new frontmatter without writing. |
+<!-- /GENERATED:tool:update_properties -->
+
+> *"Use `update_properties` on 'Q4 planning' to set `status: done` and remove `due`."*
+
 ## Maintenance
 
 ### `reindex`
@@ -442,5 +521,10 @@ Response fields:
 | `active_note` | — | ✅ | — |
 | `dataview_query` | — | ✅ + Dataview community plugin | — |
 | `base_query` | — | ✅ + Obsidian ≥ 1.10.0 + Bases core plugin | — |
+| `vault_overview` | ✅ | — | — |
+| `list_tags` | ✅ | — | — |
+| `list_bookmarks` | ✅ | — | — |
+| `list_property_values` | ✅ | — | — |
+| `update_properties` | ✅ | — | ✅ |
 | `reindex` | ✅ | — | — |
 | `index_status` | ✅ | — | — |

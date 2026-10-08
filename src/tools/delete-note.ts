@@ -91,7 +91,7 @@ export function registerDeleteNoteTool(server: McpServer, ctx: ServerContext): v
   );
 }
 
-function resolveToSinglePath(name: string, ctx: ServerContext): string {
+export function resolveToSinglePath(name: string, ctx: ServerContext): string {
   const matches = resolveNodeName(name, ctx.db);
   if (matches.length === 0) {
     throw new Error(`No note found matching "${name}"`);

@@ -53,7 +53,7 @@ function fakeCtx(
 }
 
 describe('registerTools', () => {
-  it('registers all 18 tools', () => {
+  it('registers all 23 tools', () => {
     const names: string[] = [];
     const server = {
       tool: (name: string) => names.push(name),
@@ -61,7 +61,7 @@ describe('registerTools', () => {
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registerTools(server as any, fakeCtx().ctx);
-    expect(new Set(names).size).toBe(18);
+    expect(new Set(names).size).toBe(23);
     expect(names).toEqual(expect.arrayContaining(['search', 'edit_note', 'index_status']));
   });
 });

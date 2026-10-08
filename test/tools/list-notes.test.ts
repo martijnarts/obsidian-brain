@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openDb, type DatabaseHandle } from '../../src/store/db.js';
 import { upsertNode } from '../../src/store/nodes.js';
+import { setSyncMtime } from '../../src/store/sync.js';
 import { registerListNotesTool } from '../../src/tools/list-notes.js';
 import type { ServerContext } from '../../src/context.js';
 
@@ -134,6 +135,46 @@ describe('tools/list_notes', () => {
     const out = unwrap(await registered[0].cb({}));
     const orphan = out.find((r: { id: string }) => r.id === 'orphan.md')!;
     expect(orphan.tags).toEqual([]);
+  });
+
+  it('results are sorted by path by default', async () => {
+    const { server, registered } = makeMockServer();
+    registerListNotesTool(server, { db } as ServerContext);
+    const ids = unwrap(await registered[0].cb({})).map((r: { id: string }) => r.id);
+    expect(ids).toEqual([...ids].sort());
+  });
+
+  it('tag filter matches nested, inline, string and #-prefixed tags', async () => {
+    upsertNode(db, { id: 'n/nested.md', title: 'Nested', content: '', frontmatter: { tags: ['idea/big'] } });
+    upsertNode(db, { id: 'n/inline.md', title: 'Inline', content: '', frontmatter: { inline_tags: ['idea'] } });
+    upsertNode(db, { id: 'n/str.md', title: 'Str', content: '', frontmatter: { tags: '#idea' } });
+    upsertNode(db, { id: 'n/other.md', title: 'Other', content: '', frontmatter: { tags: ['ideas'] } });
+    const { server, registered } = makeMockServer();
+    registerListNotesTool(server, { db } as ServerContext);
+    const ids = unwrap(await registered[0].cb({ tag: 'idea', directory: 'n' })).map((r: { id: string }) => r.id);
+    expect(ids).toEqual(['n/inline.md', 'n/nested.md', 'n/str.md']);
+    const nested = unwrap(await registered[0].cb({ tag: '#idea/big' })).map((r: { id: string }) => r.id);
+    expect(nested).toEqual(['n/nested.md']);
+  });
+
+  it('sortBy: mtime returns newest first with mtime, unindexed notes last', async () => {
+    setSyncMtime(db, 'People/Bob.md', 3_000);
+    setSyncMtime(db, 'orphan.md', 2_000);
+    setSyncMtime(db, 'People/Alice.md', 1_000);
+    const { server, registered } = makeMockServer();
+    registerListNotesTool(server, { db } as ServerContext);
+    const out = unwrap(await registered[0].cb({ sortBy: 'mtime', includeStubs: false }));
+    expect(out.map((r: { id: string }) => r.id)).toEqual([
+      'People/Bob.md',
+      'orphan.md',
+      'People/Alice.md',
+      'Concepts/Widget.md',
+    ]);
+    expect(out[0].mtime).toBe(new Date(3_000).toISOString());
+    expect(out[3].mtime).toBeUndefined();
+
+    const top = unwrap(await registered[0].cb({ sortBy: 'mtime', limit: 1 }));
+    expect(top.map((r: { id: string }) => r.id)).toEqual(['People/Bob.md']);
   });
 
   it('combined directory + tag filter intersects both', async () => {

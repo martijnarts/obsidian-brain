@@ -423,6 +423,53 @@ function patchFrontmatter(s: string, key: string, value: unknown): Apply {
   return { next, at, len: String(value ?? '').length, removedLen: 0 };
 }
 
+export interface FrontmatterUpdate {
+  next: string;
+  frontmatter: Record<string, unknown>;
+  set: string[];
+  removed: string[];
+  notPresent: string[];
+}
+
+/**
+ * Multi-key variant of `patchFrontmatter`: one gray-matter round-trip for
+ * every key, so the note is rewritten once. Removals run first, so `set`
+ * wins for a key named in both. A `null` value in `set` removes the key,
+ * as in `patch_frontmatter`. An empty result drops the frontmatter block.
+ */
+export function updateFrontmatter(
+  s: string,
+  set: Record<string, unknown>,
+  remove: string[],
+): FrontmatterUpdate {
+  const parsed = matter(s);
+  const data = { ...(parsed.data as Record<string, unknown>) };
+  const written: string[] = [];
+  const removed: string[] = [];
+  const notPresent: string[] = [];
+  const drop = (key: string): void => {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      delete data[key];
+      removed.push(key);
+    } else {
+      notPresent.push(key);
+    }
+  };
+  for (const key of remove) {
+    if (!Object.prototype.hasOwnProperty.call(set, key)) drop(key);
+  }
+  for (const [key, value] of Object.entries(set)) {
+    if (value === null || value === undefined) drop(key);
+    else {
+      data[key] = value;
+      written.push(key);
+    }
+  }
+  // Nothing changed: keep the file byte-for-byte instead of re-serialising.
+  const next = written.length === 0 && removed.length === 0 ? s : matter.stringify(parsed.content, data);
+  return { next, frontmatter: data, set: written, removed, notPresent };
+}
+
 function atLine(
   s: string,
   line: number,

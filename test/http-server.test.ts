@@ -69,7 +69,7 @@ describe('startHttpServer', () => {
   it('sends each call to the vault it names', async () => {
     handle = await start();
     const client = await connect(handle.port);
-    expect((await client.listTools()).tools).toHaveLength(19);
+    expect((await client.listTools()).tools).toHaveLength(24);
     for (const [name, dir, other] of [
       ['alpha', alpha, beta],
       ['beta', beta, alpha],
@@ -88,7 +88,7 @@ describe('startHttpServer', () => {
   it('accepts a trailing slash on /mcp', async () => {
     handle = await start();
     const client = await connect(handle.port, '/mcp/');
-    expect((await client.listTools()).tools).toHaveLength(19);
+    expect((await client.listTools()).tools).toHaveLength(24);
     await client.close();
   });
 
