@@ -56,6 +56,9 @@ import { registerCreateFolderTool } from './tools/create-folder.js';
 import { registerDeleteFolderTool } from './tools/delete-folder.js';
 import { registerListAttachmentsTool } from './tools/list-attachments.js';
 import { registerCreateAttachmentTool } from './tools/create-attachment.js';
+import { registerListTasksTool } from './tools/list-tasks.js';
+import { registerSetTaskStatusTool } from './tools/set-task-status.js';
+import { registerEnsureBlockIdTool } from './tools/ensure-block-id.js';
 
 export interface ServerOptions {
   vaults: VaultSpec[];
@@ -190,6 +193,9 @@ export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerDeleteFolderTool(server, ctx);
   registerListAttachmentsTool(server, ctx);
   registerCreateAttachmentTool(server, ctx);
+  registerListTasksTool(server, ctx);
+  registerSetTaskStatusTool(server, ctx);
+  registerEnsureBlockIdTool(server, ctx);
 }
 
 /** Waits briefly for queued indexing, then releases the embedder and the DB. */

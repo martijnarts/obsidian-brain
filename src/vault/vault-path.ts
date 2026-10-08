@@ -8,8 +8,8 @@
  * also covers a path that does not exist yet (a folder or file to create).
  */
 
-import { lstatSync, realpathSync } from 'fs';
-import { dirname, isAbsolute, join, posix, sep } from 'path';
+import { lstatSync, promises as fs, realpathSync } from 'fs';
+import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'path';
 
 export interface VaultPath {
   /** Vault-relative, `/`-separated, no leading or trailing slash. `''` is the root. */
@@ -55,4 +55,44 @@ function entryExists(abs: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Turn a client-supplied vault-relative path into an absolute one, refusing
+ * anything that lands outside the vault: absolute paths, `..` segments that
+ * climb out, and symlinks whose real target is elsewhere. A path that does
+ * not exist yet passes the lexical check only; the caller's read then fails.
+ */
+export async function resolveInVault(vaultPath: string, relPath: string): Promise<string> {
+  if (isAbsolute(relPath)) {
+    throw new Error(`Path must be vault-relative: "${relPath}"`);
+  }
+  const root = resolve(vaultPath);
+  const abs = resolve(join(root, relPath));
+  if (!isInside(root, abs)) {
+    throw new Error(`Path escapes the vault: "${relPath}"`);
+  }
+
+  let real: string;
+  try {
+    real = await fs.realpath(abs);
+  } catch {
+    return abs;
+  }
+  if (!isInside(await fs.realpath(root), real)) {
+    throw new Error(`Path escapes the vault: "${relPath}"`);
+  }
+  return abs;
+}
+
+function isInside(root: string, abs: string): boolean {
+  const rel = relative(root, abs);
+  return rel === '' || (!rel.startsWith('..' + sep) && rel !== '..' && !isAbsolute(rel));
+}
+
+/** Atomic replace: write a sibling temp file, then rename it over the target. */
+export async function writeFileAtomic(abs: string, content: string): Promise<void> {
+  const tmp = `${abs}.tmp`;
+  await fs.writeFile(tmp, content, 'utf-8');
+  await fs.rename(tmp, abs);
 }

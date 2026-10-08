@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 37 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 40 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-37 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+40 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -522,6 +522,60 @@ Create a binary file from base64 content, with any missing parent folders. The d
 
 > *"Use `create_attachment` to save this PNG as `assets/diagram.png`."*
 
+## Tasks
+
+### `list_tasks`
+
+List markdown tasks (`- [ ] text`, `* [x] text`, `1. [/] text`) across the vault, one folder, or one note, read from the files on disk. Tasks inside fenced code and frontmatter are skipped. Each task has its 1-based `line`, the raw `status` character, a `state` (`x`/`X` is done, `-` is cancelled, every other character is open), the `text`, its nesting `indent`, `parentLine` when it sits under another task, and `due` from an Obsidian Tasks `📅 YYYY-MM-DD` date. `total` and `truncated` support paging with `limit` and `offset`.
+
+<!-- GENERATED:tool:list_tasks -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string? | Path or fuzzy match of one note. Omit to scan the vault. |
+| `folder` | string? | Vault-relative folder to scan recursively. |
+| `status` | `"open"` \| `"done"` \| `"all"`? | Default `open`: every status but `x`, `X` and `-`. `done`: `x`/`X`. `all` adds cancelled (`-`). |
+| `limit` | number? | Max tasks to return. Default 200, max 1000. |
+| `offset` | number? | Tasks to skip, for paging. Default 0. |
+<!-- /GENERATED:tool:list_tasks -->
+
+> *"Use `list_tasks` to show my open tasks under `Projects/`."*
+
+### `set_task_status`
+
+Set the status of one task in place. Only the character between the brackets changes; indentation, list marker, text and line endings stay byte-identical. Pass `expectedText` (the `text` from `list_tasks`) to refuse the write when the line no longer holds that task. A line that is not a task is refused.
+
+<!-- GENERATED:tool:set_task_status -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match of the note. |
+| `line` | number | 1-based line of the task, as `list_tasks` returns it. |
+| `status` | string | `open` (space), `done` (`x`), or one raw status character such as `/` or `-`. |
+| `expectedText` | string? | The task text you expect on that line. The write is refused when it differs, e.g. after the note changed. |
+<!-- /GENERATED:tool:set_task_status -->
+
+> *"Use `set_task_status` to mark the 'Write spec' task in `Projects/Launch` as done."*
+
+## Blocks
+
+### `ensure_block_id`
+
+Return the `^block-id` of a block, adding one when the block has none, with a ready `[[Note#^id]]` link. Target the block by any line inside it, or by a heading, in which case the heading line carries the id. A paragraph, list item or heading gets ` ^id` at the end of its line; a table, quote, callout or fenced code block gets `^id` on its own line after the block, set off by blank lines. A block that already has an id keeps it. `dryRun: true` returns the id and diff without writing.
+
+<!-- GENERATED:tool:ensure_block_id -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match of the note. |
+| `line` | number? | 1-based line inside the block. |
+| `heading` | string? | Heading text; the id goes on that heading line. |
+| `id` | string? | Id to write when the block has none: letters, digits, dashes. Default: random 6 characters. |
+| `dryRun` | boolean? | If true, return the id and diff without writing. |
+<!-- /GENERATED:tool:ensure_block_id -->
+
+> *"Use `ensure_block_id` on line 12 of `Meetings/Kickoff` and give me a link to that paragraph."*
+
 ## Live editor
 
 These tools **require the [companion plugin](plugin.md)** installed in your vault and Obsidian running.
@@ -756,6 +810,9 @@ Response fields:
 | `delete_folder` | ✅ | — | ✅ |
 | `list_attachments` | ✅ | — | — |
 | `create_attachment` | ✅ | — | ✅ |
+| `list_tasks` | ✅ | — | — |
+| `set_task_status` | ✅ | — | ✅ |
+| `ensure_block_id` | ✅ | — | ✅ |
 | `active_note` | — | ✅ | — |
 | `dataview_query` | — | ✅ + Dataview community plugin | — |
 | `base_query` | — | ✅ + Obsidian ≥ 1.10.0 + Bases core plugin | — |
