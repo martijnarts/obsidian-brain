@@ -209,6 +209,7 @@ Modify an existing note. Six modes: `append`, `prepend`, `replace_window` (find-
 | `headingIndex` | number | For `patch_heading` when the heading text appears more than once — 0-indexed top-to-bottom picker. Without it, multiple matches throw `MultipleMatchesError` listing each occurrence with line numbers. |
 | `line` / `lineOp` | | For `at_line`. |
 | `key` / `value` / `valueJson` | | For `patch_frontmatter`. Use `valueJson` from clients that stringify tool params (e.g. `valueJson: 'null'` to clear a key, `valueJson: 'true'` for a real boolean, `valueJson: '42'` for a number). |
+| `expectedContent` | string? | Guard for edits that replace text (`replace_window`, `patch_heading` with `headingOp: replace`, `at_line` with `lineOp: replace`): the text being replaced, as last read. If the note changed since, the edit fails, nothing is written, and the error shows the current text. Line endings and trailing whitespace are ignored. Not with `edits`. |
 <!-- /GENERATED:tool:edit_note -->
 
 `patch_heading` responses include `removedLen` so callers can detect greedy trailing-heading consumption.

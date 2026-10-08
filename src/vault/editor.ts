@@ -96,14 +96,49 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Line endings and trailing whitespace do not count as a difference. */
+function normalizeForCompare(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Write precondition for an edit that replaces text: `expected` must equal
+ * the text the edit removes, so an edit planned from a stale read fails
+ * instead of destroying what someone else wrote since. Throws when the text
+ * differs, or when the edit replaces nothing.
+ */
+export function checkExpectedContent(original: string, res: Apply, expected: string): void {
+  if (res.removedLen === 0) {
+    throw new Error(
+      'expectedContent applies only to edits that replace text (replace_window, patch_heading with headingOp replace, at_line with lineOp replace).',
+    );
+  }
+  const current = original.slice(res.at, res.at + res.removedLen);
+  if (normalizeForCompare(current) !== normalizeForCompare(expected)) {
+    throw new Error(
+      'The text this edit replaces no longer matches expectedContent: the note changed since it was read. Read it again and redo the edit. Nothing was written. Current text:\n' +
+        current,
+    );
+  }
+}
+
 export async function editNote(
   vaultPath: string,
   fileRelPath: string,
   mode: EditMode,
+  opts: { expectedContent?: string } = {},
 ): Promise<EditResult> {
   const abs = join(vaultPath, fileRelPath);
   const original = await fs.readFile(abs, 'utf-8');
   const res = applyEdit(original, mode);
+  if (opts.expectedContent !== undefined) {
+    checkExpectedContent(original, res, opts.expectedContent);
+  }
 
   const tmp = `${abs}.tmp`;
   await fs.writeFile(tmp, res.next, 'utf-8');

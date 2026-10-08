@@ -8,7 +8,7 @@ import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
 import { resolveNodeName } from '../resolve/name-match.js';
-import { editNote, bulkEditNote, applyEdit, type EditMode } from '../vault/editor.js';
+import { editNote, bulkEditNote, applyEdit, checkExpectedContent, type EditMode } from '../vault/editor.js';
 import { previewStore } from './preview-store.js';
 import { editBuffer } from './edit-buffer.js';
 import { errorMessage } from '../util/errors.js';
@@ -64,6 +64,9 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
       valueJson: z.string().optional().describe('For `patch_frontmatter`: JSON-encoded value (wins over `value`). Use `"null"` to clear, `"true"` for boolean, `"42"` for number.'),
       line: z.number().int().positive().optional().describe('For `at_line`: 1-indexed line number (counts from file start including frontmatter).'),
       lineOp: z.enum(['before', 'after', 'replace']).optional().describe('For `at_line`: insert before/after the target line, or replace it. Default `replace`.'),
+      expectedContent: z.string().optional().describe(
+        'Optional guard for edits that replace text: the exact text being replaced, as last read. If the note changed since, the edit fails and nothing is written. Not with `edits`.',
+      ),
       dryRun: z.boolean().optional().describe(
         'If true, return a unified-diff preview without writing. Pass the returned previewId to apply_edit_preview to commit.',
       ),
@@ -88,6 +91,9 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
 
       // --- bulk edits branch: apply array of edits atomically ---
       if (args.edits !== undefined && args.edits.length > 0) {
+        if (args.expectedContent !== undefined) {
+          throw new Error('expectedContent works with a single edit, not with `edits`.');
+        }
         if (args.from_buffer === true) {
           throw new Error(
             'from_buffer is not compatible with bulk edits; re-issue the buffer retry as a single edit.',
@@ -191,6 +197,9 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
           throw new Error(`edit_note dryRun: could not read "${first.nodeId}": ${errorMessage(err)}`);
         }
         const applied = applyEdit(original, editMode);
+        if (args.expectedContent !== undefined) {
+          checkExpectedContent(original, applied, args.expectedContent);
+        }
         const diff = createPatch(first.nodeId, original, applied.next, 'original', 'proposed');
         const previewId = `prev_${randomUUID()}`;
         previewStore.set({
@@ -209,7 +218,9 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
 
       let result: Awaited<ReturnType<typeof editNote>>;
       try {
-        result = await editNote(ctx.config.vaultPath, first.nodeId, editMode);
+        result = await editNote(ctx.config.vaultPath, first.nodeId, editMode, {
+          expectedContent: args.expectedContent,
+        });
       } catch (err) {
         // On replace_window NoMatch failure: buffer the proposed content so
         // the agent can retry with `from_buffer: true` without re-emitting.
@@ -291,6 +302,7 @@ interface EditArgs {
   lineOp?: 'before' | 'after' | 'replace';
   dryRun?: boolean;
   from_buffer?: boolean;
+  expectedContent?: string;
 }
 
 export function parseValueJson(valueJson: string): unknown {
