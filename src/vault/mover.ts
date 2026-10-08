@@ -12,13 +12,14 @@
  */
 
 import { promises as fs } from 'fs';
-import { dirname, join, basename, resolve } from 'path';
+import { dirname, basename } from 'path';
 import matter from 'gray-matter';
 import type { DatabaseHandle } from '../store/db.js';
 import { deleteEdgesBySource, countEdgesBySource, getEdgesBySource } from '../store/edges.js';
 import { deleteEmbedding } from '../store/embeddings.js';
 import { deleteNode, pruneOrphanStubs } from '../store/nodes.js';
 import { deleteSyncPath } from '../store/sync.js';
+import { resolveVaultPath } from './vault-path.js';
 
 export interface MoveResult {
   /** Vault-relative source path. */
@@ -55,8 +56,7 @@ export async function moveNote(
   sourceRel: string,
   destinationRel: string,
 ): Promise<MoveResult> {
-  const absSource = join(vaultPath, sourceRel);
-  const resolvedSource = resolve(absSource);
+  const resolvedSource = resolveVaultPath(vaultPath, sourceRel).abs;
 
   // Refuse to proceed if the source is missing — plain rename would surface
   // a cryptic ENOENT.
@@ -64,9 +64,11 @@ export async function moveNote(
     throw new Error(`moveNote: source not found: ${sourceRel}`);
   });
 
-  const destRelNorm = normalizeDestination(destinationRel, sourceRel);
-  const absDest = join(vaultPath, destRelNorm);
-  const resolvedDest = resolve(absDest);
+  // The destination comes from the client: it must stay inside the vault.
+  const { rel: destRelNorm, abs: resolvedDest } = resolveVaultPath(
+    vaultPath,
+    normalizeDestination(destinationRel, sourceRel),
+  );
 
   if (resolvedDest === resolvedSource) {
     return { oldPath: sourceRel, newPath: destRelNorm };
@@ -168,7 +170,7 @@ export async function deleteNote(
   fileRelPath: string,
   db: DatabaseHandle,
 ): Promise<DeleteResult> {
-  const abs = join(vaultPath, fileRelPath);
+  const abs = resolveVaultPath(vaultPath, fileRelPath).abs;
 
   // Capture edge count before we nuke the row.
   let edgeCount = 0;

@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'fs';
-import { join, basename } from 'path';
+import { basename, dirname } from 'path';
 import matter from 'gray-matter';
 import type { DatabaseHandle } from '../store/db.js';
 import { upsertNode } from '../store/nodes.js';
 import { insertEdge } from '../store/edges.js';
+import { resolveVaultPath } from './vault-path.js';
 import { debugLog } from '../util/debug-log.js';
 
 debugLog('module-load: src/vault/writer.ts');
@@ -22,14 +23,14 @@ export class VaultWriter {
   ) {}
 
   createNode(opts: CreateNodeOptions): string {
-    const dir = opts.directory
-      ? join(this.vaultPath, opts.directory)
-      : this.vaultPath;
-    mkdirSync(dir, { recursive: true });
-
+    // The directory and the title both come from the client, and the title
+    // becomes the file name, so the guard checks the whole path.
     const filename = `${opts.title}.md`;
-    const relPath = opts.directory ? `${opts.directory}/${filename}` : filename;
-    const absPath = join(dir, filename);
+    const { rel: relPath, abs: absPath } = resolveVaultPath(
+      this.vaultPath,
+      opts.directory ? `${opts.directory}/${filename}` : filename,
+    );
+    mkdirSync(dirname(absPath), { recursive: true });
 
     if (existsSync(absPath)) {
       throw new Error(`File already exists: ${relPath}`);
@@ -55,7 +56,7 @@ export class VaultWriter {
   }
 
   annotateNode(nodeId: string, content: string): void {
-    const absPath = join(this.vaultPath, nodeId);
+    const absPath = resolveVaultPath(this.vaultPath, nodeId).abs;
     if (!existsSync(absPath)) {
       throw new Error(`Node not found: ${nodeId}`);
     }
@@ -67,7 +68,7 @@ export class VaultWriter {
   }
 
   addLink(sourceId: string, targetRef: string, context: string): void {
-    const absPath = join(this.vaultPath, sourceId);
+    const absPath = resolveVaultPath(this.vaultPath, sourceId).abs;
     if (!existsSync(absPath)) {
       throw new Error(`Source node not found: ${sourceId}`);
     }
@@ -88,7 +89,7 @@ export class VaultWriter {
   }
 
   private indexFile(relPath: string): void {
-    const absPath = join(this.vaultPath, relPath);
+    const absPath = resolveVaultPath(this.vaultPath, relPath).abs;
     const raw = readFileSync(absPath, 'utf-8');
 
     let fm: Record<string, unknown>;
