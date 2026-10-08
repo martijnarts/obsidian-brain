@@ -44,3 +44,9 @@ export function getAllSyncPaths(db: DatabaseHandle): string[] {
 export function deleteSyncPath(db: DatabaseHandle, path: string): void {
   db.prepare('DELETE FROM sync WHERE path = ?').run(path);
 }
+
+/** Last-indexed mtime (ms) of every tracked path. */
+export function allSyncMtimes(db: DatabaseHandle): Map<string, number> {
+  const rows = db.prepare('SELECT path, mtime FROM sync').all() as Array<{ path: string; mtime: number }>;
+  return new Map(rows.map((r) => [r.path, r.mtime]));
+}

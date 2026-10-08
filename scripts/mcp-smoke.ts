@@ -39,6 +39,11 @@ const EXPECTED_TOOLS = [
   'delete_note',
   'reindex',
   'index_status',
+  'vault_overview',
+  'list_tags',
+  'list_bookmarks',
+  'list_property_values',
+  'update_properties',
 ] as const;
 
 const FAST_TIMEOUT_MS = 5_000;
@@ -274,6 +279,22 @@ async function main(): Promise<number> {
       callTool(client, 'list_notes', { limit: 10 }, FAST_TIMEOUT_MS),
     );
 
+    await runCall('vault_overview', results, () =>
+      callTool(client, 'vault_overview', {}, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('list_tags', results, () =>
+      callTool(client, 'list_tags', {}, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('list_bookmarks', results, () =>
+      callTool(client, 'list_bookmarks', {}, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('list_property_values', results, () =>
+      callTool(client, 'list_property_values', { key: 'tags' }, FAST_TIMEOUT_MS),
+    );
+
     await runCall('read_note (brief)', results, () =>
       callTool(client, 'read_note', { name: 'Widgets' }, FAST_TIMEOUT_MS),
     );
@@ -321,6 +342,15 @@ async function main(): Promise<number> {
         client,
         'edit_note',
         { name: 'Smoke Test', mode: 'append', content: ' more text' },
+        SLOW_TIMEOUT_MS,
+      ),
+    );
+
+    await runCall('update_properties', results, () =>
+      callTool(
+        client,
+        'update_properties',
+        { name: 'Smoke Test', set: { status: 'smoke' }, remove: ['tags'] },
         SLOW_TIMEOUT_MS,
       ),
     );

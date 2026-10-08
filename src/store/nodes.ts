@@ -90,6 +90,22 @@ export function allNodeIds(db: DatabaseHandle): string[] {
 }
 
 /**
+ * Every real note (stubs excluded) with its parsed frontmatter, in id order.
+ */
+export function allNotes(
+  db: DatabaseHandle,
+): Array<{ id: string; title: string; frontmatter: Record<string, unknown> }> {
+  const rows = db.prepare('SELECT id, title, frontmatter FROM nodes ORDER BY id').all() as Array<{
+    id: string;
+    title: string;
+    frontmatter: string;
+  }>;
+  return rows
+    .map((r) => ({ id: r.id, title: r.title, frontmatter: JSON.parse(r.frontmatter) as Record<string, unknown> }))
+    .filter((n) => n.frontmatter._stub !== true);
+}
+
+/**
  * Remove a node and every piece of state that references it: FTS5 row,
  * vec0 embedding, incoming + outgoing edges, and sync-state entry.
  */
