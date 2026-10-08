@@ -1,15 +1,13 @@
 ---
 title: Tool reference
-description: All 45 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 42 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-45 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+42 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
-
-Tools marked **requires companion plugin** only work when the [companion Obsidian plugin](plugin.md) is installed and Obsidian is running. Every other tool works standalone against the vault on disk.
 
 ## Vaults
 
@@ -576,77 +574,6 @@ Return the `^block-id` of a block, adding one when the block has none, with a re
 
 > *"Use `ensure_block_id` on line 12 of `Meetings/Kickoff` and give me a link to that paragraph."*
 
-## Live editor
-
-These tools **require the [companion plugin](plugin.md)** installed in your vault and Obsidian running.
-
-### `active_note`
-
-Returns the note currently open in Obsidian — path, cursor position, and selection range. Requires the companion plugin (any current release; major.minor must match the server per the plugin-alignment contract).
-
-<!-- GENERATED:tool:active_note -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-<!-- /GENERATED:tool:active_note -->
-
-> *"Use `active_note` to see what note I'm editing right now."*
-
-### `dataview_query`
-
-Run a [Dataview](https://blacksmithgu.github.io/obsidian-dataview/) DQL query. Returns a normalised discriminated union:
-
-- `kind: "table"` → `{ headers, rows }`
-- `kind: "list"` → `{ values }`
-- `kind: "task"` → `{ items: [...] }` with full STask fields
-- `kind: "calendar"` → `{ events: [...] }`
-
-All Dataview `Link` / `DateTime` / `DataArray` / `Duration` values are flattened to JSON so tools consuming the output don't need Dataview runtime types.
-
-<!-- GENERATED:tool:dataview_query -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `query` | string | DQL source, e.g. 'TABLE file.name, rating FROM #book WHERE status = "reading" LIMIT 50' |
-| `source` | string? | Optional origin file path (vault-relative) to set the DQL origin. Affects `FROM ""` and relative link resolution inside the query. |
-| `timeoutMs` | number? | HTTP timeout in ms (default 30000). The Dataview query itself cannot be cancelled; this just bounds how long this tool waits. |
-<!-- /GENERATED:tool:dataview_query -->
-
-Requires:
-
-1. The companion plugin installed (see [plugin.md](plugin.md)) — current releases all advertise the `dataview` capability.
-2. The third-party **Dataview community plugin** by [blacksmithgu](https://github.com/blacksmithgu/obsidian-dataview) — a separate community plugin with ~4M+ installs, not shipped with Obsidian or by us. Install via Obsidian → Settings → Community plugins → Browse → search "Dataview" → Install → Enable.
-
-If Dataview isn't enabled, the tool returns a 424 with an actionable install message. Full details + DQL syntax reference: [Companion plugin → Dataview](plugin.md#dataview).
-
-> *"Use `dataview_query` to list every note tagged #book with its rating."*
-
-### `base_query`
-
-Evaluate an Obsidian Bases `.base` file and return its rows.
-
-<!-- GENERATED:tool:base_query -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `file` | string? | Vault-relative path to a `.base` YAML file (e.g. "Bases/Books.base"). Either `file` or `yaml` is required. |
-| `yaml` | string? | Inline `.base` YAML source. Either `file` or `yaml` is required. |
-| `view` | string | The name of the view inside the `.base` file to execute, e.g. "active-books". |
-| `timeoutMs` | number? | HTTP timeout in ms (default 30000). The plugin evaluator itself cannot be cancelled; this just bounds how long this tool waits. |
-<!-- /GENERATED:tool:base_query -->
-
-Response shape: `{view, rows, total, executedAt}` — `total` is the pre-limit count; `rows` each contain `{file: {name, path}, ...projected columns}` with Dates flattened to ISO strings.
-
-Requires:
-
-1. The companion plugin installed (see [plugin.md](plugin.md)) — current releases all advertise the `base` capability.
-2. Obsidian ≥ 1.10.0.
-3. The **Bases core plugin** enabled (Obsidian → Settings → Core plugins → Bases). Bases is first-party core Obsidian, not a community plugin.
-
-Supported expression subset: tree ops (`and` / `or` / `not`), comparisons (`==`, `!=`, `>`, `>=`, `<`, `<=`), leaf booleans (`&&`, `||`, `!`), `file.{name, path, folder, ext, size, mtime, ctime, tags}`, `file.hasTag(...)`, `file.inFolder(...)`, frontmatter dot-access. Arithmetic, method calls other than `hasTag`/`inFolder`, function calls (`today()`, `now()`, `date()`, `list()`, `link()`, `icon()`), regex literals, `formulas:`, `summaries:`, and `this` context all return 400 `unsupported_construct` errors — not yet shipped. Full subset + error reference: [Companion plugin → Bases](plugin.md#bases).
-
-> *"Use `base_query` on `Bases/Books.base` with view `active-books` to list everything I'm currently reading."*
-
 ## Structure
 
 ### `vault_overview`
@@ -865,49 +792,46 @@ Rename one heading in a note and rewrite every link to it across the vault: `[[N
 
 ## Capability matrix
 
-| Tool | Works offline | Needs plugin | Writes to vault |
-|---|:-:|:-:|:-:|
-| `search` | ✅ | — | — |
-| `list_notes` | ✅ | — | — |
-| `read_note` | ✅ | — | — |
-| `find_notes_by_name` | ✅ | — | — |
-| `grep_vault` | ✅ | — | — |
-| `query_notes` | ✅ | — | — |
-| `find_connections` | ✅ | — | — |
-| `find_path_between` | ✅ | — | — |
-| `detect_themes` | ✅ | — | — |
-| `rank_notes` | ✅ | — | — |
-| `create_note` | ✅ | — | ✅ |
-| `edit_note` | ✅ | — | ✅ |
-| `apply_edit_preview` | ✅ | — | ✅ |
-| `link_notes` | ✅ | — | ✅ |
-| `move_note` | ✅ | — | ✅ |
-| `create_note_from_template` | ✅ | — | ✅ |
-| `delete_note` | ✅ | — | ✅ |
-| `read_canvas` | ✅ | — | — |
-| `edit_canvas` | ✅ | — | ✅ |
-| `read_notes` | ✅ | — | — |
-| `read_note_part` | ✅ | — | — |
-| `file_info` | ✅ | — | — |
-| `create_folder` | ✅ | — | ✅ |
-| `delete_folder` | ✅ | — | ✅ |
-| `list_attachments` | ✅ | — | — |
-| `create_attachment` | ✅ | — | ✅ |
-| `list_tasks` | ✅ | — | — |
-| `set_task_status` | ✅ | — | ✅ |
-| `ensure_block_id` | ✅ | — | ✅ |
-| `active_note` | — | ✅ | — |
-| `dataview_query` | — | ✅ + Dataview community plugin | — |
-| `base_query` | — | ✅ + Obsidian ≥ 1.10.0 + Bases core plugin | — |
-| `vault_overview` | ✅ | — | — |
-| `list_tags` | ✅ | — | — |
-| `list_bookmarks` | ✅ | — | — |
-| `list_property_values` | ✅ | — | — |
-| `update_properties` | ✅ | — | ✅ |
-| `reindex` | ✅ | — | — |
-| `index_status` | ✅ | — | — |
-| `find_broken_links` | ✅ | — | — |
-| `find_orphaned_notes` | ✅ | — | — |
-| `search_and_replace` | ✅ | — | ✅ |
-| `rename_tag` | ✅ | — | ✅ |
-| `rename_heading` | ✅ | — | ✅ |
+| Tool | Works offline | Writes to vault |
+|---|:-:|:-:|
+| `search` | ✅ | — |
+| `list_notes` | ✅ | — |
+| `read_note` | ✅ | — |
+| `find_notes_by_name` | ✅ | — |
+| `grep_vault` | ✅ | — |
+| `query_notes` | ✅ | — |
+| `find_connections` | ✅ | — |
+| `find_path_between` | ✅ | — |
+| `detect_themes` | ✅ | — |
+| `rank_notes` | ✅ | — |
+| `create_note` | ✅ | ✅ |
+| `edit_note` | ✅ | ✅ |
+| `apply_edit_preview` | ✅ | ✅ |
+| `link_notes` | ✅ | ✅ |
+| `move_note` | ✅ | ✅ |
+| `create_note_from_template` | ✅ | ✅ |
+| `delete_note` | ✅ | ✅ |
+| `read_canvas` | ✅ | — |
+| `edit_canvas` | ✅ | ✅ |
+| `read_notes` | ✅ | — |
+| `read_note_part` | ✅ | — |
+| `file_info` | ✅ | — |
+| `create_folder` | ✅ | ✅ |
+| `delete_folder` | ✅ | ✅ |
+| `list_attachments` | ✅ | — |
+| `create_attachment` | ✅ | ✅ |
+| `list_tasks` | ✅ | — |
+| `set_task_status` | ✅ | ✅ |
+| `ensure_block_id` | ✅ | ✅ |
+| `vault_overview` | ✅ | — |
+| `list_tags` | ✅ | — |
+| `list_bookmarks` | ✅ | — |
+| `list_property_values` | ✅ | — |
+| `update_properties` | ✅ | ✅ |
+| `reindex` | ✅ | — |
+| `index_status` | ✅ | — |
+| `find_broken_links` | ✅ | — |
+| `find_orphaned_notes` | ✅ | — |
+| `search_and_replace` | ✅ | ✅ |
+| `rename_tag` | ✅ | ✅ |
+| `rename_heading` | ✅ | ✅ |

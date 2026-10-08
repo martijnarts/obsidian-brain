@@ -7,7 +7,6 @@ import { VaultWriter } from './vault/writer.js';
 import { IndexPipeline } from './pipeline/indexer.js';
 import { bootstrap, type BootstrapResult } from './pipeline/bootstrap.js';
 import { resolveModelMetadata } from './embeddings/metadata-resolver.js';
-import { ObsidianClient } from './obsidian/client.js';
 import { resolveConfig, type Config, type ConfigOverrides } from './config.js';
 import { isLikelyAbiFailure, tryAutoHealAbiMismatch } from './auto-heal.js';
 import { errorMessage } from './util/errors.js';
@@ -37,7 +36,6 @@ export interface ServerContext {
   writer: VaultWriter;
   pipeline: IndexPipeline;
   config: Config;
-  obsidian: ObsidianClient;
   ensureEmbedderReady: () => Promise<void>;
   getBootstrap: () => BootstrapResult | null;
   embedderReady: () => boolean;
@@ -131,8 +129,7 @@ export async function createContext(
   const search = new Search(db, embedder);
   const writer = new VaultWriter(config.vaultPath, db);
   const pipeline = new IndexPipeline(db, embedder);
-  const obsidian = new ObsidianClient(config.vaultPath);
-  debugLog('createContext: search/writer/pipeline/obsidian wiring complete');
+  debugLog('createContext: search/writer/pipeline wiring complete');
 
   let bootstrapResult: BootstrapResult | null = null;
   let embedderInitialized = false;
@@ -193,7 +190,6 @@ export async function createContext(
     writer,
     pipeline,
     config,
-    obsidian,
     ensureEmbedderReady,
     getBootstrap: () => bootstrapResult,
     embedderReady: () => embedderInitialized,

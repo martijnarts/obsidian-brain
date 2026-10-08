@@ -145,9 +145,6 @@ PR that adds tests + removes the exclusion):
   `test/cli/` directory exists.
 - **`src/pipeline/watcher.ts`** — genuinely untested; real gap
   surfaced by baseline measurement.
-- **`src/tools/active-note.ts`** / **`base-query.ts`** /
-  **`dataview-query.ts`** — plugin-dependent tools, require mocked
-  Obsidian plugin HTTP contract which nobody's written.
 - **`src/tools/find-path-between.ts`** — the underlying graph
   primitive is tested in `test/graph/pathfinding.test.ts` but the
   tool wrapper itself has no direct test.
@@ -206,8 +203,7 @@ blocks a PR, three paths, in order of preference:
 3. **Add the file to `coverage.exclude`** in `vitest.config.ts` with a
    rationale comment + TODO. Use only for genuine tooling-blind-spot
    cases like `src/server.ts`'s subprocess-only code, or for code whose
-   test requires infrastructure that doesn't yet exist (like the
-   plugin-HTTP mocks for `src/tools/base-query.ts`). **Not** as a
+   test requires infrastructure that doesn't yet exist. **Not** as a
    general "I'll write tests later" exemption — each exclusion is a
    visible gap the TODO surfaces for future work.
 

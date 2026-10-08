@@ -38,7 +38,6 @@ function buildCtx(db: DatabaseHandle): ServerContext {
     writer: undefined,
     pipeline: undefined,
     config: { vaultPath: '/fake' },
-    obsidian: undefined,
     ensureEmbedderReady: async () => {},
     enqueueBackgroundReindex: () => {},
   } as unknown as ServerContext;

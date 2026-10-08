@@ -87,7 +87,7 @@ Quit Claude (⌘Q), relaunch. First boot auto-indexes your vault and downloads a
 
     ---
 
-    Reads `.md` files directly off disk. Obsidian doesn't need to be running. The [companion plugin](plugin.md) is optional — only for live-editor features.
+    Reads `.md` files directly off disk. Obsidian doesn't need to be running.
 
 -   :material-heart-pulse: __Health & observability__
 

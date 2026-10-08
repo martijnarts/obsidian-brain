@@ -8,9 +8,8 @@
 A standalone Node MCP server that gives Claude (and any other MCP client) **semantic search + knowledge graph + vault editing** over an Obsidian vault. Runs as one local stdio process — no plugin, no HTTP bridge, no API key, nothing hosted. Your vault content never leaves your machine.
 
 > 📖 **Full docs → [sweir1.github.io/obsidian-brain](https://sweir1.github.io/obsidian-brain/)**
-> **Companion plugin** → [`sweir1/obsidian-brain-plugin`](https://github.com/sweir1/obsidian-brain-plugin) (optional — unlocks `active_note`, `dataview_query`, `base_query`)
 
-**Contents** — [Why](#why-obsidian-brain) · [Quick start](#quick-start) · [What you get](#what-you-get) · [How it works](#how-it-works) · [Companion plugin](#companion-plugin-optional) · [Troubleshooting](#troubleshooting) · [Recent releases](#recent-releases)
+**Contents** — [Why](#why-obsidian-brain) · [Quick start](#quick-start) · [What you get](#what-you-get) · [How it works](#how-it-works) · [Troubleshooting](#troubleshooting) · [Recent releases](#recent-releases)
 
 ## Why obsidian-brain?
 
@@ -69,7 +68,6 @@ Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 - **Find & read** — `search`, `list_notes`, `read_note`
 - **Understand the graph** — `find_connections`, `find_path_between`, `detect_themes`, `rank_notes`
 - **Write** — `create_note`, `edit_note`, `apply_edit_preview`, `link_notes`, `move_note`, `delete_note`
-- **Live editor** (requires [companion plugin](docs/plugin.md)) — `active_note`, `dataview_query`, `base_query`
 - **Maintenance** — `reindex`, `index_status`, `list_vaults`
 
 → Arguments, examples, and response shapes: [Tool reference](docs/tools.md)
@@ -96,14 +94,6 @@ Retrieval and writes both go through a SQLite index: reads are microsecond-cheap
 → Deeper write-up — why stdio, why SQLite, why local embeddings: [Architecture](docs/architecture.md)
 → Live watcher behaviour + debounces: [Live updates](docs/watching.md)
 → Scheduled reindex (macOS launchd / Linux systemd): [Scheduled indexing (macOS)](docs/launchd.md) · [(Linux)](docs/systemd.md)
-
-## Companion plugin (optional)
-
-An optional Obsidian plugin at [`sweir1/obsidian-brain-plugin`](https://github.com/sweir1/obsidian-brain-plugin) exposes live Obsidian runtime state — active editor, Dataview results, Bases rows — over a localhost HTTP endpoint. When installed and Obsidian is running, `active_note`, `dataview_query`, and `base_query` light up. Install via BRAT with repo ID `sweir1/obsidian-brain-plugin`.
-
-Ship plugin and server at the **same major.minor** — server v1.7.x pairs with plugin v1.7.x. Patch-version drift is fine.
-
-→ Security model, capability handshake, Dataview / Bases feature coverage: [Companion plugin](docs/plugin.md)
 
 ## Troubleshooting
 
