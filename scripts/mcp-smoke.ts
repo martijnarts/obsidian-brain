@@ -57,6 +57,9 @@ const EXPECTED_TOOLS = [
   'delete_folder',
   'list_attachments',
   'create_attachment',
+  'list_tasks',
+  'set_task_status',
+  'ensure_block_id',
 ] as const;
 
 const FAST_TIMEOUT_MS = 5_000;
@@ -98,6 +101,8 @@ function seedVault(vaultPath: string): void {
       '# Welcome',
       '',
       'Welcome to the smoke-test vault. See [[Concepts/Widgets]].',
+      '',
+      '- [ ] Explore the smoke-test vault',
       '',
     ].join('\n'),
   );
@@ -375,6 +380,14 @@ async function main(): Promise<number> {
 
     await runCall('rank_notes (influence)', results, () =>
       callTool(client, 'rank_notes', { metric: 'influence', limit: 5 }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('list_tasks', results, () =>
+      callTool(client, 'list_tasks', { status: 'all' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('ensure_block_id (dryRun)', results, () =>
+      callTool(client, 'ensure_block_id', { name: 'Welcome', line: 5, dryRun: true }, FAST_TIMEOUT_MS),
     );
 
     await runCall('create_note', results, () =>
