@@ -5,12 +5,11 @@
  * retry via the buffer with a lowered fuzzy threshold without having to
  * re-emit the potentially-long content payload.
  *
- * MCP stdio transport is single-client per process, so a process-global
- * buffer is session-equivalent. If we ever add HTTP/multi-client transport
- * this needs to be keyed by session id — but that's a separate change.
+ * The buffer is process-global and keyed by absolute path, so vaults served
+ * by one process (`obsidian-brain http`) never see each other's entries.
  */
 export interface BufferEntry {
-  path: string;              // vault-relative
+  path: string;              // absolute
   content: string;           // the replacement content
   search: string;            // the original search/needle
   mode: string;              // edit mode name

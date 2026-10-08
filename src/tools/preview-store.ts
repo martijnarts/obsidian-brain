@@ -7,13 +7,13 @@
  *     expires the agent must re-run `edit_note` with `dryRun: true`.
  *   - Cap: 50 entries. When the store is full, the oldest entry (by `createdAt`)
  *     is evicted to make room for the new one.
- *   - stdio MCP is one-process-per-client (per modelcontextprotocol.io/docs/learn/architecture).
- *     Process-global state is therefore equivalent to per-session state — no
- *     session-id partitioning is needed.
+ *   - One process can serve several vaults (`obsidian-brain http`), so each
+ *     preview records its vault and applies only through that vault's tools.
  */
 
 export interface PendingEdit {
   previewId: string;
+  vaultPath: string;        // vault the preview was made in
   path: string;             // vault-relative path
   originalContent: string;
   proposedContent: string;
@@ -63,5 +63,5 @@ export class PreviewStore {
   }
 }
 
-/** Process-global singleton. Safe because stdio MCP is single-client per process. */
+/** Process-global singleton, shared by every vault in the process. */
 export const previewStore = new PreviewStore();

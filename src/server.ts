@@ -2,7 +2,7 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createContext } from './context.js';
+import { createContext, type ServerContext } from './context.js';
 import { debugLog } from './util/debug-log.js';
 import { logger } from './util/logger.js';
 
@@ -45,7 +45,7 @@ export async function startServer(): Promise<void> {
   // code: null because Node hasn't registered a handler yet. Pre-v1.7.22
   // this raced silently green; the v1.7.22 imports (logger.ts, preparing.ts)
   // added enough cold-import overhead to flip the race red on CI.
-  let ctx: import('./context.js').ServerContext | null = null;
+  let ctx: ServerContext | null = null;
   let handle: WatcherHandle | null = null;
   let shuttingDown = false;
   const shutdown = async (reason: string): Promise<void> => {
@@ -60,31 +60,7 @@ export async function startServer(): Promise<void> {
         debugLog('shutdown: watcher closed');
       }
       if (ctx) {
-        debugLog('shutdown: awaiting pendingReindex (max 3s)');
-        await Promise.race([
-          ctx.pendingReindex.catch(() => {}),
-          new Promise<void>((resolve) => {
-            setTimeout(resolve, 3_000).unref();
-          }),
-        ]);
-        debugLog('shutdown: pendingReindex drained or timed out');
-        if (ctx.embedderReady()) {
-          debugLog('shutdown: disposing embedder (ONNX runtime threads)');
-          await ctx.embedder.dispose();
-          debugLog('shutdown: embedder disposed');
-        }
-        debugLog('shutdown: checkpointing WAL');
-        try {
-          ctx.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-          debugLog('shutdown: WAL checkpoint OK');
-        } catch (err) {
-          logger.warn(`WAL checkpoint failed during shutdown (ignored): ${err}`, {
-            error: String(err),
-          });
-        }
-        debugLog('shutdown: closing DB');
-        ctx.db.close();
-        debugLog('shutdown: DB closed');
+        await closeContext(ctx);
       } else {
         debugLog('shutdown: ctx not yet initialized, skipping DB/embedder teardown');
       }
@@ -105,24 +81,7 @@ export async function startServer(): Promise<void> {
   const server = new McpServer({ name: 'obsidian-brain', version: pkg.version });
   debugLog('startServer: McpServer instantiated, registering 18 tools');
 
-  registerSearchTool(server, ctx);
-  registerReadNoteTool(server, ctx);
-  registerListNotesTool(server, ctx);
-  registerFindConnectionsTool(server, ctx);
-  registerFindPathBetweenTool(server, ctx);
-  registerDetectThemesTool(server, ctx);
-  registerRankNotesTool(server, ctx);
-  registerCreateNoteTool(server, ctx);
-  registerEditNoteTool(server, ctx);
-  registerApplyEditPreviewTool(server, ctx);
-  registerLinkNotesTool(server, ctx);
-  registerMoveNoteTool(server, ctx);
-  registerDeleteNoteTool(server, ctx);
-  registerReindexTool(server, ctx);
-  registerActiveNoteTool(server, ctx);
-  registerDataviewQueryTool(server, ctx);
-  registerBaseQueryTool(server, ctx);
-  registerIndexStatusTool(server, ctx);
+  registerTools(server, ctx);
   debugLog('startServer: all 18 tools registered, querying allNodeIds for boot-state decision');
 
   const dbIsEmpty = allNodeIds(ctx.db).length === 0;
@@ -139,91 +98,7 @@ export async function startServer(): Promise<void> {
   // Background init: embedder download, bootstrap, and initial index all run
   // asynchronously after the handshake. ctx.embedderReady() exposes the state
   // to tool handlers; ctx.initError captures any failure for tools to surface.
-  void (async () => {
-    debugLog('background: entered fire-and-forget init block');
-    try {
-      if (dbIsEmpty) {
-        debugLog('background: dbIsEmpty branch — first-boot, calling ensureEmbedderReady');
-        // First-ever boot: download model and build initial index. Time
-        // varies dramatically with vault size — small vaults complete in
-        // under a minute; 10k+-note vaults take 5-15 minutes. Both factors
-        // are unknown at this exact point (model not yet downloaded, vault
-        // not yet walked), so the message is deliberately vague rather
-        // than mis-promising "30-60s" like earlier releases.
-        logger.info(
-          'index is empty, running first-time index. ' +
-            'Time depends on vault size — typically under a minute for small vaults, ' +
-            'a few minutes for thousands of notes. Downloads embedding model on first boot.',
-          { firstTime: true },
-        );
-        await ctx.ensureEmbedderReady();
-        ctx.enqueueBackgroundReindex(async () => {
-          const stats = await ctx.pipeline.index(ctx.config.vaultPath);
-          logger.info(
-            `indexed ${stats.nodesIndexed} notes, ` +
-              `${stats.edgesIndexed} links, ${stats.communitiesDetected} communities.`,
-            {
-              nodesIndexed: stats.nodesIndexed,
-              edgesIndexed: stats.edgesIndexed,
-              communitiesDetected: stats.communitiesDetected,
-            },
-          );
-        });
-      } else {
-        // Non-empty DB: surface any bootstrap migration reasons (model change,
-        // v1.4.0 chunk upgrade, FTS tokenizer swap) so users understand why a
-        // reindex kicks in. The actual reindex is handled by the catchup path
-        // below — forcing all sync mtimes to 0 so every note re-embeds under
-        // the new model.
-        debugLog('background: non-empty DB branch — calling ensureEmbedderReady');
-        await ctx.ensureEmbedderReady();
-        debugLog('background: ensureEmbedderReady complete, calling getBootstrap');
-        const boot = ctx.getBootstrap();
-        if (boot) {
-          for (const reason of boot.reasons) {
-            logger.info(reason, { bootstrapReason: true });
-          }
-          if (boot.needsReindex) {
-            // Force a from-scratch reindex by clearing sync mtimes — the indexer's
-            // mtime-guard would otherwise skip every file.
-            ctx.db.exec('DELETE FROM sync');
-            logger.info('rebuilding per-chunk embeddings (may take a minute)...', {
-              rebuildAll: true,
-            });
-          }
-        }
-
-        // Subsequent-boot catchup: the client has gone away and come back, and
-        // notes may have been edited on disk in the meantime. Run an incremental
-        // full-vault reindex in the background so the client gets `tools/list`
-        // immediately; the watcher takes over for any live edits from here on.
-        // Set OBSIDIAN_BRAIN_NO_CATCHUP=1 to disable.
-        const wasReindexFromScratch = boot?.needsReindex ?? false;
-        if (process.env.OBSIDIAN_BRAIN_NO_CATCHUP !== '1') {
-          ctx.enqueueBackgroundReindex(async () => {
-            const stats = await ctx.pipeline.index(ctx.config.vaultPath);
-            if (stats.nodesIndexed > 0) {
-              const suffix = wasReindexFromScratch
-                ? 're-embedded after model/schema change'
-                : 'modified while the server was down';
-              logger.info(
-                `startup catchup — reindexed ${stats.nodesIndexed} note(s) (${suffix})`,
-                {
-                  nodesIndexed: stats.nodesIndexed,
-                  reason: wasReindexFromScratch ? 'model-or-schema-change' : 'edits-while-down',
-                },
-              );
-            }
-          });
-        }
-      }
-      debugLog('background: init block completed without errors');
-    } catch (err) {
-      ctx.initError = err;
-      logger.error(`background init failed: ${err}`, { error: String(err) });
-      debugLog(`background: init block CAUGHT error — ${err instanceof Error ? err.message : String(err)}`);
-    }
-  })();
+  void runStartupIndex(ctx, dbIsEmpty);
 
   debugLog('startServer: background block scheduled, starting watcher');
 
@@ -269,7 +144,150 @@ export async function startServer(): Promise<void> {
   debugLog('startServer: all wiring complete, function returning — server is now live');
 }
 
-function readWatcherOptsFromEnv() {
+/** Registers all 18 tools on `server`, bound to one vault's context. */
+export function registerTools(server: McpServer, ctx: ServerContext): void {
+  registerSearchTool(server, ctx);
+  registerReadNoteTool(server, ctx);
+  registerListNotesTool(server, ctx);
+  registerFindConnectionsTool(server, ctx);
+  registerFindPathBetweenTool(server, ctx);
+  registerDetectThemesTool(server, ctx);
+  registerRankNotesTool(server, ctx);
+  registerCreateNoteTool(server, ctx);
+  registerEditNoteTool(server, ctx);
+  registerApplyEditPreviewTool(server, ctx);
+  registerLinkNotesTool(server, ctx);
+  registerMoveNoteTool(server, ctx);
+  registerDeleteNoteTool(server, ctx);
+  registerReindexTool(server, ctx);
+  registerActiveNoteTool(server, ctx);
+  registerDataviewQueryTool(server, ctx);
+  registerBaseQueryTool(server, ctx);
+  registerIndexStatusTool(server, ctx);
+}
+
+/** Waits briefly for queued indexing, then releases the embedder and the DB. */
+export async function closeContext(ctx: ServerContext): Promise<void> {
+  debugLog('shutdown: awaiting pendingReindex (max 3s)');
+  await Promise.race([
+    ctx.pendingReindex.catch(() => {}),
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 3_000).unref();
+    }),
+  ]);
+  debugLog('shutdown: pendingReindex drained or timed out');
+  if (ctx.embedderReady()) {
+    debugLog('shutdown: disposing embedder (ONNX runtime threads)');
+    await ctx.embedder.dispose();
+    debugLog('shutdown: embedder disposed');
+  }
+  debugLog('shutdown: checkpointing WAL');
+  try {
+    ctx.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    debugLog('shutdown: WAL checkpoint OK');
+  } catch (err) {
+    logger.warn(`WAL checkpoint failed during shutdown (ignored): ${err}`, {
+      error: String(err),
+    });
+  }
+  debugLog('shutdown: closing DB');
+  ctx.db.close();
+  debugLog('shutdown: DB closed');
+}
+
+/**
+ * Background init: embedder download, bootstrap, and initial or catchup
+ * index. Resolves once the index work is queued; `ctx.pendingReindex`
+ * settles when it finishes. ctx.embedderReady() exposes the state to tool
+ * handlers; ctx.initError captures any failure for tools to surface.
+ */
+export async function runStartupIndex(ctx: ServerContext, dbIsEmpty: boolean): Promise<void> {
+  debugLog('background: entered fire-and-forget init block');
+  try {
+    if (dbIsEmpty) {
+      debugLog('background: dbIsEmpty branch — first-boot, calling ensureEmbedderReady');
+      // First-ever boot: download model and build initial index. Time
+      // varies dramatically with vault size — small vaults complete in
+      // under a minute; 10k+-note vaults take 5-15 minutes. Both factors
+      // are unknown at this exact point (model not yet downloaded, vault
+      // not yet walked), so the message is deliberately vague rather
+      // than mis-promising "30-60s" like earlier releases.
+      logger.info(
+        'index is empty, running first-time index. ' +
+          'Time depends on vault size — typically under a minute for small vaults, ' +
+          'a few minutes for thousands of notes. Downloads embedding model on first boot.',
+        { firstTime: true },
+      );
+      await ctx.ensureEmbedderReady();
+      ctx.enqueueBackgroundReindex(async () => {
+        const stats = await ctx.pipeline.index(ctx.config.vaultPath);
+        logger.info(
+          `indexed ${stats.nodesIndexed} notes, ` +
+            `${stats.edgesIndexed} links, ${stats.communitiesDetected} communities.`,
+          {
+            nodesIndexed: stats.nodesIndexed,
+            edgesIndexed: stats.edgesIndexed,
+            communitiesDetected: stats.communitiesDetected,
+          },
+        );
+      });
+    } else {
+      // Non-empty DB: surface any bootstrap migration reasons (model change,
+      // v1.4.0 chunk upgrade, FTS tokenizer swap) so users understand why a
+      // reindex kicks in. The actual reindex is handled by the catchup path
+      // below — forcing all sync mtimes to 0 so every note re-embeds under
+      // the new model.
+      debugLog('background: non-empty DB branch — calling ensureEmbedderReady');
+      await ctx.ensureEmbedderReady();
+      debugLog('background: ensureEmbedderReady complete, calling getBootstrap');
+      const boot = ctx.getBootstrap();
+      if (boot) {
+        for (const reason of boot.reasons) {
+          logger.info(reason, { bootstrapReason: true });
+        }
+        if (boot.needsReindex) {
+          // Force a from-scratch reindex by clearing sync mtimes — the indexer's
+          // mtime-guard would otherwise skip every file.
+          ctx.db.exec('DELETE FROM sync');
+          logger.info('rebuilding per-chunk embeddings (may take a minute)...', {
+            rebuildAll: true,
+          });
+        }
+      }
+
+      // Subsequent-boot catchup: the client has gone away and come back, and
+      // notes may have been edited on disk in the meantime. Run an incremental
+      // full-vault reindex in the background so the client gets `tools/list`
+      // immediately; the watcher takes over for any live edits from here on.
+      // Set OBSIDIAN_BRAIN_NO_CATCHUP=1 to disable.
+      const wasReindexFromScratch = boot?.needsReindex ?? false;
+      if (process.env.OBSIDIAN_BRAIN_NO_CATCHUP !== '1') {
+        ctx.enqueueBackgroundReindex(async () => {
+          const stats = await ctx.pipeline.index(ctx.config.vaultPath);
+          if (stats.nodesIndexed > 0) {
+            const suffix = wasReindexFromScratch
+              ? 're-embedded after model/schema change'
+              : 'modified while the server was down';
+            logger.info(
+              `startup catchup — reindexed ${stats.nodesIndexed} note(s) (${suffix})`,
+              {
+                nodesIndexed: stats.nodesIndexed,
+                reason: wasReindexFromScratch ? 'model-or-schema-change' : 'edits-while-down',
+              },
+            );
+          }
+        });
+      }
+    }
+    debugLog('background: init block completed without errors');
+  } catch (err) {
+    ctx.initError = err;
+    logger.error(`background init failed: ${err}`, { error: String(err) });
+    debugLog(`background: init block CAUGHT error — ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+export function readWatcherOptsFromEnv() {
   const debounceMs = Number(process.env.OBSIDIAN_BRAIN_WATCH_DEBOUNCE_MS);
   const communityDebounceMs = Number(
     process.env.OBSIDIAN_BRAIN_COMMUNITY_DEBOUNCE_MS,

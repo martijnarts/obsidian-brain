@@ -46,6 +46,8 @@ describe('CLI help-text snapshots', () => {
       Commands:
         server                    Start the stdio MCP server (spawned by Claude
                                   Desktop, Claude Code, Jan, etc.)
+        http [options]            Serve one or more vaults over streamable HTTP, each
+                                  at /<name>/mcp. Indexes live in <DATA_DIR>/<name>.
         index [options]           Scan the vault and update the knowledge-graph index
                                   (incremental)
         watch [options]           Long-running process: keep the index live by

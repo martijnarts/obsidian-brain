@@ -143,12 +143,6 @@ PR that adds tests + removes the exclusion):
 
 - **`src/cli/index.ts`** — untested legacy CLI entrypoint, no
   `test/cli/` directory exists.
-- **`src/server.ts`** — subprocess blind spot. Signal handlers,
-  `stdin-EOF` shutdown, and orderly-native-teardown are exercised
-  ONLY by `test/integration/server-stdin-shutdown.test.ts`, which
-  spawns a real subprocess that V8 coverage doesn't follow into.
-  Coverage is the *wrong instrument* for this file's correctness —
-  the subprocess test IS the gate for that code.
 - **`src/pipeline/watcher.ts`** — genuinely untested; real gap
   surfaced by baseline measurement.
 - **`src/tools/active-note.ts`** / **`base-query.ts`** /

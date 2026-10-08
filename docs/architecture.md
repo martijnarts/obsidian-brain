@@ -54,7 +54,9 @@ Incremental by default — only files whose `mtime` has changed go through parse
 
 ## Why stdio, not HTTP
 
-The single most consequential decision. `src/server.ts:56` instantiates a `StdioServerTransport` and nothing else — there is no HTTP listener, no SSE endpoint, no port binding anywhere in the codebase.
+The single most consequential decision. `obsidian-brain server` speaks stdio only: `startServer` in `src/server.ts` instantiates a `StdioServerTransport` and nothing else.
+
+The one exception is `obsidian-brain http` (`src/http-server.ts`), which serves several vaults from one process for a remote client. It binds to loopback by default and has no authentication of its own, so an authenticating proxy must sit in front of it. Everything below still holds for the default `server` command.
 
 Arguments for stdio:
 
@@ -227,9 +229,10 @@ When to disable (`OBSIDIAN_BRAIN_NO_WATCH=1`): vault on SMB/NFS/iCloud where FSE
 
 The directory layout is:
 
-- `src/server.ts` — MCP server bootstrap. Instantiates `McpServer`, wires `StdioServerTransport`, registers every tool, and starts the live watcher.
+- `src/server.ts` — MCP server bootstrap. Instantiates `McpServer`, wires `StdioServerTransport`, registers every tool, and starts the live watcher. Exports the per-vault helpers (`registerTools`, `runStartupIndex`, `closeContext`) that `src/http-server.ts` reuses.
+- `src/http-server.ts` — the `http` command: one `ServerContext` per vault, served over streamable HTTP at `/<name>/mcp`.
 - `src/config.ts` / `src/context.ts` — env parsing and the shared `ServerContext` object (DB handle, embedder, vault path, pipeline, writer, search) passed to every tool.
-- `src/cli/` — the `obsidian-brain` CLI entry point: `server`, `index`, `watch`, `search` subcommands.
+- `src/cli/` — the `obsidian-brain` CLI entry point: `server`, `http`, `index`, `watch`, `search` subcommands.
 - `src/store/` — SQLite schema and per-table CRUD (`db`, `nodes`, `edges`, `embeddings`, `fulltext`, `communities`, `sync`).
 - `src/embeddings/` — embedder backends (`embedder.ts` for TransformersEmbedder + `ollama.ts` for OllamaEmbedder), the metadata-resolution chain (`metadata-resolver.ts`, `metadata-cache.ts`, `seed-loader.ts`, `hf-metadata.ts`), the user-config layer (`overrides.ts`, `user-config.ts`), the chunker (`chunker.ts`), the auto-recommend heuristic (`auto-recommend.ts`), the preset table (`presets.ts`), the embedder factory (`factory.ts`), and per-model adaptive capacity (`capacity.ts`).
 - `src/graph/` — graph construction (`builder`), centrality (`centrality`), Louvain community detection (`communities`), shortest paths (`pathfinding`), and the graphology-compat shim.

@@ -8,7 +8,7 @@ import { IndexPipeline } from './pipeline/indexer.js';
 import { bootstrap, type BootstrapResult } from './pipeline/bootstrap.js';
 import { resolveModelMetadata } from './embeddings/metadata-resolver.js';
 import { ObsidianClient } from './obsidian/client.js';
-import { resolveConfig, type Config } from './config.js';
+import { resolveConfig, type Config, type ConfigOverrides } from './config.js';
 import { isLikelyAbiFailure, tryAutoHealAbiMismatch } from './auto-heal.js';
 import { errorMessage } from './util/errors.js';
 import { debugLog } from './util/debug-log.js';
@@ -73,9 +73,9 @@ export interface ServerContext {
   lastManualReindexReason: string | null;
 }
 
-export async function createContext(): Promise<ServerContext> {
+export async function createContext(overrides: ConfigOverrides = {}): Promise<ServerContext> {
   debugLog('createContext: entry, calling resolveConfig');
-  const config = resolveConfig({});
+  const config = resolveConfig(overrides);
   debugLog(`createContext: resolveConfig OK (dataDir=${config.dataDir}, vault=${config.vaultPath})`);
   mkdirSync(config.dataDir, { recursive: true });
   debugLog('createContext: dataDir created/verified, calling openDb');
