@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startHttpServer, type HttpServerHandle } from '../src/http-server.js';
+import { EXPOSED_TOOL_COUNT } from './helpers/tool-count.js';
 
 async function connect(port: number, path = '/mcp'): Promise<Client> {
   const client = new Client({ name: 'http-server-test', version: '0.0.0' });
@@ -69,7 +70,7 @@ describe('startHttpServer', () => {
   it('sends each call to the vault it names', async () => {
     handle = await start();
     const client = await connect(handle.port);
-    expect((await client.listTools()).tools).toHaveLength(24);
+    expect((await client.listTools()).tools).toHaveLength(EXPOSED_TOOL_COUNT);
     for (const [name, dir, other] of [
       ['alpha', alpha, beta],
       ['beta', beta, alpha],
@@ -88,7 +89,7 @@ describe('startHttpServer', () => {
   it('accepts a trailing slash on /mcp', async () => {
     handle = await start();
     const client = await connect(handle.port, '/mcp/');
-    expect((await client.listTools()).tools).toHaveLength(24);
+    expect((await client.listTools()).tools).toHaveLength(EXPOSED_TOOL_COUNT);
     await client.close();
   });
 

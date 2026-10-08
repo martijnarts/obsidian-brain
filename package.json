@@ -85,11 +85,13 @@
     "graphology-metrics": "^2.4.2",
     "graphology-types": "^0.24.8",
     "gray-matter": "^4.0.3",
+    "json-logic-js": "^2.0.5",
     "sqlite-vec": "^0.1.9",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/json-logic-js": "^2.0.8",
     "@types/node": "^26.6.4",
     "@vitest/coverage-v8": "^5.0.3",
     "fast-check": "^4.10.2",
