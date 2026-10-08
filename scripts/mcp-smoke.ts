@@ -33,7 +33,6 @@ const EXPECTED_TOOLS = [
   'query_notes',
   'find_connections',
   'find_path_between',
-  'detect_themes',
   'rank_notes',
   'create_note',
   'create_note_from_template',
@@ -373,10 +372,6 @@ async function main(): Promise<number> {
         { from: 'Welcome', to: 'Gadgets', maxDepth: 3, includeCommon: true },
         FAST_TIMEOUT_MS,
       ),
-    );
-
-    await runCall('detect_themes (list)', results, () =>
-      callTool(client, 'detect_themes', {}, FAST_TIMEOUT_MS),
     );
 
     await runCall('rank_notes (both)', results, () =>

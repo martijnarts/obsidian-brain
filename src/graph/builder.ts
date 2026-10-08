@@ -7,7 +7,7 @@ import { getEdgesBySource } from '../store/edges.js';
  * Thin wrapper around a graphology instance built from the SQLite store.
  *
  * Only holds construction + basic accessors. Pure algorithmic operations
- * (paths, centrality, communities) live in sibling modules and accept the
+ * (paths, centrality) live in sibling modules and accept the
  * graphology instance directly — call `graph()` to get it.
  */
 export class KnowledgeGraph {
@@ -19,15 +19,14 @@ export class KnowledgeGraph {
 
   /**
    * Build a directed multigraph from the store. Adds every node (with title
-   * + frontmatter as attributes so community tag summaries work), then every
+   * + frontmatter as attributes), then every
    * edge whose target exists as a node (dangling edges are silently dropped).
    *
    * `includeStubs` (default `false`): when `true`, includes broken-wikilink
    * stub nodes (`frontmatter._stub: true`) in the graph. Stubs have only one
-   * incoming edge each and no outgoing edges, so leaving them in fragments
-   * Louvain into thousands of trivial singleton clusters and dominates
+   * incoming edge each and no outgoing edges, so leaving them in floods
    * eigenvector-style centrality with popular-but-empty link targets.
-   * Default-excluding makes every graph tool (`detect_themes`, `rank_notes`,
+   * Default-excluding makes every graph tool (`rank_notes`,
    * `find_connections`, `find_path_between`) operate on the connected
    * "real-notes" graph by default. Pass `{ includeStubs: true }` to opt back
    * into the legacy behaviour.
@@ -94,7 +93,7 @@ export class KnowledgeGraph {
 
   /**
    * Collapse the directed multigraph into an undirected simple graph. Useful
-   * for Louvain/PageRank/betweenness which expect undirected input.
+   * for PageRank/betweenness, which expect undirected input.
    */
   toUndirected(): GraphInstance {
     return toUndirected(this.g);

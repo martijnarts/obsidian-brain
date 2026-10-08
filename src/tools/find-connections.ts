@@ -14,7 +14,7 @@ export function registerFindConnectionsTool(
   registerTool(
     server,
     'find_connections',
-    'Find notes linked to (from or to) a given note, up to N hops. Optionally return the full subgraph instead of a flat list. Response is wrapped as `{data, context}` where `context.next_actions` suggests follow-ups like clustering a dense neighbourhood via `detect_themes` or tracing a path to the furthest neighbour via `find_path_between`. Broken-wikilink stub neighbours are excluded by default; pass `includeStubs: true` to include them.',
+    'Find notes linked to (from or to) a given note, up to N hops. Optionally return the full subgraph instead of a flat list. Response is wrapped as `{data, context}` where `context.next_actions` suggests follow-ups like tracing a path to the furthest neighbour via `find_path_between`. Broken-wikilink stub neighbours are excluded by default; pass `includeStubs: true` to include them.',
     {
       name: z.string().describe('Starting note (path or fuzzy match).'),
       depth: z.number().int().positive().optional().describe('Number of hops to traverse. Default 1, max 3.'),

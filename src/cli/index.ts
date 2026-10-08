@@ -98,13 +98,12 @@ program
   .command('index')
   .description('Scan each vault and update its knowledge-graph index (incremental), one vault at a time')
   .option(VAULT_FLAG, 'A vault to index. Repeat for more vaults. At least one is required.', collectVault)
-  .option('-r, --resolution <n>', 'Louvain resolution (passing this forces a community-cache refresh even if no files changed)', parseFloat)
   .option(
     '--drop',
     'Drop all embeddings + sync state before indexing. Mostly an escape hatch — the bootstrap auto-detects EMBEDDING_MODEL / EMBEDDING_PROVIDER changes and wipes embedding state on its own; `--drop` is for forcing a from-scratch rebuild when something else has gone wrong.',
     false,
   )
-  .action(async (opts: { vault?: VaultSpec[]; resolution?: number; drop: boolean }) => {
+  .action(async (opts: { vault?: VaultSpec[]; drop: boolean }) => {
     const vaults = await openVaults(requireVaults(opts.vault), resolveDataDir(), closeContext);
     try {
       const stats: Record<string, unknown> = {};
@@ -114,7 +113,7 @@ program
           process.stderr.write(`obsidian-brain: dropped existing embeddings + sync state of "${name}"\n`);
         }
         await ctx.ensureEmbedderReady();
-        stats[name] = await ctx.pipeline.index(ctx.config.vaultPath, opts.resolution);
+        stats[name] = await ctx.pipeline.index(ctx.config.vaultPath);
       }
       process.stdout.write(`${JSON.stringify(stats, null, 2)}\n`);
     } finally {
@@ -129,20 +128,13 @@ program
   )
   .option(VAULT_FLAG, 'A vault to watch. Repeat for more vaults. At least one is required.', collectVault)
   .option('--debounce <ms>', 'Per-file reindex debounce (ms)', (v) => parseInt(v, 10), 3000)
-  .option(
-    '--community-debounce <ms>',
-    'Graph-wide community detection debounce (ms)',
-    (v) => parseInt(v, 10),
-    60000,
-  )
   .action(
-    async (opts: { vault?: VaultSpec[]; debounce: number; communityDebounce: number }) => {
+    async (opts: { vault?: VaultSpec[]; debounce: number }) => {
       const vaults = await openVaults(requireVaults(opts.vault), resolveDataDir(), closeContext);
       for (const vault of vaults) {
         await vault.ctx.ensureEmbedderReady();
         vault.watcher = startWatcher(vault.ctx, {
           debounceMs: opts.debounce,
-          communityDebounceMs: opts.communityDebounce,
         });
       }
       let shuttingDown = false;

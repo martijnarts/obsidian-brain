@@ -2,7 +2,6 @@ export interface IndexStats {
   nodesIndexed: number;
   nodesSkipped: number;
   edgesIndexed: number;
-  communitiesDetected: number;
   stubNodesCreated: number;
   chunksOk: number;
   chunksSkipped: number;

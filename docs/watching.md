@@ -5,7 +5,7 @@ description: How obsidian-brain's chokidar watcher reindexes the vault in real t
 
 # Live updates
 
-obsidian-brain runs a [chokidar](https://github.com/paulmillr/chokidar) watcher inside the `server` process, reindexing any `.md` file within seconds of it being saved. This page covers how the watcher works, the two debounce stages, Obsidian's autosave layering, tuning knobs, and the standalone `watch` daemon for headless setups. Architectural placement is in [architecture.md](./architecture.md#live-sync).
+obsidian-brain runs a [chokidar](https://github.com/paulmillr/chokidar) watcher inside the `server` process, reindexing any `.md` file within seconds of it being saved. This page covers how the watcher works, the per-file debounce, Obsidian's autosave layering, tuning knobs, and the standalone `watch` daemon for headless setups. Architectural placement is in [architecture.md](./architecture.md#live-sync).
 
 ## Why it's on by default in `server`
 
@@ -30,18 +30,13 @@ Chokidar emits a few event types — `add`, `change`, `unlink`. We react to all 
 
 Only `.md` files are watched. Everything else is ignored.
 
-## The two debounces and why they differ
+## The per-file debounce
 
-| Debounce | Default | What it covers |
-|---|---|---|
-| Per-file | 3000 ms | Collapses bursts of saves on a single file into one reindex. |
-| Community (graph-wide) | 60000 ms | Delays Louvain community detection until the vault settles. |
+The watcher collapses bursts of saves on a single file into one reindex, 3000 ms after the last save.
 
-Per-file debounce is keyed by path. If you save `Note A.md` three times in a second and then `Note B.md` once, you get exactly two reindex operations 3 s after the last save of each file. That's the Obsidian autosave behaviour covered in the next section.
+The debounce is keyed by path. If you save `Note A.md` three times in a second and then `Note B.md` once, you get exactly two reindex operations 3 s after the last save of each file. That's the Obsidian autosave behaviour covered in the next section.
 
-Community debounce is separate because Louvain runs over the entire graph and dominates cost on large vaults. Running it after every single file change would thrash; running it once per minute keeps `detect_themes` responsive without making per-file reindex slow.
-
-Flow: Obsidian saves file → chokidar `change` event → 3 s per-file debounce → `indexSingleNote` (`src/pipeline/indexer.ts:indexSingleNote`) parses, embeds, upserts → community flag set dirty → 60 s later Louvain re-runs and clears the flag.
+Flow: Obsidian saves file → chokidar `change` event → 3 s per-file debounce → `indexSingleNote` (`src/pipeline/indexer.ts:indexSingleNote`) parses, embeds, upserts.
 
 ## Obsidian's autosave and how we layer on top
 
@@ -57,14 +52,12 @@ If you actually *want* to see search-worthy updates within 2 s of every save, lo
 
 ## Tuning
 
-All three are environment variables read at server startup:
+Both are environment variables read at server startup:
 
 | Env var | Default | Effect |
 |---|---|---|
 | `OBSIDIAN_BRAIN_NO_WATCH` | unset | Set to `1` to disable the watcher entirely; falls back to the scheduled-index model. |
 | `OBSIDIAN_BRAIN_WATCH_DEBOUNCE_MS` | `3000` | Per-file reindex debounce. Lower for snappier search, higher for less CPU. |
-| `OBSIDIAN_BRAIN_COMMUNITY_DEBOUNCE_MS` | `60000` | Graph-wide community detection debounce. Keep this high unless you actively call `detect_themes` frequently. |
-
 No restart hot-reload — changes take effect next time `server` (or `watch`) starts.
 
 ## Standalone daemon mode: `obsidian-brain watch`

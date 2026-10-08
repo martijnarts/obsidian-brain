@@ -111,8 +111,8 @@ export function registerMoveNoteTool(server: McpServer, ctx: ServerContext): voi
       );
 
       // Atomic DB-level rename: every row keyed on the old path — edges
-      // (in and out), chunks (+ composite ids), sync entry, community
-      // membership — is rewritten in place. Inbound edges survive the
+      // (in and out), chunks (+ composite ids), sync entry — is
+      // rewritten in place. Inbound edges survive the
       // rename instead of being deleted and re-derived from the reparse.
       renameNode(ctx.db, result.oldPath, result.newPath);
 

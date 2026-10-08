@@ -102,15 +102,12 @@ describe('hints/computeReadNoteHints', () => {
 });
 
 describe('hints/computeFindConnectionsHints', () => {
-  it('suggests detect_themes when neighbourhood is dense', () => {
+  it('records the connection count in state', () => {
     const neighbors = Array.from({ length: 15 }, (_, i) => ({
       id: `notes/n${i}.md`,
       title: `N${i}`,
     }));
     const ctx = computeFindConnectionsHints('notes/root.md', neighbors);
-    const themes = ctx.next_actions!.find((a) => a.tool === 'detect_themes');
-    expect(themes).toBeDefined();
-    expect(themes!.reason).toContain('15 connections');
     expect(ctx.state?.last_connections_count).toBe(15);
   });
 

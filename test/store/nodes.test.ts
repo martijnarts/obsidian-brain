@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { openDb, type DatabaseHandle } from '../../src/store/db.js';
 import {
   upsertNode,
@@ -30,8 +33,30 @@ describe('store/nodes', () => {
       .map((r) => (r as { name: string }).name);
     expect(tables).toContain('nodes');
     expect(tables).toContain('edges');
-    expect(tables).toContain('communities');
     expect(tables).toContain('sync');
+  });
+
+  it('drops the communities table from an existing database on open', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ob-schema-'));
+    try {
+      const path = join(dir, 'kg.db');
+      const old = openDb(path);
+      old.exec(
+        "CREATE TABLE communities (id INTEGER PRIMARY KEY, label TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', node_ids TEXT NOT NULL DEFAULT '[]')",
+      );
+      old.close();
+
+      const reopened = openDb(path);
+      const tables = reopened
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all()
+        .map((r) => (r as { name: string }).name);
+      reopened.close();
+      expect(tables).not.toContain('communities');
+      expect(tables).toContain('nodes');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('upserts and retrieves nodes', () => {
@@ -126,25 +151,6 @@ describe('store/nodes', () => {
     const results = searchFullText(db, 'quux');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].nodeId).toBe('test.md');
-  });
-
-  it('deleteNode prunes the id from community node_ids (F1)', async () => {
-    const { upsertCommunity, getAllCommunities } = await import('../../src/store/communities.js');
-    upsertNode(db, { id: 'a.md', title: 'A', content: '', frontmatter: {} });
-    upsertNode(db, { id: 'b.md', title: 'B', content: '', frontmatter: {} });
-    upsertNode(db, { id: 'c.md', title: 'C', content: '', frontmatter: {} });
-    upsertCommunity(db, { id: 0, label: 'Cluster0', summary: '', nodeIds: ['a.md', 'b.md', 'c.md'] });
-    upsertCommunity(db, { id: 1, label: 'Solo', summary: '', nodeIds: ['a.md'] });
-
-    deleteNode(db, 'a.md');
-
-    const all = getAllCommunities(db);
-    const cluster0 = all.find((c) => c.id === 0);
-    expect(cluster0).toBeDefined();
-    expect(cluster0!.nodeIds).not.toContain('a.md');
-    expect(cluster0!.nodeIds).toEqual(['b.md', 'c.md']);
-    // Solo community had only 'a.md' — it should be removed entirely.
-    expect(all.find((c) => c.id === 1)).toBeUndefined();
   });
 
   describe('pruneOrphanStubs', () => {

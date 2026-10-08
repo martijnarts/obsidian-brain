@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { openDb, type DatabaseHandle } from '../src/store/db.js';
 import { getNode } from '../src/store/nodes.js';
 import { getEdgesBySource } from '../src/store/edges.js';
-import { getAllCommunities } from '../src/store/communities.js';
 import { Embedder } from '../src/embeddings/embedder.js';
 import { IndexPipeline } from '../src/pipeline/indexer.js';
 import { KnowledgeGraph } from '../src/graph/builder.js';
@@ -99,11 +98,6 @@ describe('Integration: full pipeline', () => {
     const sub = extractSubgraph(kg.graph(), 'Concepts/Widget Theory.md', 1);
     expect(sub.nodes.length).toBeGreaterThan(1);
     expect(sub.edges.length).toBeGreaterThan(0);
-  });
-
-  it('communities are detected', () => {
-    const communities = getAllCommunities(db);
-    expect(communities.length).toBeGreaterThan(0);
   });
 
   it('bridges are computed', () => {

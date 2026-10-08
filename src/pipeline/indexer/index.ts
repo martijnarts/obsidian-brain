@@ -30,9 +30,6 @@ import {
   type Chunk,
   type ChunkerConfig,
 } from '../../embeddings/chunker.js';
-import { KnowledgeGraph } from '../../graph/builder.js';
-import { detectCommunities } from '../../graph/communities.js';
-import { clearCommunities, upsertCommunity } from '../../store/communities.js';
 import type { ParsedNode, ParsedEdge } from '../../types.js';
 import { errorMessage } from '../../util/errors.js';
 import {
@@ -87,7 +84,7 @@ export class IndexPipeline {
     }
   }
 
-  async index(vaultPath: string, resolution?: number): Promise<IndexStats> {
+  async index(vaultPath: string): Promise<IndexStats> {
     await this.ensureCapacity();
 
     // v1.7.3 — wipe any drift in `discovered_max_tokens` from previous runs
@@ -101,7 +98,6 @@ export class IndexPipeline {
       nodesIndexed: 0,
       nodesSkipped: 0,
       edgesIndexed: 0,
-      communitiesDetected: 0,
       stubNodesCreated: 0,
       chunksOk: 0,
       chunksSkipped: 0,
@@ -113,14 +109,11 @@ export class IndexPipeline {
       const { nodes, edges, stubIds } = await parseVault(vaultPath);
       const previousPaths = new Set(getAllSyncPaths(this.db));
 
-      // Detect deleted files. Count them so we can trigger a community refresh
-      // for delete-only reindex runs (where nothing else changed).
+      // Detect deleted files.
       const currentPaths = new Set(nodes.map((n) => n.id));
-      let deletionCount = 0;
       for (const oldPath of previousPaths) {
         if (!currentPaths.has(oldPath)) {
           deleteNode(this.db, oldPath);
-          deletionCount++;
         }
       }
 
@@ -136,20 +129,6 @@ export class IndexPipeline {
       }
 
       stats.stubNodesCreated += this.materialiseStubs(stubIds);
-
-      // Refresh community detection when anything meaningful changed, OR when
-      // the caller explicitly asked for a particular resolution (explicit intent
-      // = they want fresh communities even if mtimes didn't move), OR when
-      // files were deleted (orphan cleanup in the communities table).
-      const explicitResolution = resolution !== undefined;
-      if (
-        stats.nodesIndexed > 0 ||
-        stats.stubNodesCreated > 0 ||
-        explicitResolution ||
-        deletionCount > 0
-      ) {
-        stats.communitiesDetected = this.refreshCommunities(resolution ?? 1.0);
-      }
 
       // Resolve forward-reference stubs: if a stub's bare stem now matches a
       // real note, repoint its inbound edges to the real note and delete the
@@ -191,9 +170,7 @@ export class IndexPipeline {
 
   /**
    * Reindex exactly one file. Called by the watcher on every debounced change
-   * event. Community detection is NOT refreshed here — the caller (watcher)
-   * batches that at a separate, longer cadence so we don't re-run Louvain on
-   * every keystroke.
+   * event.
    */
   async indexSingleNote(
     vaultPath: string,
@@ -233,7 +210,6 @@ export class IndexPipeline {
       nodesIndexed: 0,
       nodesSkipped: 0,
       edgesIndexed: 0,
-      communitiesDetected: 0,
       stubNodesCreated: 0,
       chunksOk: 0,
       chunksSkipped: 0,
@@ -263,21 +239,6 @@ export class IndexPipeline {
       edgesIndexed: stats.edgesIndexed,
       stubsCreated: stats.stubNodesCreated,
     };
-  }
-
-  /**
-   * Re-run Louvain community detection over the current graph and rewrite
-   * the communities table. Exposed so watchers can schedule it independently
-   * from per-file reindex.
-   */
-  refreshCommunities(resolution = 1.0): number {
-    const kg = KnowledgeGraph.fromStore(this.db);
-    const communities = detectCommunities(kg.toUndirected(), resolution);
-    clearCommunities(this.db);
-    for (const c of communities) {
-      upsertCommunity(this.db, c);
-    }
-    return communities.length;
   }
 
   private async applyNode(

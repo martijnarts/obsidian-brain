@@ -28,7 +28,6 @@ import { registerGrepVaultTool } from './tools/grep-vault.js';
 import { registerQueryNotesTool } from './tools/query-notes.js';
 import { registerFindConnectionsTool } from './tools/find-connections.js';
 import { registerFindPathBetweenTool } from './tools/find-path-between.js';
-import { registerDetectThemesTool } from './tools/detect-themes.js';
 import { registerRankNotesTool } from './tools/rank-notes.js';
 import { registerCreateNoteTool } from './tools/create-note.js';
 import { registerCreateNoteFromTemplateTool } from './tools/create-note-from-template.js';
@@ -167,7 +166,6 @@ export function registerTools(server: McpServer, ctx: ServerContext): void {
   registerQueryNotesTool(server, ctx);
   registerFindConnectionsTool(server, ctx);
   registerFindPathBetweenTool(server, ctx);
-  registerDetectThemesTool(server, ctx);
   registerRankNotesTool(server, ctx);
   registerCreateNoteTool(server, ctx);
   registerCreateNoteFromTemplateTool(server, ctx);
@@ -259,11 +257,10 @@ export async function runStartupIndex(ctx: ServerContext, dbIsEmpty: boolean): P
         const stats = await ctx.pipeline.index(ctx.config.vaultPath);
         logger.info(
           `indexed ${stats.nodesIndexed} notes, ` +
-            `${stats.edgesIndexed} links, ${stats.communitiesDetected} communities.`,
+            `${stats.edgesIndexed} links.`,
           {
             nodesIndexed: stats.nodesIndexed,
             edgesIndexed: stats.edgesIndexed,
-            communitiesDetected: stats.communitiesDetected,
           },
         );
       });
@@ -325,14 +322,7 @@ export async function runStartupIndex(ctx: ServerContext, dbIsEmpty: boolean): P
 
 export function readWatcherOptsFromEnv() {
   const debounceMs = Number(process.env.OBSIDIAN_BRAIN_WATCH_DEBOUNCE_MS);
-  const communityDebounceMs = Number(
-    process.env.OBSIDIAN_BRAIN_COMMUNITY_DEBOUNCE_MS,
-  );
   return {
     debounceMs: Number.isFinite(debounceMs) && debounceMs > 0 ? debounceMs : undefined,
-    communityDebounceMs:
-      Number.isFinite(communityDebounceMs) && communityDebounceMs > 0
-        ? communityDebounceMs
-        : undefined,
   };
 }

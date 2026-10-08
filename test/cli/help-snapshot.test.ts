@@ -91,17 +91,15 @@ describe('CLI help-text snapshots', () => {
       a time
 
       Options:
-        --vault <name=path>   A vault to index. Repeat for more vaults. At least one
-                              is required.
-        -r, --resolution <n>  Louvain resolution (passing this forces a
-                              community-cache refresh even if no files changed)
-        --drop                Drop all embeddings + sync state before indexing. Mostly
-                              an escape hatch — the bootstrap auto-detects
-                              EMBEDDING_MODEL / EMBEDDING_PROVIDER changes and wipes
-                              embedding state on its own; \`--drop\` is for forcing a
-                              from-scratch rebuild when something else has gone wrong.
-                              (default: false)
-        -h, --help            display help for command
+        --vault <name=path>  A vault to index. Repeat for more vaults. At least one is
+                             required.
+        --drop               Drop all embeddings + sync state before indexing. Mostly
+                             an escape hatch — the bootstrap auto-detects
+                             EMBEDDING_MODEL / EMBEDDING_PROVIDER changes and wipes
+                             embedding state on its own; \`--drop\` is for forcing a
+                             from-scratch rebuild when something else has gone wrong.
+                             (default: false)
+        -h, --help           display help for command
       "
     `);
   });
@@ -116,12 +114,10 @@ describe('CLI help-text snapshots', () => {
       launchd/systemd).
 
       Options:
-        --vault <name=path>        A vault to watch. Repeat for more vaults. At least
-                                   one is required.
-        --debounce <ms>            Per-file reindex debounce (ms) (default: 3000)
-        --community-debounce <ms>  Graph-wide community detection debounce (ms)
-                                   (default: 60000)
-        -h, --help                 display help for command
+        --vault <name=path>  A vault to watch. Repeat for more vaults. At least one is
+                             required.
+        --debounce <ms>      Per-file reindex debounce (ms) (default: 3000)
+        -h, --help           display help for command
       "
     `);
   });

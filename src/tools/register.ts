@@ -9,7 +9,7 @@ const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
 /**
  * Per-tool default timeouts. Some tools have intrinsically different time
  * budgets — `reindex` on a 10k+ note vault legitimately runs for several
- * minutes (model load + per-chunk embedding + Louvain), and capping it at
+ * minutes (model load + per-chunk embedding), and capping it at
  * 30s ships a tool that always times out on real-world vaults. Other
  * tools (`search`, `read_note`) are sub-second.
  *
@@ -17,7 +17,7 @@ const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
  * `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS_<TOOL>` still win.
  */
 const PER_TOOL_DEFAULT_TIMEOUT_MS: Record<string, number> = {
-  reindex: 600_000, // 10 min — covers 10k-note vaults under transformers.js + Louvain
+  reindex: 600_000, // 10 min — covers 10k-note vaults under transformers.js
 };
 
 /**

@@ -63,8 +63,7 @@ describe('KnowledgeGraph.fromStore', () => {
 
   // G1/G4/G5/G6 (v1.7.19): default-exclude broken-wikilink stub nodes from
   // the graph. Stubs (`frontmatter._stub: true`) are degree-1 dead ends that
-  // fragment Louvain into thousands of trivial clusters and dominate
-  // eigenvector-style centrality with empty-but-popular link targets.
+  // dominate eigenvector-style centrality with empty-but-popular link targets.
 
   it('default excludes nodes with frontmatter._stub === true', () => {
     upsertNode(db, {

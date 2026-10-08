@@ -68,7 +68,7 @@ Start a new chat in Jan and ask:
 
 > List my obsidian-brain tools.
 
-The assistant should respond naming all 42 tools:
+The assistant should respond naming all 41 tools:
 
 - `list_vaults`
 - `search`
@@ -103,7 +103,6 @@ The assistant should respond naming all 42 tools:
 - `edit_canvas`
 - `find_connections`
 - `find_path_between`
-- `detect_themes`
 - `rank_notes`
 - `reindex`
 - `index_status`

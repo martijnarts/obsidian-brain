@@ -279,8 +279,8 @@ describe('enqueueBackgroundReindex — reindexInProgress tracking', () => {
   });
 
   // L1 (v1.7.19): the SIGTERM shutdown path must drain `pendingReindex`
-  // before closing the DB. Without the drain, in-flight community-detection
-  // / graph-rebuild writes hit the closed handle and emit the noisy
+  // before closing the DB. Without the drain, in-flight index
+  // writes hit the closed handle and emit the noisy
   // "TypeError: The database connection is not open" stderr line.
   it('shutdown await-pattern drains in-flight work before tearing down resources', async () => {
     const ctx = makeCtx();
@@ -290,7 +290,7 @@ describe('enqueueBackgroundReindex — reindexInProgress tracking', () => {
     let workCompletedAt: number | null = null;
 
     ctx.enqueueBackgroundReindex(async () => {
-      // Simulate slow background work — DB writes, Louvain, etc.
+      // Simulate slow background work — DB writes, embedding, etc.
       await new Promise((resolve) => setTimeout(resolve, 80));
       workCompleted = true;
       workCompletedAt = Date.now();
