@@ -27,9 +27,8 @@ Example MCP client config with a preset:
   "mcpServers": {
     "obsidian-brain": {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
       "env": {
-        "VAULT_PATH": "/absolute/path/to/your/vault",
         "EMBEDDING_PRESET": "multilingual-ollama"
       }
     }
@@ -81,7 +80,6 @@ The `EMBEDDING_MODEL` env var accepts any Hugging Face model id supported by tra
 ```json
 {
   "env": {
-    "VAULT_PATH": "/path/to/vault",
     "EMBEDDING_MODEL": "Alibaba-NLP/gte-modernbert-base"
   }
 }
@@ -162,7 +160,6 @@ Then configure obsidian-brain:
 ```json
 {
   "env": {
-    "VAULT_PATH": "/absolute/path/to/your/vault",
     "EMBEDDING_PROVIDER": "ollama",
     "EMBEDDING_MODEL": "qllama/multilingual-e5-large-instruct"
   }
@@ -180,7 +177,6 @@ Apache-2.0, 149M parameters, 8192-token context, MTEB eng 0.6421 (+8.3pp over `b
 ```json
 {
   "env": {
-    "VAULT_PATH": "/absolute/path/to/your/vault",
     "EMBEDDING_MODEL": "Alibaba-NLP/gte-modernbert-base"
   }
 }
@@ -195,7 +191,6 @@ Gemma Terms (permissive for embeddings), 308M parameters, MTEB eng 0.6524 (+9.3p
 ```json
 {
   "env": {
-    "VAULT_PATH": "/absolute/path/to/your/vault",
     "EMBEDDING_MODEL": "onnx-community/embeddinggemma-300m-ONNX"
   }
 }
@@ -210,7 +205,6 @@ Apache-2.0, 23M parameters — the best sub-30M model on MTEB. ONNX weights avai
 ```json
 {
   "env": {
-    "VAULT_PATH": "/absolute/path/to/your/vault",
     "EMBEDDING_MODEL": "onnx-community/mdbr-leaf-mt-ONNX"
   }
 }
@@ -235,7 +229,6 @@ Preset upgrade candidate for a future release.
 ```json
 {
   "env": {
-    "VAULT_PATH": "/absolute/path/to/your/vault",
     "EMBEDDING_PRESET": "multilingual-ollama"
   }
 }

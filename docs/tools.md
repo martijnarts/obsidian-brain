@@ -1,13 +1,27 @@
 ---
 title: Tool reference
-description: All 18 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 19 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-18 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+19 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+
+Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
 Tools marked **requires companion plugin** only work when the [companion Obsidian plugin](plugin.md) is installed and Obsidian is running. Every other tool works standalone against the vault on disk.
+
+## Vaults
+
+### `list_vaults`
+
+List the vaults this server serves, with each vault's path, note count and index state (`embedderReady`, `reindexInProgress`, and `initError` when its startup failed).
+
+<!-- GENERATED:tool:list_vaults -->
+_No arguments._
+<!-- /GENERATED:tool:list_vaults -->
+
+> "Which vaults do you have access to?"
 
 ## Find
 
@@ -18,6 +32,7 @@ Find notes by meaning (chunk-level semantic similarity) or by exact text (SQLite
 <!-- GENERATED:tool:search -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `query` | string | Natural-language query or keyword phrase. |
 | `mode` | `"hybrid"` \| `"semantic"` \| `"fulltext"`? | Default `hybrid`. Semantic-only queries chunk vectors; fulltext-only queries FTS5. |
 | `limit` | number? | Max results to return. Default 20. |
@@ -37,6 +52,7 @@ List notes, optionally filtered by directory, tag, or link-target status.
 <!-- GENERATED:tool:list_notes -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `directory` | string? | Restrict to notes under this subdirectory prefix. |
 | `tag` | string? | Restrict to notes containing this frontmatter tag. |
 | `limit` | number? | Max results to return. Default 100. |
@@ -52,6 +68,7 @@ Read a note's metadata (and optionally its full body). Fuzzy-matches filenames, 
 <!-- GENERATED:tool:read_note -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `name` | string | Path, filename, or fuzzy match for the note to read. |
 | `mode` | `"brief"` \| `"full"`? | Default `"brief"` (metadata + linked-note titles). `"full"` adds the body + edge context. |
 | `maxContentLength` | number? | In `full` mode, max body chars before truncation. Default 2000. |
@@ -70,6 +87,7 @@ N-hop link neighborhood around a note. Returns inbound + outbound links grouped 
 <!-- GENERATED:tool:find_connections -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `name` | string | Starting note (path or fuzzy match). |
 | `depth` | number? | Number of hops to traverse. Default 1, max 3. |
 | `returnSubgraph` | boolean? | Return all edges in the neighborhood as a full subgraph instead of a flat list. |
@@ -109,6 +127,7 @@ Shortest link chain(s) between two notes. Optionally return their shared neighbo
 <!-- GENERATED:tool:find_path_between -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `from` | string | Source note (path or fuzzy match). |
 | `to` | string | Target note (path or fuzzy match). |
 | `maxDepth` | number? | Maximum path length in hops. Default 3. |
@@ -125,6 +144,7 @@ Auto-detected topic clusters via [Louvain community detection](https://en.wikipe
 <!-- GENERATED:tool:detect_themes -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `themeId` | string? | Drill into a single cluster by its id or label. |
 | `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link targets (`frontmatter._stub: true`) in cluster membership. Older cached community data may still carry stub-dominated clusters until the next reindex regenerates the community table. |
 <!-- /GENERATED:tool:detect_themes -->
@@ -140,6 +160,7 @@ Top notes by `influence` (PageRank over backlinks), `bridging` (betweenness cent
 <!-- GENERATED:tool:rank_notes -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `metric` | `"influence"` \| `"bridging"` \| `"both"`? | Ranking metric. Default `"both"`. `"influence"` = PageRank; `"bridging"` = betweenness centrality. |
 | `limit` | number? | Max results to return. Default 20. |
 | `themeId` | string? | Restrict ranking to members of one theme cluster. |
@@ -158,6 +179,7 @@ Create a new note with frontmatter and auto-index it. `title:` is auto-injected 
 <!-- GENERATED:tool:create_note -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `title` | string | Note title. Used as the filename base and auto-injected into frontmatter. |
 | `content` | string | Markdown body (do not include frontmatter here). |
 | `directory` | string? | Vault-relative subdirectory to create the note in. |
@@ -175,6 +197,7 @@ Modify an existing note. Six modes: `append`, `prepend`, `replace_window` (find-
 <!-- GENERATED:tool:edit_note manual -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `name` | string | Path or fuzzy match. |
 | `mode` | one of the six | Required. |
 | `content` | string | New content (mode-dependent). |
@@ -208,6 +231,7 @@ apply_edit_preview({ previewId: "prev_..." })
 <!-- GENERATED:tool:apply_edit_preview -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `previewId` | string | The previewId returned by `edit_note` with `dryRun: true`. |
 <!-- /GENERATED:tool:apply_edit_preview -->
 
@@ -222,6 +246,7 @@ Add a wiki-link between two notes plus a "why this connects" context sentence pl
 <!-- GENERATED:tool:link_notes -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `source` | string | Source note to add the link from (path or fuzzy match). |
 | `target` | string | Target note to link to (path, title, or new wiki-link ref). |
 | `context` | string | One-sentence explanation of why these notes are connected. |
@@ -239,6 +264,7 @@ Rename or move a note. All inbound wiki-links (`[[old]]`, `[[old|alias]]`, `![[o
 <!-- GENERATED:tool:move_note -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `source` | string | Current path or fuzzy match of the note to move. |
 | `destination` | string | New vault-relative path (including `.md`). `.md` is appended automatically if omitted. |
 | `dryRun` | boolean? | If true, report what would be rewritten without mutating any files. |
@@ -257,6 +283,7 @@ Delete a note. Requires `confirm: true` as a Zod-level guard.
 <!-- GENERATED:tool:delete_note -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `name` | string | Path or fuzzy match of the note to delete. |
 | `confirm` | true | Must literally be `true` to execute. Guards against accidental deletion. |
 | `dryRun` | boolean? | If true, report what would be deleted without removing any files. |
@@ -277,7 +304,9 @@ These tools **require the [companion plugin](plugin.md)** installed in your vaul
 Returns the note currently open in Obsidian — path, cursor position, and selection range. Requires the companion plugin (any current release; major.minor must match the server per the plugin-alignment contract).
 
 <!-- GENERATED:tool:active_note -->
-_No arguments._
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 <!-- /GENERATED:tool:active_note -->
 
 > *"Use `active_note` to see what note I'm editing right now."*
@@ -296,6 +325,7 @@ All Dataview `Link` / `DateTime` / `DataArray` / `Duration` values are flattened
 <!-- GENERATED:tool:dataview_query -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `query` | string | DQL source, e.g. 'TABLE file.name, rating FROM #book WHERE status = "reading" LIMIT 50' |
 | `source` | string? | Optional origin file path (vault-relative) to set the DQL origin. Affects `FROM ""` and relative link resolution inside the query. |
 | `timeoutMs` | number? | HTTP timeout in ms (default 30000). The Dataview query itself cannot be cancelled; this just bounds how long this tool waits. |
@@ -317,6 +347,7 @@ Evaluate an Obsidian Bases `.base` file and return its rows.
 <!-- GENERATED:tool:base_query -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `file` | string? | Vault-relative path to a `.base` YAML file (e.g. "Bases/Books.base"). Either `file` or `yaml` is required. |
 | `yaml` | string? | Inline `.base` YAML source. Either `file` or `yaml` is required. |
 | `view` | string | The name of the view inside the `.base` file to execute, e.g. "active-books". |
@@ -344,6 +375,7 @@ Force a full re-index. You rarely need this — the live watcher picks up file c
 <!-- GENERATED:tool:reindex -->
 | Arg | Type | Description |
 |---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 | `resolution` | number? | Louvain resolution. Omit to skip community detection on no-op reindexes. Pass a value to force-rerun: 1.0 = equal-weight clusters (default); 0.5 = fewer/broader; 2.0 = more/finer. |
 <!-- /GENERATED:tool:reindex -->
 
@@ -367,7 +399,9 @@ The `reindex` response carries several `*Created` / `*Pruned` / `*Indexed` count
 Read-only inspection of index health. Surfaces everything an LLM client needs to answer "is semantic search working?" without mutating any state.
 
 <!-- GENERATED:tool:index_status -->
-_No arguments._
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
 <!-- /GENERATED:tool:index_status -->
 
 Response fields:

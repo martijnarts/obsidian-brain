@@ -44,42 +44,15 @@ const fakeCtx = new Proxy({}, {
 });
 
 // ---------------------------------------------------------------------------
-// Load every tool file and call its register* function
+// Register every tool
 // ---------------------------------------------------------------------------
 
-const toolFiles = [
-  'src/tools/search.ts',
-  'src/tools/read-note.ts',
-  'src/tools/list-notes.ts',
-  'src/tools/find-connections.ts',
-  'src/tools/find-path-between.ts',
-  'src/tools/detect-themes.ts',
-  'src/tools/rank-notes.ts',
-  'src/tools/create-note.ts',
-  'src/tools/edit-note.ts',
-  'src/tools/apply-edit-preview.ts',
-  'src/tools/link-notes.ts',
-  'src/tools/move-note.ts',
-  'src/tools/delete-note.ts',
-  'src/tools/reindex.ts',
-  'src/tools/active-note.ts',
-  'src/tools/dataview-query.ts',
-  'src/tools/base-query.ts',
-  // index_status takes no args today, so the GENERATED slot in tools.md is
-  // empty ("_No arguments._") and `--check` happens to pass. Keep it in
-  // the array so when the schema gains its first arg, drift is caught.
-  'src/tools/index-status.ts',
-];
-
-for (const rel of toolFiles) {
-  const absPath = resolve(ROOT, rel);
-  const mod = await import(absPath);
-  for (const [key, fn] of Object.entries(mod)) {
-    if (typeof fn === 'function' && key.startsWith('register') && key.endsWith('Tool')) {
-      fn(fakeServer, fakeCtx);
-    }
-  }
-}
+// Register the tools the way the server does: every tool of one vault,
+// wrapped by VaultTools, which adds the required `vault` argument and
+// `list_vaults`.
+const { registerTools } = await import(resolve(ROOT, 'src/server.ts'));
+const { VaultTools } = await import(resolve(ROOT, 'src/vaults.ts'));
+new VaultTools([{ name: 'notes', ctx: fakeCtx, watcher: null }], registerTools).register(fakeServer);
 
 // ---------------------------------------------------------------------------
 // Zod v4 schema walker
@@ -163,7 +136,9 @@ function renderTable(schema) {
   const rows = [];
   for (const [fieldName, zodType] of Object.entries(shape)) {
     const { inner, optional, hasDefault, defaultVal, description } = unwrap(zodType);
-    const label = typeLabel(inner);
+    // The vault enum holds the names of the --vault flags, which vary per
+    // server; the placeholder name above is not worth documenting.
+    const label = fieldName === 'vault' ? 'string' : typeLabel(inner);
 
     // Build type cell: optional fields get "?", defaults show "= val"
     let typeCell = label;

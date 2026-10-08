@@ -14,10 +14,10 @@ git clone https://github.com/sweir1/obsidian-brain.git
 cd obsidian-brain
 npm install
 npm run build
-VAULT_PATH="$HOME/path/to/vault" node dist/cli/index.js server
+node dist/cli/index.js server --vault notes="$HOME/path/to/vault"
 ```
 
-Point your MCP client at `/absolute/path/to/obsidian-brain/dist/cli/index.js` with arg `server` if you want to test a local build.
+Point your MCP client at `/absolute/path/to/obsidian-brain/dist/cli/index.js` with args `server`, `--vault`, `notes=/absolute/path/to/vault` if you want to test a local build.
 
 ## Repo layout
 

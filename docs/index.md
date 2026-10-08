@@ -30,8 +30,7 @@ Already have Node 22.12+? Drop this into Claude Desktop's config file at `~/Libr
   "mcpServers": {
     "obsidian-brain": {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
-      "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
   }
 }

@@ -42,8 +42,7 @@ Wire obsidian-brain into your MCP client. Example for **Claude Desktop** (`~/Lib
   "mcpServers": {
     "obsidian-brain": {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
-      "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
   }
 }
@@ -65,13 +64,13 @@ Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 
 ## What you get
 
-18 MCP tools grouped by intent:
+19 MCP tools grouped by intent. Every tool except `list_vaults` takes a `vault` argument naming one of the vaults you configured:
 
 - **Find & read** — `search`, `list_notes`, `read_note`
 - **Understand the graph** — `find_connections`, `find_path_between`, `detect_themes`, `rank_notes`
 - **Write** — `create_note`, `edit_note`, `apply_edit_preview`, `link_notes`, `move_note`, `delete_note`
 - **Live editor** (requires [companion plugin](docs/plugin.md)) — `active_note`, `dataview_query`, `base_query`
-- **Maintenance** — `reindex`, `index_status`
+- **Maintenance** — `reindex`, `index_status`, `list_vaults`
 
 → Arguments, examples, and response shapes: [Tool reference](docs/tools.md)
 
@@ -112,7 +111,7 @@ Four most common:
 
 - **"Connector has no tools available"** in Claude Desktop — usually the server crashed at startup. Check `~/Library/Logs/Claude/mcp-server-obsidian-brain.log`. Fix: `npm install -g obsidian-brain@latest`, quit Claude (⌘Q), relaunch.
 - **`ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` mismatch** — `better-sqlite3` built against a different Node ABI. Fix: `PATH=/opt/homebrew/bin:$PATH npm rebuild -g better-sqlite3`.
-- **`Vault path not configured`** — `VAULT_PATH` is unset. Set it in the `env` block of your client config or shell.
+- **`Give at least one vault with --vault <name=path>.`** — the server got no `--vault` flag. Add `"--vault", "notes=/absolute/path/to/your/vault"` to the `args` of your client config.
 - **Old version loading via `npx`** (your client still shows the previous release after a publish) — stale npx cache. Fix: `rm -rf ~/.npm/_npx`, then restart your client. Keeping `@latest` in your config prevents this.
 
 → Full troubleshooting guide (watcher not firing, stale index, running multiple clients, timeouts, embedding-dim mismatch, log locations): [docs/troubleshooting.md](docs/troubleshooting.md)

@@ -17,7 +17,7 @@ On plugin load:
 2. Generates a random bearer token (regenerated every startup, never persisted).
 3. Writes `{VAULT}/.obsidian/plugins/obsidian-brain-companion/discovery.json` with `{port, token, pid, pluginVersion, startedAt, capabilities}`.
 
-`obsidian-brain server` reads the discovery file based on `VAULT_PATH`, authenticates every request with the token, and re-reads discovery on any 401 or ECONNREFUSED (so a plugin restart that rotated the token doesn't wedge the MCP tools).
+`obsidian-brain server` reads the discovery file from the vault path given with `--vault`, authenticates every request with the token, and re-reads discovery on any 401 or ECONNREFUSED (so a plugin restart that rotated the token doesn't wedge the MCP tools).
 
 **Capability gating**: the plugin writes a `capabilities: string[]` array naming the features it exposes (e.g. `["status", "active", "dataview", "base"]`). The server reads this to fail fast on a missing capability — calling `dataview_query` against a plugin that doesn't advertise `dataview` returns a clean "this version of the plugin doesn't expose the route" error *before* the HTTP call, instead of an opaque 404 from the route lookup.
 
@@ -278,7 +278,7 @@ Check in order:
 
 1. Is Obsidian running? The plugin only answers while Obsidian is open.
 2. Is the plugin enabled? Obsidian → Settings → Community plugins → verify `obsidian-brain companion` shows a green toggle.
-3. Is it installed against the same vault your MCP client has `VAULT_PATH` pointing at? The discovery file is vault-scoped.
+3. Is it installed against the same vault your MCP client passes with `--vault`? The discovery file is vault-scoped.
 4. Look for `{VAULT}/.obsidian/plugins/obsidian-brain-companion/discovery.json`. If missing, reload the plugin.
 5. `curl -H "Authorization: Bearer $(jq -r .token …/discovery.json)" http://127.0.0.1:$(jq -r .port …/discovery.json)/status` — should return `{ok: true, ...}`. If it doesn't, the port may be blocked by something else; change it under Settings → obsidian-brain companion.
 

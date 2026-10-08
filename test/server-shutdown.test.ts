@@ -61,7 +61,7 @@ describe('startServer — SIGTERM handler arm timing (v1.7.23 race fix)', () => 
 
     // Kick off startServer — it will await the never-resolving createContext.
     // We don't await `serverPromise` itself; the assertion runs while it hangs.
-    serverPromise = startServer().catch((err) => {
+    serverPromise = startServer({ vaults: [{ name: 'v', vaultPath: '/tmp/unused' }], dataDir: '/tmp/unused' }).catch((err) => {
       // Swallow any teardown errors so afterEach can clean up.
       return err;
     });
@@ -82,7 +82,7 @@ describe('startServer — SIGTERM handler arm timing (v1.7.23 race fix)', () => 
       createContext: vi.fn(() => new Promise(() => {})),
     }));
     const { startServer } = await import('../src/server.js');
-    serverPromise = startServer().catch(() => {});
+    serverPromise = startServer({ vaults: [{ name: 'v', vaultPath: '/tmp/unused' }], dataDir: '/tmp/unused' }).catch(() => {});
     await new Promise((resolve) => setImmediate(resolve));
 
     // Capture the new SIGTERM handler (the one startServer just added).

@@ -5,15 +5,16 @@ description: Every environment variable obsidian-brain reads, with defaults and 
 
 # Configuration
 
-obsidian-brain is configured entirely through environment variables. Only `VAULT_PATH` is required; everything else has sensible defaults.
+`obsidian-brain server` takes its vaults from `--vault <name>=<path>` flags. Everything else is configured through environment variables, and all of them have sensible defaults.
+
+The `index`, `watch` and `search` subcommands read the vault from the `VAULT_PATH` environment variable instead. `server` does not read it.
 
 ## Environment variables
 
 <!-- GENERATED:env-vars -->
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `VAULT_PATH` | yes | — | Absolute path to your Obsidian vault (or any folder of .md files). |
-| `DATA_DIR` | no | — | Where to store the SQLite index + embedding cache. Defaults to $XDG_DATA_HOME/obsidian-brain or ~/.local/share/obsidian-brain. |
+| `DATA_DIR` | no | — | Where to store the SQLite indexes (one per vault, at <DATA_DIR>/<name>/kg.db) + embedding cache. Defaults to $XDG_DATA_HOME/obsidian-brain or ~/.local/share/obsidian-brain. |
 | `EMBEDDING_PRESET` | no | english | Preset name: english (default, bge-small-en-v1.5), english-fast, english-quality, multilingual, multilingual-quality, multilingual-ollama. Ignored when EMBEDDING_MODEL is set. *Choices: english, english-fast, english-quality, multilingual, multilingual-quality, multilingual-ollama* |
 | `EMBEDDING_MODEL` | no | — | Power-user override: any transformers.js checkpoint or Ollama model id. Takes precedence over EMBEDDING_PRESET. Switching auto-reindexes. |
 | `EMBEDDING_PROVIDER` | no | transformers | Embedding backend. 'transformers' (local, default) or 'ollama' (requires a running Ollama server). *Choices: transformers, ollama* |
@@ -47,4 +48,4 @@ See [Models](models.md) for the preset table, performance benchmarks, and the Ol
 
 ## Legacy aliases
 
-`KG_VAULT_PATH` is accepted as a legacy alias for `VAULT_PATH`. New configs should use `VAULT_PATH`.
+`KG_VAULT_PATH` is accepted as a legacy alias for `VAULT_PATH` by the `index`, `watch` and `search` subcommands. New configs should use `VAULT_PATH`.

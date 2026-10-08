@@ -1,8 +1,16 @@
-import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createContext, type ServerContext } from './context.js';
+import type { ServerContext } from './context.js';
+import {
+  closeVaults,
+  indexVaultsInTurn,
+  openVaults,
+  startVaultWatchers,
+  VaultTools,
+  type Vault,
+  type VaultSpec,
+} from './vaults.js';
 import { debugLog } from './util/debug-log.js';
 import { logger } from './util/logger.js';
 
@@ -10,7 +18,7 @@ debugLog('module-load: src/server.ts');
 
 const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
 import { allNodeIds } from './store/nodes.js';
-import { startWatcher, type WatcherHandle } from './pipeline/watcher.js';
+
 
 import { registerSearchTool } from './tools/search.js';
 import { registerReadNoteTool } from './tools/read-note.js';
@@ -31,13 +39,23 @@ import { registerDataviewQueryTool } from './tools/dataview-query.js';
 import { registerBaseQueryTool } from './tools/base-query.js';
 import { registerIndexStatusTool } from './tools/index-status.js';
 
-export async function startServer(): Promise<void> {
+export interface ServerOptions {
+  vaults: VaultSpec[];
+  /** Each vault keeps its index in `<dataDir>/<name>`. */
+  dataDir: string;
+}
+
+/**
+ * Serves every vault over one stdio connection. Each tool takes a required
+ * `vault` argument naming one of `opts.vaults`.
+ */
+export async function startServer(opts: ServerOptions): Promise<void> {
   debugLog('startServer: entry — registering signal handlers BEFORE any await');
 
   // v1.7.22 race fix: arm SIGINT/SIGTERM handlers FIRST, before any await.
-  // The handler captures `ctx`/`handle` via the `let` bindings below, which
-  // are null until the resources come online. Skipping the cleanup steps
-  // when references are still null is correct — there's nothing to clean up.
+  // The handler captures `vaults` via the `let` binding below, which is
+  // empty until the contexts come online. Closing an empty list is correct —
+  // there's nothing to clean up.
   //
   // Why this matters: createContext() dlopens better-sqlite3 + sqlite-vec
   // and opens the DB. On a cold Linux CI runner that takes ~1s. If the
@@ -45,29 +63,14 @@ export async function startServer(): Promise<void> {
   // code: null because Node hasn't registered a handler yet. Pre-v1.7.22
   // this raced silently green; the v1.7.22 imports (logger.ts, preparing.ts)
   // added enough cold-import overhead to flip the race red on CI.
-  let ctx: ServerContext | null = null;
-  let handle: WatcherHandle | null = null;
+  let vaults: Vault[] = [];
   let shuttingDown = false;
   const shutdown = async (reason: string): Promise<void> => {
     debugLog(`shutdown: invoked with reason="${reason}", shuttingDown=${shuttingDown}`);
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info(`shutting down (${reason}).`, { reason });
-    try {
-      if (handle) {
-        debugLog('shutdown: closing watcher');
-        await handle.close();
-        debugLog('shutdown: watcher closed');
-      }
-      if (ctx) {
-        await closeContext(ctx);
-      } else {
-        debugLog('shutdown: ctx not yet initialized, skipping DB/embedder teardown');
-      }
-    } catch (err) {
-      logger.warn(`teardown error (ignored): ${err}`, { error: String(err) });
-      debugLog(`shutdown: teardown caught error — ${err instanceof Error ? err.message : String(err)}`);
-    }
+    await closeVaults(vaults, closeContext);
     process.exitCode = 0;
     setTimeout(() => process.exit(0), 4_000).unref();
   };
@@ -75,17 +78,12 @@ export async function startServer(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   debugLog('startServer: SIGINT/SIGTERM handlers armed pre-init');
 
-  debugLog('startServer: awaiting createContext');
-  ctx = await createContext();
-  debugLog('startServer: createContext returned, instantiating McpServer');
+  debugLog('startServer: opening vaults');
+  vaults = await openVaults(opts.vaults, opts.dataDir, closeContext);
+  debugLog('startServer: vaults open, instantiating McpServer');
   const server = new McpServer({ name: 'obsidian-brain', version: pkg.version });
-  debugLog('startServer: McpServer instantiated, registering 18 tools');
-
-  registerTools(server, ctx);
-  debugLog('startServer: all 18 tools registered, querying allNodeIds for boot-state decision');
-
-  const dbIsEmpty = allNodeIds(ctx.db).length === 0;
-  debugLog(`startServer: dbIsEmpty=${dbIsEmpty}, instantiating StdioServerTransport`);
+  new VaultTools(vaults, registerTools).register(server);
+  debugLog('startServer: tools registered, instantiating StdioServerTransport');
 
   // Connect to the MCP transport immediately so the initialize handshake
   // completes in <100ms regardless of whether the embedding model has been
@@ -98,20 +96,12 @@ export async function startServer(): Promise<void> {
   // Background init: embedder download, bootstrap, and initial index all run
   // asynchronously after the handshake. ctx.embedderReady() exposes the state
   // to tool handlers; ctx.initError captures any failure for tools to surface.
-  void runStartupIndex(ctx, dbIsEmpty);
-
-  debugLog('startServer: background block scheduled, starting watcher');
+  void indexVaultsInTurn(vaults, runStartupIndex, () => shuttingDown);
 
   // Live reindex on vault changes. Set OBSIDIAN_BRAIN_NO_WATCH=1 to fall
   // back to the timer-driven model (periodic `obsidian-brain index` runs).
-  // Assign to the closure-captured `handle` so the pre-armed shutdown
-  // handler picks it up for graceful watcher drain.
-  if (process.env.OBSIDIAN_BRAIN_NO_WATCH !== '1') {
-    handle = startWatcher(ctx, readWatcherOptsFromEnv());
-    debugLog('startServer: watcher started');
-  } else {
-    debugLog('startServer: watcher SKIPPED (OBSIDIAN_BRAIN_NO_WATCH=1)');
-  }
+  startVaultWatchers(vaults, readWatcherOptsFromEnv());
+  debugLog('startServer: watchers started');
 
   // Session-end: the MCP SDK fires `transport.onclose` when the client ends
   // the JSON-RPC session cleanly. Wire our shutdown to it so we don't linger
@@ -299,28 +289,4 @@ export function readWatcherOptsFromEnv() {
         ? communityDebounceMs
         : undefined,
   };
-}
-
-// Auto-run when invoked as a direct entry point (e.g. `node dist/server.js`).
-// When imported by the CLI, this block is skipped.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  startServer().catch((err) => {
-    // Synchronous fs.writeSync(2, …) instead of process.stderr.write —
-    // process.exit(1) doesn't wait for Node's async stderr buffer to drain,
-    // and a crash before the buffer flushes lands in Claude Desktop's pipe
-    // as EOF with no error visible. writeSync blocks on the OS write()
-    // syscall directly, so the bytes always reach the pipe before exit.
-    const msg = `obsidian-brain failed to start: ${
-      err instanceof Error ? err.stack ?? err.message : String(err)
-    }\n`;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('node:fs').writeSync(2, msg);
-    } catch {
-      // Fall back to async if writeSync is unavailable for any reason —
-      // not ideal but better than nothing.
-      process.stderr.write(msg);
-    }
-    process.exit(1);
-  });
 }

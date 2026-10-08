@@ -11,7 +11,7 @@ Replace `/absolute/path/to/your/vault` everywhere with the real path to your vau
 
 On first boot the server auto-indexes the vault and downloads the default embedding model (~34 MB) — initial `tools/list` may block for 30–60 s, subsequent starts are instant.
 
-> **Embedding preset knob.** Any config below accepts `EMBEDDING_PRESET` in its `env` block as an optional upgrade. Valid values: `english` (default), `english-fast`, `english-quality`, `multilingual`, `multilingual-quality`, `multilingual-ollama`. Example: add `"EMBEDDING_PRESET": "multilingual"` alongside `VAULT_PATH` to switch to a multilingual model. See [Models](models.md) for the full preset table, MTEB ranking, and BYOM recipes.
+> **Embedding preset knob.** Any config below accepts `EMBEDDING_PRESET` in an `env` block as an optional upgrade. Valid values: `english` (default), `english-fast`, `english-quality`, `multilingual`, `multilingual-quality`, `multilingual-ollama`. Example: add `"EMBEDDING_PRESET": "multilingual"` alongside the `--vault` argument to switch to a multilingual model. See [Models](models.md) for the full preset table, MTEB ranking, and BYOM recipes.
 
 > **Auto-update.** Every snippet below uses `obsidian-brain@latest` — the `@latest` tag forces npx to re-resolve the newest published version on every launch so future releases auto-propagate after a client restart. Drop `@latest` (or pin to e.g. `obsidian-brain@1.6.0`) if you'd rather cache a known-good version and update on your own schedule.
 
@@ -31,8 +31,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
@@ -44,11 +43,10 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
 
     ```bash
     claude mcp add --scope user --transport stdio obsidian-brain \
-      -e VAULT_PATH="$HOME/path/to/your/vault" \
-      -- npx -y obsidian-brain@latest server
+      -- npx -y obsidian-brain@latest server --vault notes="$HOME/path/to/your/vault"
     ```
 
-    All flags (`--scope`, `--transport`, `-e`) come before the server name. `--` separates the name from the launch command. To raise the startup timeout for the first-boot auto-index, prefix the `claude` CLI with `MCP_TIMEOUT=60000`. [Claude Code MCP docs](https://code.claude.com/docs/en/mcp).
+    All flags (`--scope`, `--transport`) come before the server name. `--` separates the name from the launch command. To raise the startup timeout for the first-boot auto-index, prefix the `claude` CLI with `MCP_TIMEOUT=60000`. [Claude Code MCP docs](https://code.claude.com/docs/en/mcp).
 
 ??? info "Cursor"
 
@@ -59,21 +57,20 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
     ```
 
-    Reload Cursor; the server appears under Settings → MCP with its 18 tools. [Cursor MCP docs](https://cursor.com/docs/context/mcp).
+    Reload Cursor; the server appears under Settings → MCP with its 19 tools. [Cursor MCP docs](https://cursor.com/docs/context/mcp).
 
 ??? info "VS Code (GitHub Copilot)"
 
     VS Code 1.102+ with Copilot. CLI:
 
     ```bash
-    code --add-mcp '{"name":"obsidian-brain","command":"npx","args":["-y","obsidian-brain@latest","server"],"env":{"VAULT_PATH":"/absolute/path/to/your/vault"}}'
+    code --add-mcp '{"name":"obsidian-brain","command":"npx","args":["-y","obsidian-brain@latest","server","--vault","notes=/absolute/path/to/your/vault"]}'
     ```
 
     Or create `.vscode/mcp.json` in your workspace (note: top-level key is `servers`, with `type: "stdio"`):
@@ -84,8 +81,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
         "obsidian-brain": {
           "type": "stdio",
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
@@ -102,8 +98,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
@@ -113,7 +108,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
 
 ??? info "Jan"
 
-    **Settings → MCP Servers → + Add**. Transport: `STDIO (local process)`. Command: `npx` (or absolute path if Jan can't find it). Arguments: `-y`, `obsidian-brain@latest`, `server`. Env: `VAULT_PATH=/absolute/path/to/your/vault`. Save and toggle on.
+    **Settings → MCP Servers → + Add**. Transport: `STDIO (local process)`. Command: `npx` (or absolute path if Jan can't find it). Arguments: `-y`, `obsidian-brain@latest`, `server`, `--vault`, `notes=/absolute/path/to/your/vault`. Save and toggle on.
 
     Jan places server entries at the top level of its MCP config — there is no `mcpServers` wrapper, unlike Claude Desktop.
 
@@ -123,8 +118,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
     {
       "obsidian-brain": {
         "command": "npx",
-        "args": ["-y", "obsidian-brain@latest", "server"],
-        "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+        "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
       }
     }
     ```
@@ -140,8 +134,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" },
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
           "disabled": false,
           "autoApprove": []
         }
@@ -161,8 +154,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
         "obsidian-brain": {
           "source": "custom",
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
@@ -179,8 +171,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
@@ -197,8 +188,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
         }
       }
     }
@@ -216,9 +206,8 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcp": {
         "obsidian-brain": {
           "type": "local",
-          "command": ["npx", "-y", "obsidian-brain@latest", "server"],
-          "enabled": true,
-          "environment": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+          "command": ["npx", "-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
+          "enabled": true
         }
       }
     }
@@ -229,7 +218,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
 ??? info "OpenAI Codex CLI"
 
     ```bash
-    codex mcp add obsidian-brain --env VAULT_PATH="$HOME/path/to/your/vault" -- npx -y obsidian-brain@latest server
+    codex mcp add obsidian-brain -- npx -y obsidian-brain@latest server --vault notes="$HOME/path/to/your/vault"
     ```
 
     Then bump the startup timeout in `~/.codex/config.toml` — the default 10 s is too short for first-boot auto-indexing:
@@ -237,11 +226,8 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
     ```toml
     [mcp_servers.obsidian-brain]
     command = "npx"
-    args = ["-y", "obsidian-brain@latest", "server"]
+    args = ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
     startup_timeout_sec = 60
-
-    [mcp_servers.obsidian-brain.env]
-    VAULT_PATH = "/absolute/path/to/your/vault"
     ```
 
     [Codex MCP docs](https://developers.openai.com/codex/mcp).
@@ -255,15 +241,14 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
       "mcpServers": {
         "obsidian-brain": {
           "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server"],
-          "env": { "VAULT_PATH": "$HOME/path/to/your/vault" },
+          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
           "timeout": 60000
         }
       }
     }
     ```
 
-    Gemini expands `$VAR` inside the `env` block; `timeout` is in milliseconds. [Gemini CLI MCP docs](https://www.geminicli.com/docs/tools/mcp-server).
+    `timeout` is in milliseconds. [Gemini CLI MCP docs](https://www.geminicli.com/docs/tools/mcp-server).
 
 ??? info "Warp"
 
@@ -273,8 +258,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
     {
       "obsidian-brain": {
         "command": "npx",
-        "args": ["-y", "obsidian-brain@latest", "server"],
-        "env": { "VAULT_PATH": "/absolute/path/to/your/vault" },
+        "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
         "working_directory": null
       }
     }
@@ -289,8 +273,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
     ```json
     {
       "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server"],
-      "env": { "VAULT_PATH": "/absolute/path/to/your/vault" }
+      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
     ```
 
@@ -300,7 +283,7 @@ No system-level prerequisites beyond Node 22.12+. `npm install` bundles every na
 
 ## Verifying the connection
 
-Once your client restarts, obsidian-brain should appear in its MCP/tool list with 18 tools. Try:
+Once your client restarts, obsidian-brain should appear in its MCP/tool list with 19 tools. Try:
 
 > *"Use `search` to find notes about the most recent thing I wrote."*
 

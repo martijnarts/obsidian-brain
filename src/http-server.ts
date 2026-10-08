@@ -1,18 +1,23 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createContext, type ServerContext } from './context.js';
-import { allNodeIds } from './store/nodes.js';
-import { startWatcher, type WatcherHandle } from './pipeline/watcher.js';
 import {
   registerTools,
   runStartupIndex,
   closeContext,
   readWatcherOptsFromEnv,
+  type ServerOptions,
 } from './server.js';
+import {
+  closeVaults,
+  indexVaultsInTurn,
+  openVaults,
+  startVaultWatchers,
+  VaultTools,
+  type Vault,
+} from './vaults.js';
 import { debugLog } from './util/debug-log.js';
 import { logger } from './util/logger.js';
 
@@ -20,36 +25,11 @@ debugLog('module-load: src/http-server.ts');
 
 const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
 
-export interface VaultSpec {
-  /** URL segment: the vault is served at `/<name>/mcp`. */
-  name: string;
-  vaultPath: string;
-}
-
-export interface HttpServerOptions {
+export interface HttpServerOptions extends ServerOptions {
   host: string;
   port: number;
-  vaults: VaultSpec[];
-  /** Each vault keeps its index in `<dataDir>/<name>`. */
-  dataDir: string;
 }
 
-interface ServedVault {
-  name: string;
-  ctx: ServerContext;
-  watcher: WatcherHandle | null;
-}
-
-const VAULT_PATH_RE = /^\/([^/]+)\/mcp\/?$/;
-
-/**
- * Serves several vaults from one process over streamable HTTP, each at
- * `/<name>/mcp`. Every vault has its own context: index, graph, watcher and
- * tools. Nothing crosses between vaults.
- *
- * The transport runs stateless. Each POST gets a fresh McpServer bound to
- * the vault's context, because no tool sends server-initiated messages.
- */
 export interface HttpServerHandle {
   /** The bound port; differs from the requested one when that was 0. */
   port: number;
@@ -57,8 +37,17 @@ export interface HttpServerHandle {
   close: () => Promise<void>;
 }
 
+const MCP_PATH_RE = /^\/mcp\/?$/;
+
+/**
+ * Serves every vault over streamable HTTP at `/mcp`. Each tool takes a
+ * required `vault` argument naming one of `opts.vaults`.
+ *
+ * The transport runs stateless. Each POST gets a fresh McpServer with the
+ * shared tool set, because no tool sends server-initiated messages.
+ */
 export async function startHttpServer(opts: HttpServerOptions): Promise<HttpServerHandle> {
-  const served: ServedVault[] = [];
+  let vaults: Vault[] = [];
   let httpServer: Server | null = null;
   let closing: Promise<void> | null = null;
   const close = (): Promise<void> => {
@@ -69,33 +58,16 @@ export async function startHttpServer(opts: HttpServerOptions): Promise<HttpServ
           httpServer!.closeAllConnections();
         });
       }
-      for (const vault of served) {
-        try {
-          await vault.watcher?.close();
-          await closeContext(vault.ctx);
-        } catch (err) {
-          logger.warn(`teardown error for vault "${vault.name}" (ignored): ${err}`, {
-            vault: vault.name,
-            error: String(err),
-          });
-        }
-      }
+      await closeVaults(vaults, closeContext);
     })();
     return closing;
   };
 
   try {
-    for (const spec of opts.vaults) {
-      const ctx = await createContext({
-        vaultPath: spec.vaultPath,
-        dataDir: join(opts.dataDir, spec.name),
-      });
-      served.push({ name: spec.name, ctx, watcher: null });
-    }
-    const byName = new Map(served.map((v) => [v.name, v]));
-
+    vaults = await openVaults(opts.vaults, opts.dataDir, closeContext);
+    const tools = new VaultTools(vaults, registerTools);
     httpServer = createServer((req, res) => {
-      void handleRequest(byName, req, res).catch((err: unknown) => {
+      void handleRequest(tools, req, res).catch((err: unknown) => {
         logger.error(`request failed: ${String(err)}`, { error: String(err) });
         if (!res.headersSent) {
           sendJsonRpcError(res, 500, -32603, 'Internal server error');
@@ -113,26 +85,12 @@ export async function startHttpServer(opts: HttpServerOptions): Promise<HttpServ
   // Port 0 picks a free port; report the one actually bound.
   const port = (httpServer.address() as AddressInfo).port;
   logger.info(
-    `serving ${served.map((v) => `/${v.name}/mcp`).join(', ')} on http://${opts.host}:${port}`,
-    { vaults: served.map((v) => v.name) },
+    `serving vaults ${vaults.map((v) => v.name).join(', ')} on http://${opts.host}:${port}/mcp`,
+    { vaults: vaults.map((v) => v.name) },
   );
 
-  if (process.env.OBSIDIAN_BRAIN_NO_WATCH !== '1') {
-    for (const vault of served) {
-      vault.watcher = startWatcher(vault.ctx, readWatcherOptsFromEnv());
-    }
-  }
-
-  // Index one vault at a time, so the memory peaks of two full indexes never
-  // add up. A tool call on a vault that waits its turn still works: it loads
-  // the embedder on demand.
-  void (async () => {
-    for (const vault of served) {
-      if (closing) return;
-      await runStartupIndex(vault.ctx, allNodeIds(vault.ctx.db).length === 0);
-      await vault.ctx.pendingReindex;
-    }
-  })();
+  startVaultWatchers(vaults, readWatcherOptsFromEnv());
+  void indexVaultsInTurn(vaults, runStartupIndex, () => closing !== null);
 
   return { port, close };
 }
@@ -159,14 +117,12 @@ export async function runHttpServer(opts: HttpServerOptions): Promise<void> {
 }
 
 async function handleRequest(
-  vaults: Map<string, ServedVault>,
+  tools: VaultTools,
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
-  const match = VAULT_PATH_RE.exec(path);
-  const vault = match ? vaults.get(decodeURIComponent(match[1]!)) : undefined;
-  if (!vault) {
+  if (!MCP_PATH_RE.test(path)) {
     res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found\n');
     return;
   }
@@ -178,7 +134,7 @@ async function handleRequest(
   }
 
   const server = new McpServer({ name: 'obsidian-brain', version: pkg.version });
-  registerTools(server, vault.ctx);
+  tools.register(server);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => {
     void transport.close();

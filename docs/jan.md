@@ -25,8 +25,7 @@ Then in [Jan](https://jan.ai):
    - **Name**: `obsidian-brain`
    - **Transport**: **STDIO (local process)**
    - **Command**: the absolute path from `which obsidian-brain` (typically `/opt/homebrew/bin/obsidian-brain` on macOS Homebrew, `/usr/bin/obsidian-brain` or an nvm-scoped path on Linux). Use an absolute path, **not** a bare `obsidian-brain`. Jan spawns subprocesses with a minimal `PATH` that usually doesn't include your shell's install.
-   - **Arguments**: `server`
-   - **Environment variables**: `VAULT_PATH=/absolute/path/to/your/vault`
+   - **Arguments**: `server`, `--vault`, `notes=/absolute/path/to/your/vault` (three separate arg entries)
 3. Save and enable the server. Jan will spawn the process and send `initialize` followed by `tools/list`. First boot auto-indexes the vault (30–60 s while the default embedding model downloads — ~34 MB). Once the index is built you should see the 18 obsidian-brain tools appear in the MCP panel.
 
 ### Alternative: npx (no global install)
@@ -34,8 +33,7 @@ Then in [Jan](https://jan.ai):
 If you'd rather not install globally, point Jan at `npx` directly:
 
 - **Command**: absolute path to `npx` (e.g. `/opt/homebrew/bin/npx`)
-- **Arguments**: `-y`, `obsidian-brain`, `server` (three separate arg entries)
-- **Env**: same as above
+- **Arguments**: `-y`, `obsidian-brain`, `server`, `--vault`, `notes=/absolute/path/to/your/vault` (five separate arg entries)
 
 npx will fetch the package from npm on first launch and cache it locally; subsequent launches are fast.
 
@@ -54,9 +52,8 @@ The JSON shape is roughly:
 {
   "obsidian-brain": {
     "command": "npx",
-    "args": ["-y", "obsidian-brain@latest", "server"],
+    "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
     "env": {
-      "VAULT_PATH": "/absolute/path/to/your/vault",
       "EMBEDDING_PRESET": "multilingual"
     }
   }
@@ -71,7 +68,7 @@ Start a new chat in Jan and ask:
 
 > List my obsidian-brain tools.
 
-The assistant should respond naming all 18 tools:
+The assistant should respond naming all 19 tools:
 
 - `search`
 - `read_note`
@@ -88,6 +85,7 @@ The assistant should respond naming all 18 tools:
 - `delete_note`
 - `reindex`
 - `index_status`
+- `list_vaults`
 - `active_note` *(requires the [companion plugin](./plugin.md) + Obsidian running)*
 - `dataview_query` *(requires the [companion plugin](./plugin.md) and the third-party Dataview community plugin by [blacksmithgu](https://github.com/blacksmithgu/obsidian-dataview) installed + enabled in the vault)*
 - `base_query` *(requires the [companion plugin](./plugin.md), Obsidian ≥ 1.10.0, and the core Bases plugin enabled)*
@@ -117,7 +115,7 @@ Usually this means the server crashed after `initialize`, or first-boot indexing
 2. Run the server by hand and watch stderr:
 
    ```bash
-   VAULT_PATH="/absolute/path/to/your/vault" obsidian-brain server
+   obsidian-brain server --vault notes=/absolute/path/to/your/vault
    ```
 
    Paste a single `initialize` frame on stdin and confirm you get a JSON-RPC response back.
@@ -126,9 +124,9 @@ Usually this means the server crashed after `initialize`, or first-boot indexing
 
 You used a bare `obsidian-brain` instead of the absolute path. Replace with the output of `which obsidian-brain` (typically `/opt/homebrew/bin/obsidian-brain` on macOS Homebrew).
 
-### `Vault path not configured`
+### `Give at least one vault with --vault <name=path>.`
 
-The `env` block in Jan's UI didn't stick. Open the server entry, re-enter `VAULT_PATH=/absolute/path/to/your/vault` exactly, and save.
+The arguments in Jan's UI didn't stick. Open the server entry, re-enter `server`, `--vault`, `notes=/absolute/path/to/your/vault` as separate arguments, and save.
 
 ### `better-sqlite3` ABI mismatch (`ERR_DLOPEN_FAILED`)
 

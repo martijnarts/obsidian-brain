@@ -44,10 +44,9 @@ describe('CLI help-text snapshots', () => {
         -h, --help                display help for command
 
       Commands:
-        server                    Start the stdio MCP server (spawned by Claude
-                                  Desktop, Claude Code, Jan, etc.)
-        http [options]            Serve one or more vaults over streamable HTTP, each
-                                  at /<name>/mcp. Indexes live in <DATA_DIR>/<name>.
+        server [options]          Start the MCP server. Every tool takes a required
+                                  \`vault\` argument naming one of the --vault names.
+                                  Indexes live in <DATA_DIR>/<name>.
         index [options]           Scan the vault and update the knowledge-graph index
                                   (incremental)
         watch [options]           Long-running process: keep the index live by
@@ -62,15 +61,23 @@ describe('CLI help-text snapshots', () => {
     `);
   });
 
-  it('`server --help` is terse, takes no options', () => {
+  it('`server --help` lists the vault, transport and listen options', () => {
     const cmd = getSubcommand(buildProgram(), 'server');
     expect(cmd.helpInformation()).toMatchInlineSnapshot(`
       "Usage: obsidian-brain server [options]
 
-      Start the stdio MCP server (spawned by Claude Desktop, Claude Code, Jan, etc.)
+      Start the MCP server. Every tool takes a required \`vault\` argument naming one of
+      the --vault names. Indexes live in <DATA_DIR>/<name>.
 
       Options:
-        -h, --help  display help for command
+        --vault <name=path>      A vault to serve. Repeat for more vaults. At least
+                                 one is required.
+        --transport <transport>  stdio for an MCP client that spawns the server; http
+                                 for a long-running server at /mcp (choices: "stdio",
+                                 "http", default: "stdio")
+        --listen <host:port>     Address to listen on with --transport http (default:
+                                 127.0.0.1:8080)
+        -h, --help               display help for command
       "
     `);
   });
