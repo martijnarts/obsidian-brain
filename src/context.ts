@@ -71,9 +71,35 @@ export interface ServerContext {
    * reasons. Null until the first manual reindex; persists in-process only.
    */
   lastManualReindexReason: string | null;
+  /**
+   * False when the embedder is shared with other vaults' contexts. Closing
+   * this context then leaves the embedder alone; whoever shared it disposes
+   * it once every context is closed. Undefined means owned.
+   */
+  ownsEmbedder?: boolean;
 }
 
-export async function createContext(overrides: ConfigOverrides): Promise<ServerContext> {
+/**
+ * One embedder for several vaults' contexts. `init` loads its model once,
+ * however many contexts ask for it.
+ */
+export interface SharedEmbedder {
+  embedder: Embedder;
+  init: () => Promise<void>;
+}
+
+export function shareEmbedder(embedder: Embedder = createEmbedder()): SharedEmbedder {
+  let initPromise: Promise<void> | null = null;
+  return {
+    embedder,
+    init: () => (initPromise ??= embedder.init()),
+  };
+}
+
+export async function createContext(
+  overrides: ConfigOverrides,
+  shared?: SharedEmbedder,
+): Promise<ServerContext> {
   debugLog('createContext: entry, calling resolveConfig');
   const config = resolveConfig(overrides);
   debugLog(`createContext: resolveConfig OK (dataDir=${config.dataDir}, vault=${config.vaultPath})`);
@@ -100,7 +126,7 @@ export async function createContext(overrides: ConfigOverrides): Promise<ServerC
     throw err;
   }
   debugLog('createContext: calling createEmbedder');
-  const embedder = createEmbedder();
+  const embedder = shared?.embedder ?? createEmbedder();
   debugLog(`createContext: createEmbedder OK (provider=${embedder.providerName?.() ?? '?'}, model=${embedder.modelIdentifier?.() ?? '?'})`);
   const search = new Search(db, embedder);
   const writer = new VaultWriter(config.vaultPath, db);
@@ -120,7 +146,7 @@ export async function createContext(overrides: ConfigOverrides): Promise<ServerC
       debugLog('ensureEmbedderReady: first call — building init promise');
       initPromise = (async () => {
         debugLog('ensureEmbedderReady: calling embedder.init() (may download model on first run)');
-        await embedder.init();
+        await (shared ? shared.init() : embedder.init());
         debugLog(`ensureEmbedderReady: embedder.init() OK (dim=${embedder.dimensions()})`);
         // v1.7.5: resolve metadata (cache → seed → HF) and push onto the
         // embedder so it knows the correct query/document prefix before
@@ -175,6 +201,7 @@ export async function createContext(overrides: ConfigOverrides): Promise<ServerC
     pendingReindex: Promise.resolve(),
     reindexInProgress: false,
     lastManualReindexReason: null,
+    ownsEmbedder: shared === undefined,
     enqueueBackgroundReindex(work) {
       // Chain onto the current tail — .finally() runs the work whether
       // the prior chain resolved or rejected, so a failed reindex never

@@ -177,6 +177,49 @@ describe('vault lifecycle helpers', () => {
     expect(close).toHaveBeenCalledTimes(2);
   });
 
+  it('gives every vault the same embedder, owned by none of them', async () => {
+    const close = vi.fn(async (ctx: ServerContext) => ctx.db.close());
+    const vaults = await openVaults(
+      [
+        { name: 'one', vaultPath: vaultDir },
+        { name: 'two', vaultPath: vaultDir },
+      ],
+      dataDir,
+      close,
+    );
+    expect(vaults[0]!.ctx.embedder).toBe(vaults[1]!.ctx.embedder);
+    expect(vaults.map((v) => v.ctx.ownsEmbedder)).toEqual([false, false]);
+    await closeVaults(vaults, close);
+  });
+
+  it('disposes a shared embedder once, after closing every vault', async () => {
+    const order: string[] = [];
+    const embedder = { dispose: vi.fn(async () => void order.push('embedder')) };
+    const vaults = ['alpha', 'beta'].map((name) => {
+      const vault = fakeVault(name);
+      Object.assign(vault.ctx, { embedder, ownsEmbedder: false });
+      return vault;
+    });
+    await closeVaults(vaults, async (ctx) => void order.push(ctx.config.vaultPath));
+    expect(order).toEqual(['/vaults/alpha', '/vaults/beta', 'embedder']);
+    expect(embedder.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the embedder of a vault that owns it to its own close', async () => {
+    const embedder = { dispose: vi.fn(async () => {}) };
+    const vault = fakeVault('alpha');
+    Object.assign(vault.ctx, { embedder, ownsEmbedder: true });
+    await closeVaults([vault], async () => {});
+    expect(embedder.dispose).not.toHaveBeenCalled();
+  });
+
+  it('logs a failed shared dispose and still returns', async () => {
+    const embedder = { dispose: vi.fn(async () => { throw new Error('ort busy'); }) };
+    const vault = fakeVault('alpha');
+    Object.assign(vault.ctx, { embedder, ownsEmbedder: false });
+    await expect(closeVaults([vault], async () => {})).resolves.toBeUndefined();
+  });
+
   it('closes the vaults it opened when a later one fails to open', async () => {
     const close = vi.fn(async (ctx: ServerContext) => ctx.db.close());
     // A regular file where the second vault's data dir should be.

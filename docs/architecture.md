@@ -68,7 +68,7 @@ Tradeoff given up: a stdio server cannot run on a remote host. For that topology
 
 ## Several vaults, one server
 
-`server` takes one or more `--vault <name>=<path>` flags. Each vault gets its own `ServerContext`: DB, embedder, search, writer, pipeline and watcher. `src/vaults.ts` registers every tool once per vault on a capturing shim, then exposes each tool once, with a required `vault` argument whose schema is an enum of the vault names. A call goes to the handler of the vault it names. The tool modules stay single-vault and know nothing of this.
+`server` takes one or more `--vault <name>=<path>` flags. Each vault gets its own `ServerContext`: DB, search, writer, pipeline and watcher. All vaults share one embedder, so the model loads once and one idle unload frees it for every vault. `src/vaults.ts` registers every tool once per vault on a capturing shim, then exposes each tool once, with a required `vault` argument whose schema is an enum of the vault names. A call goes to the handler of the vault it names. The tool modules stay single-vault and know nothing of this.
 
 There is no default vault, so a wrong-vault write is always an explicit choice by the caller. `list_vaults` reports each vault and its index state. To give a client only some of the vaults, run a separate server with just those vaults.
 
