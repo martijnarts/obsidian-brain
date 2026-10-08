@@ -18,7 +18,6 @@ description: Shipped releases, what's next, and what we've deliberately scoped o
 ### v1.7.25+ — open follow-ups (uncommitted, design TBD)
 
 - **CLI `--accept-byom-pull` flag** — v1.7.23 added the BYOM auto-pull gate with an env-var opt-in (`OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL=1`). A one-shot CLI flag for users running `obsidian-brain index user/custom-fork` interactively would be more ergonomic than the env var, but needs net-new prompt infrastructure (the CLI is flag-only today). Defer until there's user demand or until the broader Templater-style dynamic tool registration (v2.0) lands the prompt scaffolding.
-- **`better-sqlite3` 12.10.0+ bump** — held back from v1.7.24 because the bump removed Node.js v20 prebuilt binaries ([WiseLibs/better-sqlite3#1468](https://github.com/WiseLibs/better-sqlite3/releases/tag/v12.10.0)). Bundle with v1.8.0's Node-minimum bump from `>=20.19.0` to `>=22.0.0` (Node 20 hit EOL in April 2026).
 
 #### Audit items explicitly accepted as-is
 

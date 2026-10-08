@@ -66,36 +66,35 @@
     "promote": "node scripts/promote.mjs",
     "setup:protection": "node scripts/setup-branch-protection.mjs",
     "prepublishOnly": "npm run build",
-    "postinstall": "npm rebuild better-sqlite3 || (echo 'obsidian-brain: postinstall rebuild of better-sqlite3 FAILED — your install may crash on first boot. Run `npm rebuild better-sqlite3` manually, or `rm -rf ~/.npm/_npx` and retry. See https://sweir1.github.io/obsidian-brain/troubleshooting/#err_dlopen_failed-node_module_version-mismatch' 1>&2; exit 1)",
     "preversion": "npm run gen-docs -- --check && npm run gen-tools-docs -- --check && npm run gen-readme-recent -- --check && npm run check-plugin",
     "version": "node scripts/sync-server-version.mjs && node scripts/gen-readme-recent.mjs && git add server.json README.md",
     "postversion": "git push --follow-tags"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.12.0"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "better-sqlite3": "^12.9.0",
+    "@huggingface/transformers": "^4.3.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "better-sqlite3": "^13.0.3",
     "chokidar": "^5.0.0",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "diff": "^9.0.0",
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",
-    "graphology-metrics": "^2.4.0",
+    "graphology-metrics": "^2.4.2",
     "graphology-types": "^0.24.8",
     "gray-matter": "^4.0.3",
-    "sqlite-vec": "^0.1.7",
-    "zod": "^4.3.6"
+    "sqlite-vec": "^0.1.9",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.8.0",
-    "@vitest/coverage-v8": "^4.1.6",
-    "fast-check": "^4.8.0",
-    "tsx": "^4.22.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.4",
+    "@vitest/coverage-v8": "^5.0.3",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
   }
 }
