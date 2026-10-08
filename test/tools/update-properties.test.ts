@@ -150,7 +150,7 @@ describe('tools/update_properties', () => {
 
     const res = await raw({ name: 'link.md', set: { a: 1 } });
     expect(res.isError).toBe(true);
-    expect(res.content[0].text).toMatch(/escapes the vault/);
+    expect(res.content[0].text).toMatch(/outside the vault/);
     expect(await readFile(target, 'utf-8')).toBe(body);
   });
 
@@ -159,6 +159,6 @@ describe('tools/update_properties', () => {
     const rel = `../${outside.split('/').pop()}/x.md`;
     upsertNode(db, { id: rel, title: 'x', content: '', frontmatter: {} });
     const res = await raw({ name: rel, set: { a: 1 } });
-    expect(res.content[0].text).toMatch(/escapes the vault/);
+    expect(res.content[0].text).toMatch(/outside the vault/);
   });
 });

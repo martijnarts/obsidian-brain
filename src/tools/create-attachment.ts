@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { ServerContext } from '../context.js';
-import { resolveVaultPath } from '../vault/vault-path.js';
+import { resolveVaultPath, writeFileAtomic } from '../vault/vault-path.js';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -48,9 +48,7 @@ export function registerCreateAttachmentTool(server: McpServer, ctx: ServerConte
 
       const bytes = Buffer.from(b64, 'base64');
       await mkdir(dirname(abs), { recursive: true });
-      const tmp = `${abs}.tmp`;
-      await writeFile(tmp, bytes);
-      await rename(tmp, abs);
+      await writeFileAtomic(abs, bytes);
 
       return { path: rel, bytesWritten: bytes.length, overwritten: existing !== undefined };
     },

@@ -1,22 +1,11 @@
 import { z } from 'zod';
-import { promises as fs } from 'node:fs';
-import { join, relative, isAbsolute } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { resolveToSinglePath } from './delete-note.js';
-import { getNode } from '../store/nodes.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
 import { updateFrontmatter } from '../vault/editor.js';
-
-/** Throws unless `abs`, after following symlinks, lies inside the vault. */
-async function assertInsideVault(vaultPath: string, abs: string, relPath: string): Promise<void> {
-  const [root, target] = await Promise.all([fs.realpath(vaultPath), fs.realpath(abs)]);
-  const rel = relative(root, target);
-  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
-    throw new Error(`Path escapes the vault: ${relPath}`);
-  }
-}
+import { readNoteFile, writeFileAtomic } from '../vault/vault-path.js';
 
 export function registerUpdatePropertiesTool(server: McpServer, ctx: ServerContext): void {
   registerTool(
@@ -40,14 +29,8 @@ export function registerUpdatePropertiesTool(server: McpServer, ctx: ServerConte
         throw new Error(`Invalid frontmatter key(s): ${invalid.map((k) => JSON.stringify(k)).join(', ')}`);
       }
 
-      const fileRelPath = resolveToSinglePath(args.name, ctx);
-      if (getNode(ctx.db, fileRelPath)?.frontmatter._stub === true) {
-        throw new Error(`"${fileRelPath}" is an unresolved link target, not a note on disk.`);
-      }
-      const abs = join(ctx.config.vaultPath, fileRelPath);
-      await assertInsideVault(ctx.config.vaultPath, abs, fileRelPath);
-
-      const original = await fs.readFile(abs, 'utf-8');
+      const fileRelPath = resolveSingleNote(args.name, ctx.db);
+      const { abs, content: original } = await readNoteFile(ctx.config.vaultPath, fileRelPath);
       const res = updateFrontmatter(original, set, remove);
       const summary = {
         path: fileRelPath,
@@ -59,9 +42,7 @@ export function registerUpdatePropertiesTool(server: McpServer, ctx: ServerConte
       if (args.dryRun === true) return { dryRun: true, ...summary };
 
       if (res.next !== original) {
-        const tmp = `${abs}.tmp`;
-        await fs.writeFile(tmp, res.next, 'utf-8');
-        await fs.rename(tmp, abs);
+        await writeFileAtomic(abs, res.next);
         runBackgroundReindex(ctx);
       }
       return summary;

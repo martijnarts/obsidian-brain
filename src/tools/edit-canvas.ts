@@ -17,7 +17,7 @@ import {
   type CanvasNode,
   type CanvasNodeType,
 } from '../vault/canvas.js';
-import { resolveInVault } from '../vault/paths.js';
+import { resolveVaultPath } from '../vault/vault-path.js';
 
 type Operation = 'add_node' | 'update_node' | 'delete_node' | 'connect' | 'disconnect';
 
@@ -202,6 +202,6 @@ function checkContentFields(type: string, args: Partial<Record<string, unknown>>
 
 /** The target must stay inside the vault; a missing target only warns. */
 function checkFileTarget(ctx: ServerContext, file: string, warnings: string[]): void {
-  const abs = resolveInVault(ctx.config.vaultPath, file);
+  const { abs } = resolveVaultPath(ctx.config.vaultPath, file);
   if (!existsSync(abs)) warnings.push(`File not found in the vault: ${file}`);
 }

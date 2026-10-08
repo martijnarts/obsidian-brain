@@ -203,8 +203,8 @@ describe('create_note_from_template', () => {
   });
 
   it('refuses paths that escape the vault', async () => {
-    expect(unwrapError(await call({ template: '../../etc/passwd', title: 'X' }))).toMatch(/escapes the vault/);
-    expect(unwrapError(await call({ template: 'Plain', title: 'X', directory: '../out' }))).toMatch(/escapes the vault/);
+    expect(unwrapError(await call({ template: '../../etc/passwd', title: 'X' }))).toMatch(/outside the vault/);
+    expect(unwrapError(await call({ template: 'Plain', title: 'X', directory: '../out' }))).toMatch(/outside the vault/);
     expect(unwrapError(await call({ template: 'Plain', title: 'a/b' }))).toMatch(/cannot contain/);
   });
 

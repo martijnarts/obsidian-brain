@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { resolveNodeName } from '../resolve/name-match.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
 import { editNote, bulkEditNote, applyEdit, checkExpectedContent, type EditMode } from '../vault/editor.js';
 import { previewStore } from './preview-store.js';
 import { editBuffer } from './edit-buffer.js';
@@ -78,16 +78,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
       ),
     },
     async (args) => {
-      const matches = resolveNodeName(args.name, ctx.db);
-      if (matches.length === 0) throw new Error(`No note found matching "${args.name}"`);
-      const first = matches[0]!;
-      const weak = first.matchType === 'substring'
-        || first.matchType === 'case-insensitive'
-        || first.matchType === 'alias';
-      if (matches.length > 1 && weak) {
-        const cands = matches.slice(0, 10).map((m) => `- ${m.title} (${m.nodeId})`).join('\n');
-        throw new Error(`Multiple notes match "${args.name}". Please be more specific. Candidates:\n${cands}`);
-      }
+      const notePath = resolveSingleNote(args.name, ctx.db);
 
       // --- bulk edits branch: apply array of edits atomically ---
       if (args.edits !== undefined && args.edits.length > 0) {
@@ -111,12 +102,12 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
 
         // dryRun + edits: compute final state, store preview, return without writing.
         if (args.dryRun === true) {
-          const abs = join(ctx.config.vaultPath, first.nodeId);
+          const abs = join(ctx.config.vaultPath, notePath);
           let original: string;
           try {
             original = await fs.readFile(abs, 'utf-8');
           } catch (err) {
-            throw new Error(`edit_note dryRun: could not read "${first.nodeId}": ${errorMessage(err)}`);
+            throw new Error(`edit_note dryRun: could not read "${notePath}": ${errorMessage(err)}`);
           }
           let proposed = original;
           for (let i = 0; i < modes.length; i++) {
@@ -126,23 +117,23 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
               throw new Error(`[bulk edit dryRun] edits[${i}] (${modes[i].kind}) failed: ${errorMessage(err)}. No edits were applied.`);
             }
           }
-          const diff = createPatch(first.nodeId, original, proposed, 'original', 'proposed');
+          const diff = createPatch(notePath, original, proposed, 'original', 'proposed');
           const previewId = `prev_${randomUUID()}`;
           previewStore.set({
             previewId,
             vaultPath: ctx.config.vaultPath,
-            path: first.nodeId,
+            path: notePath,
             originalContent: original,
             proposedContent: proposed,
             diff,
             mode: 'bulk',
             createdAt: Date.now(),
           });
-          return { dryRun: true, previewId, path: first.nodeId, diff, mode: 'bulk', editsApplied: modes.length };
+          return { dryRun: true, previewId, path: notePath, diff, mode: 'bulk', editsApplied: modes.length };
         }
 
         // Normal bulk apply.
-        const bulkResult = await bulkEditNote(ctx.config.vaultPath, first.nodeId, modes);
+        const bulkResult = await bulkEditNote(ctx.config.vaultPath, notePath, modes);
 
         // Fire-and-forget reindex: the write has already succeeded; blocking on
         // the embedder init + index run would make this tool call wait minutes on
@@ -166,10 +157,10 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
 
       let editMode: EditMode;
       if (isBufferRetry) {
-        const buffered = editBuffer.get(join(ctx.config.vaultPath, first.nodeId));
+        const buffered = editBuffer.get(join(ctx.config.vaultPath, notePath));
         if (!buffered) {
           throw new Error(
-            `No buffered edit found for "${first.nodeId}". Buffer TTL is 30 minutes. Re-issue the edit with explicit content.`,
+            `No buffered edit found for "${notePath}". Buffer TTL is 30 minutes. Re-issue the edit with explicit content.`,
           );
         }
         editMode = {
@@ -189,36 +180,36 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
 
       // --- dryRun branch: compute diff, store preview, return without writing ---
       if (args.dryRun === true) {
-        const abs = join(ctx.config.vaultPath, first.nodeId);
+        const abs = join(ctx.config.vaultPath, notePath);
         let original: string;
         try {
           original = await fs.readFile(abs, 'utf-8');
         } catch (err) {
-          throw new Error(`edit_note dryRun: could not read "${first.nodeId}": ${errorMessage(err)}`);
+          throw new Error(`edit_note dryRun: could not read "${notePath}": ${errorMessage(err)}`);
         }
         const applied = applyEdit(original, editMode);
         if (args.expectedContent !== undefined) {
           checkExpectedContent(original, applied, args.expectedContent);
         }
-        const diff = createPatch(first.nodeId, original, applied.next, 'original', 'proposed');
+        const diff = createPatch(notePath, original, applied.next, 'original', 'proposed');
         const previewId = `prev_${randomUUID()}`;
         previewStore.set({
           previewId,
           vaultPath: ctx.config.vaultPath,
-          path: first.nodeId,
+          path: notePath,
           originalContent: original,
           proposedContent: applied.next,
           diff,
           mode: args.mode as string,
           createdAt: Date.now(),
         });
-        return { dryRun: true, previewId, path: first.nodeId, diff, mode: args.mode as string };
+        return { dryRun: true, previewId, path: notePath, diff, mode: args.mode as string };
       }
       // --- end dryRun branch ---
 
       let result: Awaited<ReturnType<typeof editNote>>;
       try {
-        result = await editNote(ctx.config.vaultPath, first.nodeId, editMode, {
+        result = await editNote(ctx.config.vaultPath, notePath, editMode, {
           expectedContent: args.expectedContent,
         });
       } catch (err) {
@@ -232,7 +223,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
           args.search !== undefined
         ) {
           editBuffer.push({
-            path: join(ctx.config.vaultPath, first.nodeId),
+            path: join(ctx.config.vaultPath, notePath),
             content: args.content,
             search: args.search,
             mode: args.mode,
@@ -244,7 +235,7 @@ export function registerEditNoteTool(server: McpServer, ctx: ServerContext): voi
       }
 
       // Clear the buffer on successful non-dryRun edit.
-      editBuffer.remove(join(ctx.config.vaultPath, first.nodeId));
+      editBuffer.remove(join(ctx.config.vaultPath, notePath));
 
       // Also clear on from_buffer success (already covered by remove above,
       // but being explicit improves readability).

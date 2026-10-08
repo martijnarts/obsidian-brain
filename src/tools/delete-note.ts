@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { resolveNodeName } from '../resolve/name-match.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
 import { deleteNote, type DeleteResult } from '../vault/mover.js';
 import type { ContextualResult } from './hints.js';
 import { getNode } from '../store/nodes.js';
@@ -33,7 +33,7 @@ export function registerDeleteNoteTool(server: McpServer, ctx: ServerContext): v
     async (args) => {
       const { name, dryRun } = args;
 
-      const fileRelPath = resolveToSinglePath(name, ctx);
+      const fileRelPath = resolveSingleNote(name, ctx.db, { allowStubs: true });
 
       if (dryRun === true) {
         // Preview what would be deleted without mutating anything.
@@ -89,27 +89,4 @@ export function registerDeleteNoteTool(server: McpServer, ctx: ServerContext): v
       return payload;
     },
   );
-}
-
-export function resolveToSinglePath(name: string, ctx: ServerContext): string {
-  const matches = resolveNodeName(name, ctx.db);
-  if (matches.length === 0) {
-    throw new Error(`No note found matching "${name}"`);
-  }
-  const first = matches[0]!;
-  const ambiguous =
-    matches.length > 1 &&
-    (first.matchType === 'substring' ||
-      first.matchType === 'case-insensitive' ||
-      first.matchType === 'alias');
-  if (ambiguous) {
-    const candidates = matches
-      .slice(0, 10)
-      .map((m) => `- ${m.title} (${m.nodeId})`)
-      .join('\n');
-    throw new Error(
-      `Multiple notes match "${name}". Please be more specific. Candidates:\n${candidates}`,
-    );
-  }
-  return first.nodeId;
 }

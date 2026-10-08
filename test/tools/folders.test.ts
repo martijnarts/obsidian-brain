@@ -163,7 +163,7 @@ describe('tools/delete_folder', () => {
     expect(err(await tool.call({ path: '.obsidian', confirm: true, recursive: true }))).toMatch(/\.obsidian/);
     expect(err(await tool.call({ path: '.obsidian/plugins', confirm: true, recursive: true }))).toMatch(/\.obsidian/);
     expect(err(await tool.call({ path: 'Keep.md', confirm: true }))).toMatch(/is a file/);
-    expect(err(await tool.call({ path: 'Nope', confirm: true }))).toMatch(/Folder not found: Nope/);
+    expect(err(await tool.call({ path: 'Nope', confirm: true }))).toMatch(/Folder not found: "Nope"/);
     expect(err(await tool.call({ path: 'alias', confirm: true, recursive: true }))).toMatch(/symlink/);
     expect(err(await tool.call({ path: '..', confirm: true, recursive: true }))).toMatch(/outside the vault/);
     expect(await exists(join(h.vault, '.obsidian/plugins'))).toBe(true);

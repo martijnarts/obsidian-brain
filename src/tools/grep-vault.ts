@@ -5,20 +5,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { ServerContext } from '../context.js';
 import { collectMarkdownFiles } from '../vault/parser.js';
-import { normalizeFolder, resolveFolderOnDisk } from './folder-scope.js';
+import { resolveFolder } from '../vault/vault-path.js';
+import { compileUserRegex } from '../util/safe-regex.js';
 
 /** Wall-clock budget for one scan. Past it the tool returns what it has. */
 export const GREP_TIME_BUDGET_MS = 2_000;
-const MAX_PATTERN_LENGTH = 500;
 /** Returned lines are clipped to this many characters (around the match). */
 const MAX_LINE_CHARS = 400;
-
-/**
- * A group that holds a quantifier and is itself quantified, like `(a+)+`
- * or `(\w*x)*`. Such patterns backtrack exponentially on a near-miss, and
- * a JS regex cannot be interrupted mid-match, so they are refused up front.
- */
-const NESTED_QUANTIFIER = /\((?:[^()\\]|\\.)*(?:[+*]|\{\d+,\d*\})(?:[^()\\]|\\.)*\)(?:[+*]|\{\d+,\d*\})/;
 
 interface LineMatch {
   line: number;
@@ -31,23 +24,6 @@ interface FileMatches {
   path: string;
   matches: LineMatch[];
   moreMatches?: true;
-}
-
-/** Compile the search pattern, or throw a user-facing error. */
-export function compilePattern(query: string, regex: boolean, caseSensitive: boolean): RegExp {
-  const flags = caseSensitive ? '' : 'i';
-  if (!regex) return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
-  if (query.length > MAX_PATTERN_LENGTH) {
-    throw new Error(`Regex is too long (${query.length} chars, max ${MAX_PATTERN_LENGTH}).`);
-  }
-  if (NESTED_QUANTIFIER.test(query)) {
-    throw new Error('Regex has a quantified group that contains a quantifier, like `(a+)+`. Rewrite it without the nesting.');
-  }
-  try {
-    return new RegExp(query, flags);
-  } catch (err) {
-    throw new Error(`Invalid regex: ${(err as Error).message}`);
-  }
 }
 
 /** Clip a long line to a window that keeps the character at `at` visible. */
@@ -73,15 +49,14 @@ export function registerGrepVaultTool(server: McpServer, ctx: ServerContext): vo
       maxMatchesPerFile: z.number().int().min(1).max(100).optional().describe('Max matching lines per file. Default 5.'),
     },
     async (args) => {
-      const pattern = compilePattern(args.query, args.regex ?? false, args.caseSensitive ?? false);
-      const folder = normalizeFolder(args.folder);
+      const pattern = compileUserRegex(args.query, args.caseSensitive === true ? '' : 'i', args.regex !== true);
       const contextLines = args.contextLines ?? 1;
       const limit = args.limit ?? 20;
       const maxMatches = args.maxMatchesPerFile ?? 5;
 
-      const root = await resolveFolderOnDisk(ctx.config.vaultPath, undefined);
-      await resolveFolderOnDisk(root, folder);
-      const paths = (await collectMarkdownFiles(root, folder ?? '')).sort();
+      const root = ctx.config.vaultPath;
+      const folder = await resolveFolder(root, args.folder);
+      const paths = (await collectMarkdownFiles(root, folder.rel)).sort();
 
       const deadline = Date.now() + GREP_TIME_BUDGET_MS;
       const files: FileMatches[] = [];

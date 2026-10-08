@@ -5,9 +5,24 @@ import { resolveNodeName } from './name-match.js';
  * Resolve a note name to exactly one indexed path. Throws when nothing
  * matches, or when the best match is a loose one (substring,
  * case-insensitive, alias) shared by several notes.
+ *
+ * Unresolved link targets (`_stub/` ids) are refused unless `allowStubs`
+ * is set, because they have no file on disk. Index-only tools (graph
+ * queries, index reads, delete) pass `allowStubs: true`.
  */
-export function resolveSingleNote(name: string, db: DatabaseHandle): string {
-  const matches = resolveNodeName(name, db);
+export function resolveSingleNote(
+  name: string,
+  db: DatabaseHandle,
+  opts: { allowStubs?: boolean } = {},
+): string {
+  let matches = resolveNodeName(name, db);
+  if (opts.allowStubs !== true) {
+    const real = matches.filter((m) => !m.nodeId.startsWith('_stub/'));
+    if (real.length === 0 && matches.length > 0) {
+      throw new Error(`"${matches[0]!.nodeId}" is an unresolved link target, not a note on disk.`);
+    }
+    matches = real;
+  }
   if (matches.length === 0) {
     throw new Error(`No note found matching "${name}"`);
   }

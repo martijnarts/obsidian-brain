@@ -35,7 +35,7 @@ export function registerDeleteFolderTool(server: McpServer, ctx: ServerContext):
         throw new Error('Refusing to delete the .obsidian config folder');
       }
       const st = await lstat(abs).catch(() => {
-        throw new Error(`Folder not found: ${rel}`);
+        throw new Error(`Folder not found: "${rel}"`);
       });
       if (st.isSymbolicLink()) throw new Error(`${rel} is a symlink, not a folder`);
       if (!st.isDirectory()) throw new Error(`${rel} is a file, not a folder: use delete_note`);

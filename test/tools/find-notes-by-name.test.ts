@@ -154,8 +154,8 @@ describe('tools/find_notes_by_name', () => {
   });
 
   it('refuses folders that leave the vault', async () => {
-    expect(errorText(await tool.cb({ query: 'x', folder: '../etc' }))).toMatch(/inside the vault/);
-    expect(errorText(await tool.cb({ query: 'x', folder: '/etc' }))).toMatch(/vault-relative/);
+    expect(errorText(await tool.cb({ query: 'x', folder: '../etc' }))).toMatch(/outside the vault/);
+    expect(errorText(await tool.cb({ query: 'x', folder: 'C:/etc' }))).toMatch(/vault-relative/);
   });
 
   it('schema rejects an empty query and an out-of-range limit', () => {

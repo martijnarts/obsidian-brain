@@ -6,6 +6,7 @@ import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
 import { previewStore } from './preview-store.js';
+import { writeFileAtomic } from '../vault/vault-path.js';
 
 export function registerApplyEditPreviewTool(server: McpServer, ctx: ServerContext): void {
   registerTool(
@@ -29,9 +30,7 @@ export function registerApplyEditPreviewTool(server: McpServer, ctx: ServerConte
         );
       }
 
-      const tmp = `${abs}.tmp`;
-      await fs.writeFile(tmp, preview.proposedContent, 'utf-8');
-      await fs.rename(tmp, abs);
+      await writeFileAtomic(abs, preview.proposedContent);
 
       previewStore.delete(args.previewId);
 

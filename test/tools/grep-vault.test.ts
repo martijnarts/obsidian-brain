@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  GREP_TIME_BUDGET_MS,
-  compilePattern,
-  registerGrepVaultTool,
-} from '../../src/tools/grep-vault.js';
+import { GREP_TIME_BUDGET_MS, registerGrepVaultTool } from '../../src/tools/grep-vault.js';
 import {
   acceptsArgs,
   buildCtx,
@@ -17,33 +13,6 @@ import {
   type SchemaTool,
 } from '../helpers/search-tools.js';
 import type { DatabaseHandle } from '../../src/store/db.js';
-
-describe('compilePattern', () => {
-  it('escapes metacharacters in a literal query', () => {
-    const re = compilePattern('a.b (c)', false, true);
-    expect(re.test('xa.b (c)y')).toBe(true);
-    expect(re.test('aXb (c)')).toBe(false);
-  });
-
-  it('is case-insensitive unless caseSensitive', () => {
-    expect(compilePattern('Foo', false, false).test('foo')).toBe(true);
-    expect(compilePattern('Foo', false, true).test('foo')).toBe(false);
-  });
-
-  it('refuses long, nested-quantifier and invalid regexes', () => {
-    expect(() => compilePattern('a'.repeat(501), true, false)).toThrow(/too long/);
-    expect(() => compilePattern('(a+)+$', true, false)).toThrow(/quantified group/);
-    expect(() => compilePattern('(\\w*x)*', true, false)).toThrow(/quantified group/);
-    expect(() => compilePattern('(a{1,})+', true, false)).toThrow(/quantified group/);
-    expect(() => compilePattern('(', true, false)).toThrow(/Invalid regex/);
-  });
-
-  it('accepts ordinary groups and escaped parentheses', () => {
-    expect(compilePattern('(foo|bar)+', true, false).test('barfoo')).toBe(true);
-    expect(compilePattern('\\(a+\\)+', true, false).test('(aa))')).toBe(true);
-    expect(compilePattern('a'.repeat(500), true, false)).toBeInstanceOf(RegExp);
-  });
-});
 
 describe('tools/grep_vault', () => {
   let vault: string;
@@ -170,9 +139,9 @@ describe('tools/grep_vault', () => {
     try {
       await writeVault(outside, { 'secret.md': 'widget secret\n' });
       await symlink(outside, join(vault, 'Escape'));
-      expect(errorText(await tool.cb({ query: 'widget', folder: 'Escape' }))).toMatch(/inside the vault/);
-      expect(errorText(await tool.cb({ query: 'widget', folder: '../x' }))).toMatch(/inside the vault/);
-      expect(errorText(await tool.cb({ query: 'widget', folder: '/etc' }))).toMatch(/vault-relative/);
+      expect(errorText(await tool.cb({ query: 'widget', folder: 'Escape' }))).toMatch(/outside the vault/);
+      expect(errorText(await tool.cb({ query: 'widget', folder: '../x' }))).toMatch(/outside the vault/);
+      expect(errorText(await tool.cb({ query: 'widget', folder: 'C:/etc' }))).toMatch(/vault-relative/);
     } finally {
       await rm(outside, { recursive: true, force: true });
     }

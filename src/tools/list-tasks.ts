@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { promises as fs } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { ServerContext } from '../context.js';
-import { readNoteFile } from './note-file.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
 import { collectMarkdownFiles } from '../vault/parser.js';
-import { resolveInVault } from '../vault/vault-path.js';
+import { normalizeFolder, readNoteFile, resolveFolder } from '../vault/vault-path.js';
 import { scanTasks, type Task } from '../vault/tasks.js';
 
 /**
@@ -36,13 +35,12 @@ export function registerListTasksTool(server: McpServer, ctx: ServerContext): vo
 
       const notes: Array<{ path: string; content: string }> = [];
       if (args.name !== undefined) {
-        notes.push(await readNoteFile(args.name, ctx));
+        const note = await readNoteFile(ctx.config.vaultPath, resolveSingleNote(args.name, ctx.db));
+        notes.push({ path: note.rel, content: note.content });
       } else {
         for (const path of await notesUnder(ctx.config.vaultPath, args.folder ?? '')) {
           // A symlink out of the vault, or a file deleted mid-scan, is skipped.
-          const content = await resolveInVault(ctx.config.vaultPath, path)
-            .then((abs) => fs.readFile(abs, 'utf-8'))
-            .catch(() => null);
+          const content = await readNoteFile(ctx.config.vaultPath, path).then((n) => n.content, () => null);
           if (content !== null) notes.push({ path, content });
         }
       }
@@ -67,14 +65,11 @@ export function registerListTasksTool(server: McpServer, ctx: ServerContext): vo
 }
 
 async function notesUnder(vaultPath: string, folder: string): Promise<string[]> {
-  let rel = folder.replace(/^\.?\/+/, '').replace(/\/+$/, '');
-  if (rel === '.') rel = '';
-  if (rel.split('/').some((seg) => seg.startsWith('.') && seg !== '.' && seg !== '..')) {
+  const rel = normalizeFolder(folder);
+  if (rel.split('/').some((seg) => seg.startsWith('.'))) {
     throw new Error(`Hidden folders are not scanned: "${folder}"`);
   }
-  const abs = await resolveInVault(vaultPath, rel);
-  const stat = await fs.stat(abs).catch(() => null);
-  if (!stat?.isDirectory()) throw new Error(`Folder not found: "${folder}"`);
+  await resolveFolder(vaultPath, folder);
   const paths = await collectMarkdownFiles(vaultPath, rel);
   return paths.sort();
 }

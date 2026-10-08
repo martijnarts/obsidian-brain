@@ -7,7 +7,7 @@ import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
 import { migrateStubToReal } from '../store/nodes.js';
-import { resolveInVault } from '../vault/paths.js';
+import { resolveVaultPath } from '../vault/vault-path.js';
 import {
   BUILTIN_VARIABLES,
   findTemplate,
@@ -50,13 +50,13 @@ export function registerCreateNoteFromTemplateTool(server: McpServer, ctx: Serve
       const now = parseDate(args.date);
 
       const target = directory ? `${directory}/${title}.md` : `${title}.md`;
-      if (existsSync(resolveInVault(ctx.config.vaultPath, target))) {
+      if (existsSync(resolveVaultPath(ctx.config.vaultPath, target).abs)) {
         throw new Error(`File already exists: ${target}`);
       }
 
       const config = readTemplatesConfig(ctx.config.vaultPath);
       const templatePath = findTemplate(ctx.config.vaultPath, template, config);
-      const raw = readFileSync(resolveInVault(ctx.config.vaultPath, templatePath), 'utf-8');
+      const raw = readFileSync(resolveVaultPath(ctx.config.vaultPath, templatePath).abs, 'utf-8');
       const rendered = renderTemplate(raw, { title, now, config, variables });
 
       let parsed: matter.GrayMatterFile<string>;
