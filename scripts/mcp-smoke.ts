@@ -50,6 +50,13 @@ const EXPECTED_TOOLS = [
   'list_bookmarks',
   'list_property_values',
   'update_properties',
+  'read_notes',
+  'read_note_part',
+  'file_info',
+  'create_folder',
+  'delete_folder',
+  'list_attachments',
+  'create_attachment',
 ] as const;
 
 const FAST_TIMEOUT_MS = 5_000;
@@ -333,6 +340,18 @@ async function main(): Promise<number> {
       ),
     );
 
+    await runCall('read_notes', results, () =>
+      callTool(client, 'read_notes', { names: ['Welcome', 'Widgets'] }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('read_note_part (outline)', results, () =>
+      callTool(client, 'read_note_part', { name: 'Widgets', mode: 'outline' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('file_info', results, () =>
+      callTool(client, 'file_info', { path: 'Concepts/Widgets.md' }, FAST_TIMEOUT_MS),
+    );
+
     await runCall('find_connections', results, () =>
       callTool(client, 'find_connections', { name: 'Welcome', depth: 2 }, FAST_TIMEOUT_MS),
     );
@@ -435,6 +454,32 @@ async function main(): Promise<number> {
         'edit_canvas',
         { path: 'Board.canvas', operation: 'add_node', type: 'file', file: 'Welcome.md' },
         FAST_TIMEOUT_MS,
+      ),
+    );
+
+    await runCall('create_folder', results, () =>
+      callTool(client, 'create_folder', { path: 'Smoke Assets' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('create_attachment', results, () =>
+      callTool(
+        client,
+        'create_attachment',
+        { path: 'Smoke Assets/pixel.png', content: Buffer.from('smoke').toString('base64') },
+        FAST_TIMEOUT_MS,
+      ),
+    );
+
+    await runCall('list_attachments', results, () =>
+      callTool(client, 'list_attachments', { folder: 'Smoke Assets' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('delete_folder', results, () =>
+      callTool(
+        client,
+        'delete_folder',
+        { path: 'Smoke Assets', recursive: true, confirm: true },
+        SLOW_TIMEOUT_MS,
       ),
     );
 

@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 30 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 37 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-30 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+37 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -412,6 +412,116 @@ Make one change to a canvas per call. `add_node` adds a `text`, `file`, `link` o
 
 > *"Use `edit_canvas` to add a text node 'Open questions' to `Projects/Roadmap.canvas` and connect it to the `Launch` node."*
 
+## Files
+
+These tools work on vault files directly: reading notes in batches or in parts, inspecting any path, managing folders and attachments.
+
+### `read_notes`
+
+Read up to 20 notes in one call. Each name resolves on its own, so a missing or ambiguous name returns `{name, error}` in its slot and the rest of the batch still succeeds. Bodies are truncated at `maxContentLength` (default 2000 chars) per note, with `truncated: true` on the ones that were cut.
+
+<!-- GENERATED:tool:read_notes -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `names` | array | Paths, filenames, or fuzzy matches of the notes to read. |
+| `maxContentLength` | number? | Max body chars per note before truncation. Default 2000. |
+<!-- /GENERATED:tool:read_notes -->
+
+> *"Use `read_notes` to read `Widgets`, `Gadgets` and `Inbox/today` together."*
+
+### `read_note_part`
+
+Read part of a note from disk instead of the whole body. `outline` lists the headings with level and line; `heading` returns the section under a heading, down to the next heading of the same or a higher level (a nested path such as `Project > Notes` picks one of several equal headings); `lines` returns a line range; `block` returns the paragraph or list item that carries a `^blockId`. Line numbers are 1-based and count the frontmatter. Headings and block ids inside fenced code blocks are ignored.
+
+<!-- GENERATED:tool:read_note_part -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path, filename, or fuzzy match for the note. |
+| `mode` | `"outline"` \| `"heading"` \| `"lines"` \| `"block"` | Which part to read. |
+| `heading` | string? | For `heading`: heading text, or a nested path like `Parent > Child`. |
+| `startLine` | number? | For `lines`: first line, 1-based, inclusive. |
+| `endLine` | number? | For `lines`: last line, inclusive. Default and maximum: the end of the note. |
+| `blockId` | string? | For `block`: the block id, with or without the leading `^`. |
+<!-- /GENERATED:tool:read_note_part -->
+
+> *"Use `read_note_part` to get the outline of `Projects/Plan`, then read only its `Goals` section."*
+
+### `file_info`
+
+Describe one vault path without its body: `kind` (`note`, `attachment` or `folder`), size in bytes, and `mtime`/`ctime` as ISO timestamps. For a note it adds outgoing, incoming and unresolved link counts from the index, plus heading count, open and done tasks, and the tag list from the file on disk. A folder reports its number of direct children.
+
+<!-- GENERATED:tool:file_info -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `path` | string | Vault-relative path of a note, attachment or folder. |
+<!-- /GENERATED:tool:file_info -->
+
+> *"Use `file_info` on `Projects/Plan.md` to see how many open tasks and backlinks it has."*
+
+### `create_folder`
+
+Create a folder and any missing parents. Calling it on an existing folder succeeds with `created: false`; a file at the path is an error.
+
+<!-- GENERATED:tool:create_folder -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `path` | string | Vault-relative folder path, e.g. `Projects/2026`. |
+<!-- /GENERATED:tool:create_folder -->
+
+> *"Use `create_folder` to make `Projects/2026/Q1`."*
+
+### `delete_folder`
+
+Permanently delete a folder. A non-empty folder is refused unless `recursive: true`. Every note inside leaves the index in the same call (node, edges, embedding, orphaned stubs), as with `delete_note`. The vault root and `.obsidian` are always refused. Requires `confirm: true`; `dryRun: true` reports file, folder and note counts with a sample of up to 50 paths.
+
+<!-- GENERATED:tool:delete_folder -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `path` | string | Vault-relative folder path. |
+| `confirm` | true | Must literally be `true` to execute. Guards against accidental deletion. |
+| `recursive` | boolean? | Delete the folder with everything in it. Default false: refuse a non-empty folder. |
+| `dryRun` | boolean? | If true, report what would be deleted without removing anything. |
+<!-- /GENERATED:tool:delete_folder -->
+
+> *"Use `delete_folder` with `dryRun: true` on `Archive/2019`, then delete it recursively."*
+
+### `list_attachments`
+
+List the non-markdown files in the vault or one folder, each with its size and `references`: the number of notes that embed or link to it through `![[file]]`, `[[file]]`, `![](path)` or `[](path)`. Targets match by vault-relative path, by path relative to the note, or by bare filename, as Obsidian resolves them. `unreferencedOnly: true` finds orphaned attachments.
+
+<!-- GENERATED:tool:list_attachments -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `folder` | string? | Vault-relative folder to list, recursively. Default: the whole vault. |
+| `extensions` | array? | Keep only these extensions, case-insensitive, e.g. `["png", ".pdf"]`. |
+| `unreferencedOnly` | boolean? | Return only attachments no note references. |
+| `limit` | number? | Max results. Default 100. |
+| `offset` | number? | Results to skip, for paging. Default 0. |
+<!-- /GENERATED:tool:list_attachments -->
+
+> *"Use `list_attachments` with `unreferencedOnly: true` to find images no note uses any more."*
+
+### `create_attachment`
+
+Create a binary file from base64 content, with any missing parent folders. The decoded size is capped at 10 MB. An existing file is replaced only with `overwrite: true`. Markdown paths are refused: use `create_note` for notes.
+
+<!-- GENERATED:tool:create_attachment -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `path` | string | Vault-relative file path with extension, e.g. `assets/diagram.png`. |
+| `content` | string | File bytes, base64-encoded. |
+| `overwrite` | boolean? | Replace an existing file. Default false. |
+<!-- /GENERATED:tool:create_attachment -->
+
+> *"Use `create_attachment` to save this PNG as `assets/diagram.png`."*
+
 ## Live editor
 
 These tools **require the [companion plugin](plugin.md)** installed in your vault and Obsidian running.
@@ -639,6 +749,13 @@ Response fields:
 | `delete_note` | ✅ | — | ✅ |
 | `read_canvas` | ✅ | — | — |
 | `edit_canvas` | ✅ | — | ✅ |
+| `read_notes` | ✅ | — | — |
+| `read_note_part` | ✅ | — | — |
+| `file_info` | ✅ | — | — |
+| `create_folder` | ✅ | — | ✅ |
+| `delete_folder` | ✅ | — | ✅ |
+| `list_attachments` | ✅ | — | — |
+| `create_attachment` | ✅ | — | ✅ |
 | `active_note` | — | ✅ | — |
 | `dataview_query` | — | ✅ + Dataview community plugin | — |
 | `base_query` | — | ✅ + Obsidian ≥ 1.10.0 + Bases core plugin | — |
