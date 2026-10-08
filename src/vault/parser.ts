@@ -207,7 +207,7 @@ function extractInlineFields(content: string): Record<string, string> {
   return fields;
 }
 
-async function collectMarkdownFiles(
+export async function collectMarkdownFiles(
   vaultPath: string,
   subdir = '',
 ): Promise<string[]> {

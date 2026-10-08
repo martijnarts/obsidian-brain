@@ -28,6 +28,9 @@ const EXPECTED_TOOLS = [
   'search',
   'read_note',
   'list_notes',
+  'find_notes_by_name',
+  'grep_vault',
+  'query_notes',
   'find_connections',
   'find_path_between',
   'detect_themes',
@@ -297,6 +300,23 @@ async function main(): Promise<number> {
 
     await runCall('read_note (brief)', results, () =>
       callTool(client, 'read_note', { name: 'Widgets' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('find_notes_by_name', results, () =>
+      callTool(client, 'find_notes_by_name', { query: 'gadg' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('grep_vault', results, () =>
+      callTool(client, 'grep_vault', { query: 'widgets', folder: 'Concepts' }, FAST_TIMEOUT_MS),
+    );
+
+    await runCall('query_notes', results, () =>
+      callTool(
+        client,
+        'query_notes',
+        { filter: { has_tag: [{ var: 'tags' }, 'demo'] }, sort: { field: 'title' } },
+        FAST_TIMEOUT_MS,
+      ),
     );
 
     await runCall('find_connections', results, () =>

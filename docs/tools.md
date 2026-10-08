@@ -1,11 +1,11 @@
 ---
 title: Tool reference
-description: All 24 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
+description: All 27 MCP tools obsidian-brain exposes — arguments, behaviour, examples.
 ---
 
 # Tool reference
 
-24 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
+27 tools, grouped by intent. Every tool description below includes a one-line Claude prompt you can copy-paste into chat to nudge routing in the right direction.
 
 Every tool except `list_vaults` takes a required `vault` argument: one of the names given to `server --vault <name>=<path>`. There is no default vault.
 
@@ -78,6 +78,56 @@ Read a note's metadata (and optionally its full body). Fuzzy-matches filenames, 
 In `full` mode, the response includes `truncated: true` when the body exceeded `maxContentLength` and was sliced. Wrapped as `{data, context}` with `next_actions` hints — e.g. `create_note` for unresolved `[[links]]`, `find_connections` for outgoing neighbours.
 
 > *"Use `read_note` to open the note called 'Q4 planning' with `mode: 'full'`."*
+
+### `find_notes_by_name`
+
+Find notes by a half-remembered name, the way Obsidian's quick switcher does. The query is matched case-insensitively against each note's filename, title and frontmatter `aliases`; typos and non-contiguous characters still match. Each hit reports `path`, `title`, `matchedOn` (`name`, `title` or `alias`), the matching `alias` when relevant and a `score` from 0 to 1, best first. Unresolved link targets are never returned.
+
+<!-- GENERATED:tool:find_notes_by_name -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `query` | string | Name fragment. Typos and non-contiguous characters still match. |
+| `folder` | string? | Only notes under this vault-relative folder. |
+| `limit` | number? | Max results (1-100). Default 20. |
+<!-- /GENERATED:tool:find_notes_by_name -->
+
+> *"Use `find_notes_by_name` to find the note I called something like 'kelly crit'."*
+
+### `grep_vault`
+
+Search the text of the note files on disk, line by line like grep, with a literal string or a JavaScript regex. Frontmatter is searched too, and line numbers are the real 1-based lines of the file. Each file lists its matching lines with `before` and `after` context lines, and `moreMatches: true` when it had more than `maxMatchesPerFile`. Regexes longer than 500 characters or with a quantified group that holds a quantifier, like `(a+)+`, are refused. A scan stops after 2 seconds or at `limit` matching files and then reports `truncated: true` with `stoppedBy`.
+
+<!-- GENERATED:tool:grep_vault -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `query` | string | Literal text, or a regex source without slashes when `regex` is true. |
+| `regex` | boolean? | Treat `query` as a JavaScript regex. Default false. |
+| `caseSensitive` | boolean? | Default false. |
+| `folder` | string? | Only notes under this vault-relative folder. |
+| `contextLines` | number? | Lines of context before and after each match. Default 1. |
+| `limit` | number? | Max files with matches to return. Default 20. |
+| `maxMatchesPerFile` | number? | Max matching lines per file. Default 5. |
+<!-- /GENERATED:tool:grep_vault -->
+
+> *"Use `grep_vault` to find every line under `Projects/` that mentions 'TODO(marts)'."*
+
+### `query_notes`
+
+Filter notes by their metadata with a [JsonLogic](https://jsonlogic.com) expression: the headless replacement for Dataview queries. The filter sees one record per note: `{path, folder, name, title, tags, frontmatter, mtime, size}`. `tags` merges frontmatter and inline tags without `#`, `frontmatter` includes Dataview-style `key:: value` inline fields, and `mtime` is an ISO 8601 string. The extra operator `has_tag` matches a tag case-insensitively and includes nested tags, so `area` matches `area/work`. Results are sorted by `path` unless `sort` names `title`, `mtime` or `frontmatter.<key>`; notes without the sort value come last.
+
+<!-- GENERATED:tool:query_notes -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `filter` | object | JsonLogic expression; a note matches when it is truthy. `{"==": [1, 1]}` matches every note. |
+| `fields` | array? | Frontmatter keys to return. Default all. |
+| `sort` | object? | Default: by path, ascending. |
+| `limit` | number? | Max results (1-500). Default 50. |
+<!-- /GENERATED:tool:query_notes -->
+
+> *"Use `query_notes` to list every note tagged #book with a rating of 4 or more, newest first."*
 
 ## Map the graph
 
@@ -508,6 +558,9 @@ Response fields:
 | `search` | ✅ | — | — |
 | `list_notes` | ✅ | — | — |
 | `read_note` | ✅ | — | — |
+| `find_notes_by_name` | ✅ | — | — |
+| `grep_vault` | ✅ | — | — |
+| `query_notes` | ✅ | — | — |
 | `find_connections` | ✅ | — | — |
 | `find_path_between` | ✅ | — | — |
 | `detect_themes` | ✅ | — | — |
