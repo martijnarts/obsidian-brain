@@ -1,14 +1,14 @@
 ---
 title: Quick start
-description: Install obsidian-brain in under a minute — no clone, no build. Node 20+ and a folder of .md files is all you need.
+description: Install obsidian-brain in under a minute — no clone, no build. Node 22.12+ and a folder of .md files is all you need.
 ---
 
 # Quick start
 
-No clone, no build. Requires **Node 20+** and an Obsidian vault (or any folder of `.md` files — Obsidian itself is optional).
+No clone, no build. Requires **Node 22.12+** and an Obsidian vault (or any folder of `.md` files — Obsidian itself is optional).
 
 !!! tip "Preflight check"
-    You need Node 20+. Run `node -v` in Terminal — if it prints `v20.x.x` or higher, you're good. If it errors or shows an older version, the [macOS walkthrough](install-mac-nontechnical.md) covers the install.
+    You need Node 22.12+. Run `node -v` in Terminal — if it prints `v22.12.0` or higher, you're good. If it errors or shows an older version, the [macOS walkthrough](install-mac-nontechnical.md) covers the install.
 
 ## Minimum config
 
@@ -36,7 +36,7 @@ On first launch the server auto-indexes your vault and downloads the default emb
 
 Per-model metadata (output dim, max tokens, query / document prefix) for canonical presets is bundled inside the npm tarball at `data/seed-models.json` (refreshed at every release from MTEB's curated registry). For BYOM models (`EMBEDDING_MODEL=any/hf-id`) the server fetches metadata from HuggingFace once on first use and caches it per-vault forever (invalidate via `obsidian-brain models refresh-cache`). See [Models → How model metadata is resolved](models.md#how-model-metadata-is-resolved).
 
-No system-level prerequisites beyond Node 20+. The `better-sqlite3`, `sqlite-vec`, and ONNX runtime native bindings ship as prebuilt binaries for macOS, Linux, and Windows — no `brew install sqlite`, no Xcode Command Line Tools, no Python required.
+No system-level prerequisites beyond Node 22.12+. The `better-sqlite3`, `sqlite-vec`, and ONNX runtime native bindings ship as prebuilt binaries for macOS, Linux, and Windows — no `brew install sqlite`, no Xcode Command Line Tools, no Python required.
 
 ## Environment variables
 

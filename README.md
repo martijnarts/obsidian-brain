@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/obsidian-brain.svg)](https://www.npmjs.com/package/obsidian-brain)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Node ≥ 20](https://img.shields.io/node/v/obsidian-brain.svg)](package.json)
+[![Node ≥ 22.12](https://img.shields.io/node/v/obsidian-brain.svg)](package.json)
 [![GitHub stars](https://img.shields.io/github/stars/sweir1/obsidian-brain.svg?style=social)](https://github.com/sweir1/obsidian-brain)
 
 A standalone Node MCP server that gives Claude (and any other MCP client) **semantic search + knowledge graph + vault editing** over an Obsidian vault. Runs as one local stdio process — no plugin, no HTTP bridge, no API key, nothing hosted. Your vault content never leaves your machine.
@@ -29,11 +29,11 @@ A standalone Node MCP server that gives Claude (and any other MCP client) **sema
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sweir1/obsidian-brain/main/scripts/install.sh)"
 ```
 
-Installs Homebrew + Node 20+ if you don't already have them, adds the `/usr/local/bin` symlinks that Claude Desktop needs, merges obsidian-brain into your `claude_desktop_config.json`, opens the Full Disk Access pane for you to toggle Claude on, and relaunches Claude. You'll be asked for your macOS password once (for Homebrew + the symlinks) and your vault path once. Everything else is automatic. Audit what it does: [`scripts/install.sh`](scripts/install.sh).
+Installs Homebrew + Node 22.12+ if you don't already have them, adds the `/usr/local/bin` symlinks that Claude Desktop needs, merges obsidian-brain into your `claude_desktop_config.json`, opens the Full Disk Access pane for you to toggle Claude on, and relaunches Claude. You'll be asked for your macOS password once (for Homebrew + the symlinks) and your vault path once. Everything else is automatic. Audit what it does: [`scripts/install.sh`](scripts/install.sh).
 
 ### Manual install
 
-Requires Node 20+ and an Obsidian vault (or any folder of `.md` files — Obsidian itself is optional).
+Requires Node 22.12+ and an Obsidian vault (or any folder of `.md` files — Obsidian itself is optional).
 
 Wire obsidian-brain into your MCP client. Example for **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 

@@ -84,7 +84,7 @@ The stack trace at the bottom of that file is almost always the actual cause.
 rm -rf ~/.npm/_npx
 ```
 
-Then restart your MCP client. The next `npx` invocation does a fresh install, which triggers our `postinstall` hook to rebuild `better-sqlite3` against your current Node.
+Then restart your MCP client. The next `npx` invocation does a fresh install.
 
 **Fix.** Rebuild the native module under the same Node the client will use:
 

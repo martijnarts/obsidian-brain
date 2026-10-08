@@ -23,7 +23,7 @@ render_macros: false
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sweir1/obsidian-brain/main/scripts/install.sh)"
 ```
 
-Already have Node 20+? Drop this into Claude Desktop's config file at `~/Library/Application Support/Claude/claude_desktop_config.json` instead:
+Already have Node 22.12+? Drop this into Claude Desktop's config file at `~/Library/Application Support/Claude/claude_desktop_config.json` instead:
 
 ```json
 {
