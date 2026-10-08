@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createContext, type ServerContext } from './context.js';
+import { createContext, shareEmbedder, type ServerContext } from './context.js';
 import { allNodeIds } from './store/nodes.js';
 import { startWatcher, type WatcherHandle, type WatcherOptions } from './pipeline/watcher.js';
 import { registerTool } from './tools/register.js';
@@ -27,8 +27,9 @@ export type ToolRegistrar = (server: McpServer, ctx: ServerContext) => void;
 
 /**
  * Opens a context per vault. Each vault keeps its index in
- * `<dataDir>/<name>`. If one vault fails to open, the ones already open are
- * closed again before the error propagates.
+ * `<dataDir>/<name>`. All vaults share one embedder, so the model loads
+ * once. If one vault fails to open, the ones already open are closed again
+ * before the error propagates.
  */
 export async function openVaults(
   specs: VaultSpec[],
@@ -36,12 +37,16 @@ export async function openVaults(
   close: (ctx: ServerContext) => Promise<void>,
 ): Promise<Vault[]> {
   const vaults: Vault[] = [];
+  const shared = shareEmbedder();
   try {
     for (const spec of specs) {
-      const ctx = await createContext({
-        vaultPath: spec.vaultPath,
-        dataDir: join(dataDir, spec.name),
-      });
+      const ctx = await createContext(
+        {
+          vaultPath: spec.vaultPath,
+          dataDir: join(dataDir, spec.name),
+        },
+        shared,
+      );
       vaults.push({ name: spec.name, ctx, watcher: null });
     }
   } catch (err) {
@@ -51,7 +56,10 @@ export async function openVaults(
   return vaults;
 }
 
-/** Closes every vault's watcher and context. One failure does not stop the rest. */
+/**
+ * Closes every vault's watcher and context, then disposes the embedders
+ * the contexts share, once each. One failure does not stop the rest.
+ */
 export async function closeVaults(
   vaults: Vault[],
   close: (ctx: ServerContext) => Promise<void>,
@@ -63,6 +71,18 @@ export async function closeVaults(
     } catch (err) {
       logger.warn(`teardown error for vault "${vault.name}" (ignored): ${err}`, {
         vault: vault.name,
+        error: String(err),
+      });
+    }
+  }
+  const shared = new Set(
+    vaults.filter((v) => v.ctx.ownsEmbedder === false).map((v) => v.ctx.embedder),
+  );
+  for (const embedder of shared) {
+    try {
+      await embedder.dispose();
+    } catch (err) {
+      logger.warn(`could not dispose the shared embedder (ignored): ${err}`, {
         error: String(err),
       });
     }

@@ -166,7 +166,7 @@ export async function closeContext(ctx: ServerContext): Promise<void> {
     }),
   ]);
   debugLog('shutdown: pendingReindex drained or timed out');
-  if (ctx.embedderReady()) {
+  if (ctx.embedderReady() && ctx.ownsEmbedder !== false) {
     debugLog('shutdown: disposing embedder (ONNX runtime threads)');
     await ctx.embedder.dispose();
     debugLog('shutdown: embedder disposed');

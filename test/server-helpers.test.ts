@@ -125,6 +125,14 @@ describe('closeContext', () => {
     expect(f.close).toHaveBeenCalled();
   });
 
+  it('leaves a shared embedder to whoever shared it', async () => {
+    const f = fakeCtx({ embedderReady: true });
+    Object.assign(f.ctx, { ownsEmbedder: false });
+    await closeContext(f.ctx);
+    expect(f.dispose).not.toHaveBeenCalled();
+    expect(f.close).toHaveBeenCalled();
+  });
+
   it('leaves an embedder that never loaded alone', async () => {
     const f = fakeCtx({ embedderReady: false });
     await closeContext(f.ctx);
