@@ -42,6 +42,25 @@ interface Extractor {
     tolist(): number[][];
   }>;
   dispose(): Promise<void>;
+  tokenizer?: { model_max_length?: unknown };
+}
+
+/**
+ * How long the loaded model may sit unused before it is unloaded, from
+ * OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS. 0 or unset keeps it loaded.
+ */
+function readIdleUnloadMs(): number {
+  const raw = Number(process.env.OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+export interface TransformersEmbedderOptions {
+  /**
+   * Unload the model after this many milliseconds without an embed call,
+   * and load it again on the next one. 0 keeps it loaded. Defaults to
+   * OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS.
+   */
+  idleUnloadMs?: number;
 }
 
 /**
@@ -56,9 +75,28 @@ export class TransformersEmbedder implements EmbedderInterface {
   private readonly _model: string;
   private lastRun: Promise<void> = Promise.resolve();
   private _metadata: EmbedderMetadata | null = null;
+  private readonly idleUnloadMs: number;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Embed calls queued or running; the model is never unloaded under them. */
+  private pending = 0;
+  private _modelMaxLength: unknown = undefined;
 
-  constructor(model?: string) {
+  constructor(model?: string, opts: TransformersEmbedderOptions = {}) {
     this._model = model ?? process.env.EMBEDDING_MODEL ?? DEFAULT_MODEL;
+    this.idleUnloadMs = opts.idleUnloadMs ?? readIdleUnloadMs();
+  }
+
+  /**
+   * The tokenizer's `model_max_length`, recorded when the model loads, so
+   * it stays readable while the model is unloaded. Undefined before init.
+   */
+  get modelMaxLength(): unknown {
+    return this._modelMaxLength;
+  }
+
+  /** Whether the model is in memory right now. */
+  isLoaded(): boolean {
+    return this.extractor !== null;
   }
 
   /**
@@ -84,7 +122,7 @@ export class TransformersEmbedder implements EmbedderInterface {
 
   async init(): Promise<void> {
     try {
-      this.extractor = await this.loadPipelineWithCorruptCacheRecovery();
+      this.extractor = await this.load();
       // Probe output length so callers can validate the DB's vec0 dim before
       // any embeds are written. Space is a cheap input.
       const probe = await this.extractor(' ', { pooling: 'mean', normalize: true });
@@ -96,11 +134,56 @@ export class TransformersEmbedder implements EmbedderInterface {
         );
       }
       this._dim = vec.length;
+      this.scheduleIdleUnload();
     } catch (err) {
       // If it's already our error type (or a specific known internal error), rethrow as-is
       if (err instanceof EmbedderLoadError) throw err;
       throw classifyLoadError(this._model, err);
     }
+  }
+
+  private async load(): Promise<Extractor> {
+    const extractor = await this.loadPipelineWithCorruptCacheRecovery();
+    this._modelMaxLength = extractor.tokenizer?.model_max_length;
+    return extractor;
+  }
+
+  private scheduleIdleUnload(): void {
+    if (this.idleUnloadMs <= 0) return;
+    this.cancelIdleUnload();
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      void this.unloadIfIdle();
+    }, this.idleUnloadMs);
+    this.idleTimer.unref();
+  }
+
+  private cancelIdleUnload(): void {
+    if (this.idleTimer !== null) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  /**
+   * Runs in the embed queue, so it never overlaps an embed. An embed that
+   * arrives meanwhile raises `pending`, and the model stays.
+   */
+  private unloadIfIdle(): Promise<void> {
+    const run = this.lastRun.then(async () => {
+      if (this.pending > 0 || this.extractor === null) return;
+      const extractor = this.extractor;
+      this.extractor = null;
+      await extractor.dispose();
+      logger.info(`unloaded embedding model ${this._model} after ${this.idleUnloadMs} ms idle`, {
+        model: this._model,
+        idleUnloadMs: this.idleUnloadMs,
+      });
+    });
+    this.lastRun = run.catch((err: unknown) => {
+      logger.warn(`could not unload embedding model: ${String(err)}`, { model: this._model });
+    });
+    return this.lastRun;
   }
 
   /**
@@ -191,8 +274,9 @@ export class TransformersEmbedder implements EmbedderInterface {
   }
 
   async embed(text: string, taskType: 'document' | 'query' = 'document'): Promise<Float32Array> {
-    if (!this.extractor) throw new Error('Embedder not initialized. Call init() first.');
-    const extractor = this.extractor;
+    if (this._dim === null) throw new Error('Embedder not initialized. Call init() first.');
+    this.cancelIdleUnload();
+    this.pending++;
     // v1.7.5: prefix comes from resolved metadata (cache → seed → HF), not
     // a hardcoded family-pattern table. If setMetadata() wasn't called we
     // fall through to '' (treat as symmetric — degraded but doesn't crash).
@@ -205,22 +289,33 @@ export class TransformersEmbedder implements EmbedderInterface {
     // e.g. "Task: {text}\nQuery: {text}"); anything else is dropped.
     // `replaceAll` is required for multi-`{text}` templates.
     const prefixedText = prefix.includes('{text}') ? prefix.replaceAll('{text}', text) : prefix + text;
-    const run = this.lastRun.then(async () =>
-      extractor(prefixedText, {
+    const run = this.lastRun.then(async () => {
+      // Unloaded after an idle period: load it again first.
+      if (this.extractor === null) {
+        this.extractor = await this.load();
+        logger.info(`reloaded embedding model ${this._model}`, { model: this._model });
+      }
+      return this.extractor(prefixedText, {
         pooling: 'mean',
         normalize: true,
-      }),
-    );
+      });
+    });
     // Chain regardless of previous failure so one throw doesn't permanently wedge the queue.
     this.lastRun = run.then(
       () => undefined,
       () => undefined,
     );
-    const output = await run;
-    return new Float32Array(output.tolist()[0] ?? []);
+    try {
+      const output = await run;
+      return new Float32Array(output.tolist()[0] ?? []);
+    } finally {
+      this.pending--;
+      if (this.pending === 0) this.scheduleIdleUnload();
+    }
   }
 
   async dispose(): Promise<void> {
+    this.cancelIdleUnload();
     if (this.extractor) {
       await this.extractor.dispose();
       this.extractor = null;

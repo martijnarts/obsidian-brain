@@ -103,6 +103,16 @@ describe('getCapacity — transformers.js path', () => {
     expect(cap.advertisedMaxTokens).toBe(512);
     expect(cap.method).toBe('fallback');
   });
+
+  it('reads the limit recorded at load time while the model is unloaded', async () => {
+    // An idle-unloaded embedder has no pipeline, but keeps model_max_length.
+    const emb = Object.assign(new TransformersStub('Xenova/bge-large-en-v1.5', null), {
+      modelMaxLength: 8192,
+    });
+    const cap = await getCapacity(db, emb);
+    expect(cap.advertisedMaxTokens).toBe(8192);
+    expect(cap.method).toBe('tokenizer_config');
+  });
 });
 
 describe('getCapacity — Ollama path', () => {

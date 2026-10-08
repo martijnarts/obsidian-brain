@@ -71,6 +71,11 @@ interface TransformersPipeline {
 
 /** Minimal interface we need from TransformersEmbedder beyond base Embedder. */
 interface TransformersEmbedderLike extends Embedder {
+  /**
+   * `model_max_length` recorded at load time. Readable while the model is
+   * unloaded after an idle period.
+   */
+  readonly modelMaxLength?: unknown;
   /** The loaded pipeline (may be null before init). */
   readonly _pipeline?: TransformersPipeline;
   // Older builds expose the extractor field instead.
@@ -105,12 +110,10 @@ function modelHash(embedder: Embedder): string {
  * "no limit" sentinel).
  */
 function readTransformersModelMaxLength(embedder: TransformersEmbedderLike): number | null {
-  // The TransformersEmbedder stores the pipeline in `extractor`.
+  // The value recorded at load time comes first: the pipeline itself is
+  // null while the model is unloaded.
   const pipe = embedder.extractor ?? embedder._pipeline;
-  if (!pipe) return null;
-  const tok = pipe.tokenizer;
-  if (!tok) return null;
-  const raw = tok.model_max_length;
+  const raw = embedder.modelMaxLength ?? pipe?.tokenizer?.model_max_length;
   if (typeof raw !== 'number' || raw <= 0) return null;
   // transformers.js sometimes sets model_max_length to INT32_MAX / UINT32_MAX
   // as a "no limit" sentinel. Treat values above 1M as "not useful".
