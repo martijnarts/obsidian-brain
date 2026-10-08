@@ -5,7 +5,10 @@
 [![Node ≥ 22.12](https://img.shields.io/node/v/obsidian-brain.svg)](package.json)
 [![GitHub stars](https://img.shields.io/github/stars/sweir1/obsidian-brain.svg?style=social)](https://github.com/sweir1/obsidian-brain)
 
-A standalone Node MCP server that gives Claude (and any other MCP client) **semantic search + knowledge graph + vault editing** over an Obsidian vault. Runs as one local stdio process — no plugin, no HTTP bridge, no API key, nothing hosted. Your vault content never leaves your machine.
+A standalone Node MCP server that gives Claude (and any other MCP client) **semantic search + knowledge graph + vault editing** over your Obsidian vaults. One process serves one or more vaults, over stdio for a local client or over HTTP for a remote one. No plugin, no API key, nothing hosted. Your vault content never leaves your machine.
+
+> [!NOTE]
+> This is [Marts's fork](https://github.com/martijnarts/obsidian-brain) of [sweir1/obsidian-brain](https://github.com/sweir1/obsidian-brain). It adds several vaults per server, an HTTP transport, idle model unloading and 26 more tools. The fork is not published on npm: `npx obsidian-brain` installs the upstream release without these changes. Build the fork from source instead, as [Development](docs/development.md) describes.
 
 > 📖 **Full docs → [sweir1.github.io/obsidian-brain](https://sweir1.github.io/obsidian-brain/)**
 
@@ -14,7 +17,10 @@ A standalone Node MCP server that gives Claude (and any other MCP client) **sema
 ## Why obsidian-brain?
 
 - **Works without Obsidian running** — unlike Local REST API-based servers, obsidian-brain reads `.md` files directly from disk. Obsidian can be closed; your vault is just a folder.
-- **No Local REST API plugin required** — nothing to install inside Obsidian for the core experience.
+- **No Local REST API plugin required** — nothing to install inside Obsidian.
+- **Several vaults, one server** — `--vault personal=… --vault work=…`; every tool takes a `vault` argument, and each vault keeps its own index and graph.
+- **Local or remote** — stdio for a client that spawns the server, or `--transport http` for a long-running server behind an authenticating proxy.
+- **Light when idle** — one embedding model shared by every vault, unloaded after an idle period and loaded again on the next search.
 - **Chunk-level semantic search with RRF hybrid retrieval** — embeddings at markdown-heading granularity, fused with FTS5 BM25 via Reciprocal Rank Fusion. Finds the exact chunk, ranks on meaning.
 - **The only Obsidian MCP server with PageRank + Louvain + graph analytics** — ask for your vault's most influential notes, bridging notes, theme clusters. Nobody else ships this.
 - **Ollama provider for high-quality local embeddings** — switch to `qwen3-embedding:0.6b`, `nomic-embed-text`, `bge-m3`, etc. with one env var.
@@ -63,12 +69,18 @@ Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 
 ## What you get
 
-19 MCP tools grouped by intent. Every tool except `list_vaults` takes a `vault` argument naming one of the vaults you configured:
+42 MCP tools grouped by intent. Every tool except `list_vaults` takes a `vault` argument naming one of the vaults you configured:
 
-- **Find & read** — `search`, `list_notes`, `read_note`
-- **Understand the graph** — `find_connections`, `find_path_between`, `detect_themes`, `rank_notes`
-- **Write** — `create_note`, `edit_note`, `apply_edit_preview`, `link_notes`, `move_note`, `delete_note`
-- **Maintenance** — `reindex`, `index_status`, `list_vaults`
+- **Vaults** — `list_vaults`
+- **Find** — `search`, `list_notes`, `read_note`, `find_notes_by_name`, `grep_vault`, `query_notes`
+- **Files** — `read_notes`, `read_note_part`, `file_info`, `create_folder`, `delete_folder`, `list_attachments`, `create_attachment`
+- **Write** — `create_note`, `create_note_from_template`, `edit_note`, `apply_edit_preview`, `link_notes`, `move_note`, `delete_note`
+- **Properties** — `list_property_values`, `update_properties`
+- **Structure** — `vault_overview`, `list_tags`, `list_bookmarks`
+- **Tasks and blocks** — `list_tasks`, `set_task_status`, `ensure_block_id`
+- **Canvas** — `read_canvas`, `edit_canvas`
+- **Map the graph** — `find_connections`, `find_path_between`, `detect_themes`, `rank_notes`
+- **Maintenance** — `reindex`, `index_status`, `find_broken_links`, `find_orphaned_notes`, `search_and_replace`, `rename_tag`, `rename_heading`
 
 → Arguments, examples, and response shapes: [Tool reference](docs/tools.md)
 
@@ -78,7 +90,7 @@ Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
 flowchart LR
     Client["<b>MCP Client</b><br/>Claude Desktop · Claude Code<br/>Cursor · Jan · Windsurf · ..."]
 
-    subgraph OB ["obsidian-brain (Node process)"]
+    subgraph OB ["obsidian-brain (one Node process, every vault)"]
         direction TB
         SQL["<b>SQLite index</b><br/>nodes · edges<br/>FTS5 · vec0 embeddings"]
         Vault["<b>Vault on disk</b><br/>your .md files"]
@@ -86,12 +98,13 @@ flowchart LR
         SQL -.->|"writes"| Vault
     end
 
-    Client <-->|"stdio JSON-RPC"| OB
+    Client <-->|"stdio or HTTP JSON-RPC"| OB
 ```
 
-Retrieval and writes both go through a SQLite index: reads are microsecond-cheap, writes land on disk immediately and incrementally re-index the affected file. Embeddings are chunk-level (heading-aware recursive chunker preserving code + LaTeX blocks), and `search`'s default `hybrid` mode fuses chunk-level semantic rank with FTS5 BM25 via Reciprocal Rank Fusion.
+Each vault has its own SQLite index, graph and file watcher; the embedding model is shared. Retrieval and writes both go through the index: reads are microsecond-cheap, writes land on disk immediately and incrementally re-index the affected file. Embeddings are chunk-level (heading-aware recursive chunker preserving code + LaTeX blocks), and `search`'s default `hybrid` mode fuses chunk-level semantic rank with FTS5 BM25 via Reciprocal Rank Fusion.
 
-→ Deeper write-up — why stdio, why SQLite, why local embeddings: [Architecture](docs/architecture.md)
+→ Deeper write-up — why stdio, several vaults in one server, why SQLite, why local embeddings: [Architecture](docs/architecture.md)
+→ Flags for vaults, transport and listen address: [CLI](docs/cli.md#obsidian-brain-server-options)
 → Live watcher behaviour + debounces: [Live updates](docs/watching.md)
 → Scheduled reindex (macOS launchd / Linux systemd): [Scheduled indexing (macOS)](docs/launchd.md) · [(Linux)](docs/systemd.md)
 

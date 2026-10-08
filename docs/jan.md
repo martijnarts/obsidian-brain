@@ -68,24 +68,50 @@ Start a new chat in Jan and ask:
 
 > List my obsidian-brain tools.
 
-The assistant should respond naming all 19 tools:
+The assistant should respond naming all 42 tools:
 
+- `list_vaults`
 - `search`
-- `read_note`
 - `list_notes`
-- `find_connections`
-- `find_path_between`
-- `detect_themes`
-- `rank_notes`
+- `read_note`
+- `find_notes_by_name`
+- `grep_vault`
+- `query_notes`
+- `read_notes`
+- `read_note_part`
+- `file_info`
+- `create_folder`
+- `delete_folder`
+- `list_attachments`
+- `create_attachment`
 - `create_note`
+- `create_note_from_template`
 - `edit_note`
 - `apply_edit_preview`
 - `link_notes`
 - `move_note`
 - `delete_note`
+- `list_property_values`
+- `update_properties`
+- `vault_overview`
+- `list_tags`
+- `list_bookmarks`
+- `list_tasks`
+- `set_task_status`
+- `ensure_block_id`
+- `read_canvas`
+- `edit_canvas`
+- `find_connections`
+- `find_path_between`
+- `detect_themes`
+- `rank_notes`
 - `reindex`
 - `index_status`
-- `list_vaults`
+- `find_broken_links`
+- `find_orphaned_notes`
+- `search_and_replace`
+- `rename_tag`
+- `rename_heading`
 
 Alternatively, open the Jan MCP panel — it lists the tools once `tools/list` succeeds.
 

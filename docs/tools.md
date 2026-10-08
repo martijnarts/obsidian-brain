@@ -127,289 +127,6 @@ Filter notes by their metadata with a [JsonLogic](https://jsonlogic.com) express
 
 > *"Use `query_notes` to list every note tagged #book with a rating of 4 or more, newest first."*
 
-## Map the graph
-
-### `find_connections`
-
-N-hop link neighborhood around a note. Returns inbound + outbound links grouped by hop distance, optionally the full subgraph for visualization.
-
-<!-- GENERATED:tool:find_connections -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `name` | string | Starting note (path or fuzzy match). |
-| `depth` | number? | Number of hops to traverse. Default 1, max 3. |
-| `returnSubgraph` | boolean? | Return all edges in the neighborhood as a full subgraph instead of a flat list. |
-| `includeStubs` | boolean? | Default `false`. Set `true` to include broken-wikilink stub neighbours (`frontmatter._stub: true`). |
-<!-- /GENERATED:tool:find_connections -->
-
-Response is wrapped as `{data, context}` — `context.next_actions` suggests `detect_themes` when the neighbourhood is large (> 10) and `find_path_between` to the furthest neighbour. Clients that ignore `context` keep working.
-
-#### `find_connections` `context` envelope shape
-
-```jsonc
-{
-  "data": [ /* neighbours, or {nodes, edges} when returnSubgraph: true */ ],
-  "context": {
-    "state": {
-      "last_connections_root": "Epistemology.md",
-      "last_connections_count": 7
-    },
-    "next_actions": [
-      { "description": "Cluster this neighbourhood via detect_themes" },
-      { "description": "Trace path from Epistemology.md to <furthest>.md via find_path_between" }
-    ]
-  }
-}
-```
-
-- `context.state.last_connections_root` — the resolved-from path of the call (lets the client correlate follow-ups).
-- `context.state.last_connections_count` — neighbour count returned this call.
-- `context.next_actions[]` — list of single-sentence suggestions an LLM can route directly into the next tool call. Empty when no useful follow-up exists (zero neighbours, depth=1 on a single-edge note). Skipping `context` is always safe — `data` carries everything load-bearing.
-
-> *"Use `find_connections` to show everything within 2 hops of `Epistemology.md`."*
-
-### `find_path_between`
-
-Shortest link chain(s) between two notes. Optionally return their shared neighbors as well.
-
-<!-- GENERATED:tool:find_path_between -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `from` | string | Source note (path or fuzzy match). |
-| `to` | string | Target note (path or fuzzy match). |
-| `maxDepth` | number? | Maximum path length in hops. Default 3. |
-| `includeCommon` | boolean? | Also return notes that both `from` and `to` link to (shared neighbors). |
-| `includeStubs` | boolean? | Default `false`. Set `true` to include broken-wikilink stub nodes (`frontmatter._stub: true`) in the path search. |
-<!-- /GENERATED:tool:find_path_between -->
-
-> *"Use `find_path_between` to find how `Bayesian updating` connects to `Kelly criterion`."*
-
-### `detect_themes`
-
-Auto-detected topic clusters via [Louvain community detection](https://en.wikipedia.org/wiki/Louvain_method) over the backlink graph. Served from the community-detection cache; to recompute at a different resolution, call `reindex({resolution: X})` first.
-
-<!-- GENERATED:tool:detect_themes -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `themeId` | string? | Drill into a single cluster by its id or label. |
-| `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link targets (`frontmatter._stub: true`) in cluster membership. Older cached community data may still carry stub-dominated clusters until the next reindex regenerates the community table. |
-<!-- /GENERATED:tool:detect_themes -->
-
-Each cluster carries `staleMembersFiltered` — cached `nodeIds` that no longer exist on disk and were filtered on this read; a positive value triggers live regeneration of `summary` so the two fields stay consistent. If the vault's overall Louvain modularity is `< 0.3`, the response wraps as `{clusters, warning, modularity}` — the clusters aren't clearly separable and may not reflect meaningful themes.
-
-> *"Use `detect_themes` to surface the main themes across my vault."*
-
-### `rank_notes`
-
-Top notes by `influence` (PageRank over backlinks), `bridging` (betweenness centrality, normalized 0–1 so scores compare across vaults), or `both`.
-
-<!-- GENERATED:tool:rank_notes -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `metric` | `"influence"` \| `"bridging"` \| `"both"`? | Ranking metric. Default `"both"`. `"influence"` = PageRank; `"bridging"` = betweenness centrality. |
-| `limit` | number? | Max results to return. Default 20. |
-| `themeId` | string? | Restrict ranking to members of one theme cluster. |
-| `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link target stubs (`frontmatter._stub: true`) in the ranked set. With stubs in, popular link targets dominate eigenvector-style centrality even when they have no real content behind them. |
-| `minIncomingLinks` | number? = 2 | Minimum incoming links for influence ranking. Default 2. Pass 0 to see unfiltered PageRank. |
-<!-- /GENERATED:tool:rank_notes -->
-
-> *"Use `rank_notes` with `metric: 'influence'` to list the top 10 most-linked-to notes."*
-
-## Write
-
-### `create_note`
-
-Create a new note with frontmatter and auto-index it. `title:` is auto-injected from the filename unless you explicitly pass `frontmatter: { title: null }`.
-
-<!-- GENERATED:tool:create_note -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `title` | string | Note title. Used as the filename base and auto-injected into frontmatter. |
-| `content` | string | Markdown body (do not include frontmatter here). |
-| `directory` | string? | Vault-relative subdirectory to create the note in. |
-| `frontmatter` | object? | YAML frontmatter key/value map. `title` is auto-injected unless explicitly set. |
-<!-- /GENERATED:tool:create_note -->
-
-Creating a note that matches an existing `[[ForwardRef]]` stub automatically repoints the stub's inbound edges to the real note and deletes the stub.
-
-> *"Use `create_note` to create `Meetings/2026-04-21 standup.md` with tags `[meeting, standup]`."*
-
-### `create_note_from_template`
-
-Create a note from an Obsidian core Templates template. The template is looked up by name in the templates folder set in `.obsidian/templates.json` (default `Templates/`), or by vault-relative path. `{{title}}`, `{{date}}`, `{{time}}` and `{{date:FORMAT}}` / `{{time:FORMAT}}` are filled with moment-style tokens, defaulting to the `dateFormat` / `timeFormat` in that settings file (`YYYY-MM-DD`, `HH:mm`). `variables` fills other `{{key}}` placeholders. The note is written and indexed the same way as `create_note`, and the call fails if the note exists. Templater `<% %>` code is not run: it stays in the note as written, and the result says so. Placeholders nothing filled are listed in `unresolved`.
-
-<!-- GENERATED:tool:create_note_from_template -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `template` | string | Template name in the templates folder, or a vault-relative path. `.md` is optional. |
-| `title` | string | Note title. Used as the filename base and for `{{title}}`. |
-| `directory` | string? | Vault-relative subdirectory to create the note in. |
-| `variables` | object? | Extra `{{key}}` substitutions. |
-| `date` | string? | ISO date or date-time to use instead of now. |
-<!-- /GENERATED:tool:create_note_from_template -->
-
-> *"Use `create_note_from_template` with the `Meeting` template to create `Meetings/Kickoff` with `attendees: 'Ann, Bo'`."*
-
-### `edit_note`
-
-Modify an existing note. Six modes: `append`, `prepend`, `replace_window` (find-and-replace; optionally fuzzy), `patch_heading`, `patch_frontmatter`, `at_line`.
-
-<!-- GENERATED:tool:edit_note manual -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `name` | string | Path or fuzzy match. |
-| `mode` | one of the six | Required. |
-| `content` | string | New content (mode-dependent). |
-| `search` | string | For `replace_window`: the block of text to locate. |
-| `fuzzy` | boolean | For `replace_window`: tolerate whitespace + trailing punctuation drift. |
-| `heading` | string | Target heading (for `patch_heading`). |
-| `headingOp` | `"replace"` \| `"before"` \| `"after"` | For `patch_heading`. `replace` (default) replaces the section below the heading; `before` / `after` insert adjacent to the heading line. |
-| `scope` | `"section"` \| `"body"` | For `patch_heading replace`: `section` (default) consumes until the next same-or-higher heading or EOF; `body` stops at the first blank line. |
-| `headingIndex` | number | For `patch_heading` when the heading text appears more than once — 0-indexed top-to-bottom picker. Without it, multiple matches throw `MultipleMatchesError` listing each occurrence with line numbers. |
-| `line` / `lineOp` | | For `at_line`. |
-| `key` / `value` / `valueJson` | | For `patch_frontmatter`. Use `valueJson` from clients that stringify tool params (e.g. `valueJson: 'null'` to clear a key, `valueJson: 'true'` for a real boolean, `valueJson: '42'` for a number). |
-| `expectedContent` | string? | Guard for edits that replace text (`replace_window`, `patch_heading` with `headingOp: replace`, `at_line` with `lineOp: replace`): the text being replaced, as last read. If the note changed since, the edit fails, nothing is written, and the error shows the current text. Line endings and trailing whitespace are ignored. Not with `edits`. |
-<!-- /GENERATED:tool:edit_note -->
-
-`patch_heading` responses include `removedLen` so callers can detect greedy trailing-heading consumption.
-
-- `dryRun: true` → returns a unified diff + `previewId`; no file is mutated. Commit the preview with `apply_edit_preview({ previewId })`.
-- `edits: [...]` — bulk edit array applied atomically on a single file. All or nothing; error names the failing index if any edit fails.
-- `fuzzyThreshold: 0–1` on `replace_window` (default `0.7`). Higher = stricter match required.
-- `from_buffer: true` — on `replace_window` NoMatch, the proposed content is held in a buffer; retry via `from_buffer: true` retries with `fuzzy: true, fuzzyThreshold: 0.5`.
-
-> *"Use `edit_note` to append a 'Follow-ups' section to today's standup note."*
-
-### `apply_edit_preview`
-
-Commit an edit previewed via `edit_note({ dryRun: true })`.
-
-```
-apply_edit_preview({ previewId: "prev_..." })
-```
-
-<!-- GENERATED:tool:apply_edit_preview -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `previewId` | string | The previewId returned by `edit_note` with `dryRun: true`. |
-<!-- /GENERATED:tool:apply_edit_preview -->
-
-- Preview not found or expired (5 min TTL) → error; regenerate the preview.
-- Target file changed since preview was generated → error; regenerate the preview.
-
-
-### `link_notes`
-
-Add a wiki-link between two notes plus a "why this connects" context sentence placed where the link is inserted.
-
-<!-- GENERATED:tool:link_notes -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `source` | string | Source note to add the link from (path or fuzzy match). |
-| `target` | string | Target note to link to (path, title, or new wiki-link ref). |
-| `context` | string | One-sentence explanation of why these notes are connected. |
-| `dryRun` | boolean? | If true, return the line that would be appended without writing. |
-<!-- /GENERATED:tool:link_notes -->
-
-`dryRun: true` returns the line that would be appended without writing.
-
-> *"Use `link_notes` to link `Bayesian updating` to `Kelly criterion` with a note about risk-adjusted bets."*
-
-### `move_note`
-
-Rename or move a note. All inbound wiki-links (`[[old]]`, `[[old|alias]]`, `![[old]]`, `[[old#heading]]`, `[[old^block]]`) are rewritten in place across every note that linked to the old stem; graph edges stay intact.
-
-<!-- GENERATED:tool:move_note -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `source` | string | Current path or fuzzy match of the note to move. |
-| `destination` | string | New vault-relative path (including `.md`). `.md` is appended automatically if omitted. |
-| `dryRun` | boolean? | If true, report what would be rewritten without mutating any files. |
-<!-- /GENERATED:tool:move_note -->
-
-Response adds `linksRewritten: {files, occurrences}` counting the rewrites applied.
-
-`dryRun: true` reports what would be rewritten without mutating. Response on a real move includes `stubsPruned: N`.
-
-> *"Use `move_note` with `source: 'Inbox/thought.md'` and `destination: 'Areas/Ideas/thought.md'`."*
-
-### `delete_note`
-
-Delete a note. Requires `confirm: true` as a Zod-level guard.
-
-<!-- GENERATED:tool:delete_note -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `name` | string | Path or fuzzy match of the note to delete. |
-| `confirm` | true | Must literally be `true` to execute. Guards against accidental deletion. |
-| `dryRun` | boolean? | If true, report what would be deleted without removing any files. |
-<!-- /GENERATED:tool:delete_note -->
-
-When the delete removed inbound edges, the response is wrapped in a `{data, context: {next_actions}}` envelope suggesting `rank_notes({metric: 'influence', minIncomingLinks: 0})` as a follow-up to surface newly orphaned notes.
-
-`dryRun: true` reports what would be deleted. Real deletes surface `deletedFromIndex.stubsPruned: N` when the deleted note's orphan-stub targets were cleaned up.
-
-> *"Use `delete_note` with `confirm: true` to delete `Inbox/obsolete.md`."*
-
-## Canvas
-
-### `read_canvas`
-
-Read a `.canvas` file (JSON Canvas 1.0) and return its nodes and edges as stored, including fields this server does not model. An empty file reads as an empty canvas.
-
-<!-- GENERATED:tool:read_canvas -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `path` | string | Vault-relative path of the `.canvas` file. The extension is optional. |
-<!-- /GENERATED:tool:read_canvas -->
-
-> *"Use `read_canvas` to show me what is on `Projects/Roadmap.canvas`."*
-
-### `edit_canvas`
-
-Make one change to a canvas per call. `add_node` adds a `text`, `file`, `link` or `group` node; without `x`/`y` it goes right of the right-most node, at 400×200 unless sized, and a missing canvas is created. `update_node` changes only the fields passed, and `null` removes `color`, `label` or `subpath`. `delete_node` also removes the node's edges. `connect` adds an edge between two existing nodes, and `disconnect` removes one by id. Ids are 16 hex characters, as Obsidian makes them. Every other field of existing nodes and edges is kept. A `file` node whose target is missing gets a warning, not an error. The file is written atomically in Obsidian's layout: tab-indented, one node or edge per line.
-
-<!-- GENERATED:tool:edit_canvas -->
-| Arg | Type | Description |
-|---|---|---|
-| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `path` | string | Vault-relative path of the `.canvas` file. The extension is optional. |
-| `operation` | `"add_node"` \| `"update_node"` \| `"delete_node"` \| `"connect"` \| `"disconnect"` |  |
-| `nodeId` | string? | Node to change (`update_node`, `delete_node`). |
-| `type` | `"text"` \| `"file"` \| `"link"` \| `"group"`? | Node type (`add_node`). |
-| `text` | string? | Markdown content of a `text` node. |
-| `file` | string? | Vault-relative file a `file` node shows. |
-| `subpath` | string \| null? | Heading or block of a `file` node, e.g. `#Heading`. `null` removes it. |
-| `url` | string? | URL of a `link` node. |
-| `label` | string \| null? | Label of a `group` node or an edge. `null` removes it. |
-| `color` | string \| null? | Preset `"1"`-`"6"` or hex like `"#ff0000"`. `null` removes it. |
-| `x` | number? |  |
-| `y` | number? |  |
-| `width` | number? | Default 400. |
-| `height` | number? | Default 200. |
-| `fromNode` | string? | Edge start node id (`connect`). |
-| `toNode` | string? | Edge end node id (`connect`). |
-| `fromSide` | `"top"` \| `"right"` \| `"bottom"` \| `"left"`? |  |
-| `toSide` | `"top"` \| `"right"` \| `"bottom"` \| `"left"`? |  |
-| `fromEnd` | `"none"` \| `"arrow"`? | Default `none`. |
-| `toEnd` | `"none"` \| `"arrow"`? | Default `arrow`. |
-| `edgeId` | string? | Edge to remove (`disconnect`). |
-<!-- /GENERATED:tool:edit_canvas -->
-
-> *"Use `edit_canvas` to add a text node 'Open questions' to `Projects/Roadmap.canvas` and connect it to the `Launch` node."*
-
 ## Files
 
 These tools work on vault files directly: reading notes in batches or in parts, inspecting any path, managing folders and attachments.
@@ -520,6 +237,226 @@ Create a binary file from base64 content, with any missing parent folders. The d
 
 > *"Use `create_attachment` to save this PNG as `assets/diagram.png`."*
 
+## Write
+
+### `create_note`
+
+Create a new note with frontmatter and auto-index it. `title:` is auto-injected from the filename unless you explicitly pass `frontmatter: { title: null }`.
+
+<!-- GENERATED:tool:create_note -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `title` | string | Note title. Used as the filename base and auto-injected into frontmatter. |
+| `content` | string | Markdown body (do not include frontmatter here). |
+| `directory` | string? | Vault-relative subdirectory to create the note in. |
+| `frontmatter` | object? | YAML frontmatter key/value map. `title` is auto-injected unless explicitly set. |
+<!-- /GENERATED:tool:create_note -->
+
+Creating a note that matches an existing `[[ForwardRef]]` stub automatically repoints the stub's inbound edges to the real note and deletes the stub.
+
+> *"Use `create_note` to create `Meetings/2026-04-21 standup.md` with tags `[meeting, standup]`."*
+
+### `create_note_from_template`
+
+Create a note from an Obsidian core Templates template. The template is looked up by name in the templates folder set in `.obsidian/templates.json` (default `Templates/`), or by vault-relative path. `{{title}}`, `{{date}}`, `{{time}}` and `{{date:FORMAT}}` / `{{time:FORMAT}}` are filled with moment-style tokens, defaulting to the `dateFormat` / `timeFormat` in that settings file (`YYYY-MM-DD`, `HH:mm`). `variables` fills other `{{key}}` placeholders. The note is written and indexed the same way as `create_note`, and the call fails if the note exists. Templater `<% %>` code is not run: it stays in the note as written, and the result says so. Placeholders nothing filled are listed in `unresolved`.
+
+<!-- GENERATED:tool:create_note_from_template -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `template` | string | Template name in the templates folder, or a vault-relative path. `.md` is optional. |
+| `title` | string | Note title. Used as the filename base and for `{{title}}`. |
+| `directory` | string? | Vault-relative subdirectory to create the note in. |
+| `variables` | object? | Extra `{{key}}` substitutions. |
+| `date` | string? | ISO date or date-time to use instead of now. |
+<!-- /GENERATED:tool:create_note_from_template -->
+
+> *"Use `create_note_from_template` with the `Meeting` template to create `Meetings/Kickoff` with `attendees: 'Ann, Bo'`."*
+
+### `edit_note`
+
+Modify an existing note. Six modes: `append`, `prepend`, `replace_window` (find-and-replace; optionally fuzzy), `patch_heading`, `patch_frontmatter`, `at_line`.
+
+<!-- GENERATED:tool:edit_note manual -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match. |
+| `mode` | one of the six | Required. |
+| `content` | string | New content (mode-dependent). |
+| `search` | string | For `replace_window`: the block of text to locate. |
+| `fuzzy` | boolean | For `replace_window`: tolerate whitespace + trailing punctuation drift. |
+| `heading` | string | Target heading (for `patch_heading`). |
+| `headingOp` | `"replace"` \| `"before"` \| `"after"` | For `patch_heading`. `replace` (default) replaces the section below the heading; `before` / `after` insert adjacent to the heading line. |
+| `scope` | `"section"` \| `"body"` | For `patch_heading replace`: `section` (default) consumes until the next same-or-higher heading or EOF; `body` stops at the first blank line. |
+| `headingIndex` | number | For `patch_heading` when the heading text appears more than once — 0-indexed top-to-bottom picker. Without it, multiple matches throw `MultipleMatchesError` listing each occurrence with line numbers. |
+| `line` / `lineOp` | | For `at_line`. |
+| `key` / `value` / `valueJson` | | For `patch_frontmatter`. Use `valueJson` from clients that stringify tool params (e.g. `valueJson: 'null'` to clear a key, `valueJson: 'true'` for a real boolean, `valueJson: '42'` for a number). |
+| `expectedContent` | string? | Guard for edits that replace text (`replace_window`, `patch_heading` with `headingOp: replace`, `at_line` with `lineOp: replace`): the text being replaced, as last read. If the note changed since, the edit fails, nothing is written, and the error shows the current text. Line endings and trailing whitespace are ignored. Not with `edits`. |
+<!-- /GENERATED:tool:edit_note -->
+
+`patch_heading` responses include `removedLen` so callers can detect greedy trailing-heading consumption.
+
+- `dryRun: true` → returns a unified diff + `previewId`; no file is mutated. Commit the preview with `apply_edit_preview({ previewId })`.
+- `edits: [...]` — bulk edit array applied atomically on a single file. All or nothing; error names the failing index if any edit fails.
+- `fuzzyThreshold: 0–1` on `replace_window` (default `0.7`). Higher = stricter match required.
+- `from_buffer: true` — on `replace_window` NoMatch, the proposed content is held in a buffer; retry via `from_buffer: true` retries with `fuzzy: true, fuzzyThreshold: 0.5`.
+
+> *"Use `edit_note` to append a 'Follow-ups' section to today's standup note."*
+
+### `apply_edit_preview`
+
+Commit an edit previewed via `edit_note({ dryRun: true })`.
+
+```
+apply_edit_preview({ previewId: "prev_..." })
+```
+
+<!-- GENERATED:tool:apply_edit_preview -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `previewId` | string | The previewId returned by `edit_note` with `dryRun: true`. |
+<!-- /GENERATED:tool:apply_edit_preview -->
+
+- Preview not found or expired (5 min TTL) → error; regenerate the preview.
+- Target file changed since preview was generated → error; regenerate the preview.
+
+### `link_notes`
+
+Add a wiki-link between two notes plus a "why this connects" context sentence placed where the link is inserted.
+
+<!-- GENERATED:tool:link_notes -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `source` | string | Source note to add the link from (path or fuzzy match). |
+| `target` | string | Target note to link to (path, title, or new wiki-link ref). |
+| `context` | string | One-sentence explanation of why these notes are connected. |
+| `dryRun` | boolean? | If true, return the line that would be appended without writing. |
+<!-- /GENERATED:tool:link_notes -->
+
+`dryRun: true` returns the line that would be appended without writing.
+
+> *"Use `link_notes` to link `Bayesian updating` to `Kelly criterion` with a note about risk-adjusted bets."*
+
+### `move_note`
+
+Rename or move a note. All inbound wiki-links (`[[old]]`, `[[old|alias]]`, `![[old]]`, `[[old#heading]]`, `[[old^block]]`) are rewritten in place across every note that linked to the old stem; graph edges stay intact.
+
+<!-- GENERATED:tool:move_note -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `source` | string | Current path or fuzzy match of the note to move. |
+| `destination` | string | New vault-relative path (including `.md`). `.md` is appended automatically if omitted. |
+| `dryRun` | boolean? | If true, report what would be rewritten without mutating any files. |
+<!-- /GENERATED:tool:move_note -->
+
+Response adds `linksRewritten: {files, occurrences}` counting the rewrites applied.
+
+`dryRun: true` reports what would be rewritten without mutating. Response on a real move includes `stubsPruned: N`.
+
+> *"Use `move_note` with `source: 'Inbox/thought.md'` and `destination: 'Areas/Ideas/thought.md'`."*
+
+### `delete_note`
+
+Delete a note. Requires `confirm: true` as a Zod-level guard.
+
+<!-- GENERATED:tool:delete_note -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match of the note to delete. |
+| `confirm` | true | Must literally be `true` to execute. Guards against accidental deletion. |
+| `dryRun` | boolean? | If true, report what would be deleted without removing any files. |
+<!-- /GENERATED:tool:delete_note -->
+
+When the delete removed inbound edges, the response is wrapped in a `{data, context: {next_actions}}` envelope suggesting `rank_notes({metric: 'influence', minIncomingLinks: 0})` as a follow-up to surface newly orphaned notes.
+
+`dryRun: true` reports what would be deleted. Real deletes surface `deletedFromIndex.stubsPruned: N` when the deleted note's orphan-stub targets were cleaned up.
+
+> *"Use `delete_note` with `confirm: true` to delete `Inbox/obsolete.md`."*
+
+## Properties
+
+### `list_property_values`
+
+The distinct values of one frontmatter property across notes, with how often each occurs, ordered by count. Each element of a list value counts separately, and a number stays distinct from the same text as a string. `notesWithKey` tells how many notes have the key at all.
+
+<!-- GENERATED:tool:list_property_values -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `key` | string | Frontmatter key, e.g. `status`. |
+| `folder` | string? | Only notes under this folder. |
+| `limit` | number? | Max distinct values to return. Default 100. |
+<!-- /GENERATED:tool:list_property_values -->
+
+> *"Use `list_property_values` for `status` under `Projects/` to see which statuses I use."*
+
+### `update_properties`
+
+Set and remove several frontmatter properties of one note in a single atomic write. Creates the frontmatter block when the note has none and drops it when the last key goes. The body and keys not named stay as they are; the YAML is re-serialised the same way as `edit_note`'s `patch_frontmatter`. A key named in both `set` and `remove` is set. `dryRun: true` returns the new frontmatter without writing.
+
+<!-- GENERATED:tool:update_properties -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `name` | string | Path or fuzzy match of the note. |
+| `set` | object? | Keys to write, with their values. A `null` value removes the key. |
+| `remove` | array? | Keys to remove. Absent keys are skipped. |
+| `dryRun` | boolean? | Return the new frontmatter without writing. |
+<!-- /GENERATED:tool:update_properties -->
+
+> *"Use `update_properties` on 'Q4 planning' to set `status: done` and remove `due`."*
+
+## Structure
+
+### `vault_overview`
+
+One-call orientation for a vault: note count, attachment count (non-Markdown files outside hidden folders), notes per top-level folder (`(root)` for notes at the top), the most used tags with note counts, and the most recently modified notes with their index mtime. Use `list_tags` or `list_notes` with `sortBy: "mtime"` for more than the snapshot.
+
+<!-- GENERATED:tool:vault_overview -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `topTags` | number? | Tags to include. Default 15. |
+| `recent` | number? | Recently modified notes to include. Default 10. |
+<!-- /GENERATED:tool:vault_overview -->
+
+> *"Use `vault_overview` to get a quick picture of my vault before we start."*
+
+### `list_tags`
+
+Every tag with the number of notes that carry it. Reads frontmatter `tags` and `tag` (a list or a comma-separated string, with or without `#`) and inline `#tags` in the body. By default a note tagged `a/b` also counts toward `a`; pass `includeParents: false` to count each nested tag only under its own name.
+
+<!-- GENERATED:tool:list_tags -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `sort` | `"count"` \| `"name"`? | Default `count` (descending). `name` sorts alphabetically. |
+| `limit` | number? | Max tags to return. Default 100. |
+| `prefix` | string? | Only tags starting with this text, e.g. `project/`. |
+| `includeParents` | boolean? | Default `true`: a note tagged `a/b` also counts toward `a`. |
+<!-- /GENERATED:tool:list_tags -->
+
+> *"Use `list_tags` with `prefix: 'project/'` to show which project tags I use most."*
+
+### `list_bookmarks`
+
+The bookmarks of the Obsidian core Bookmarks plugin, read from `.obsidian/bookmarks.json`, as a tree of groups, files, folders, searches, headings and blocks. Returns an empty list with a `note` when the file is absent or not valid. A `types` filter without `group` flattens group contents to the top level.
+
+<!-- GENERATED:tool:list_bookmarks -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `types` | array? | Only these bookmark types. Without `group`, group contents are flattened. |
+<!-- /GENERATED:tool:list_bookmarks -->
+
+> *"Use `list_bookmarks` to show the notes I bookmarked."*
+
 ## Tasks
 
 ### `list_tasks`
@@ -574,83 +511,145 @@ Return the `^block-id` of a block, adding one when the block has none, with a re
 
 > *"Use `ensure_block_id` on line 12 of `Meetings/Kickoff` and give me a link to that paragraph."*
 
-## Structure
+## Canvas
 
-### `vault_overview`
+### `read_canvas`
 
-One-call orientation for a vault: note count, attachment count (non-Markdown files outside hidden folders), notes per top-level folder (`(root)` for notes at the top), the most used tags with note counts, and the most recently modified notes with their index mtime. Use `list_tags` or `list_notes` with `sortBy: "mtime"` for more than the snapshot.
+Read a `.canvas` file (JSON Canvas 1.0) and return its nodes and edges as stored, including fields this server does not model. An empty file reads as an empty canvas.
 
-<!-- GENERATED:tool:vault_overview -->
+<!-- GENERATED:tool:read_canvas -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `topTags` | number? | Tags to include. Default 15. |
-| `recent` | number? | Recently modified notes to include. Default 10. |
-<!-- /GENERATED:tool:vault_overview -->
+| `path` | string | Vault-relative path of the `.canvas` file. The extension is optional. |
+<!-- /GENERATED:tool:read_canvas -->
 
-> *"Use `vault_overview` to get a quick picture of my vault before we start."*
+> *"Use `read_canvas` to show me what is on `Projects/Roadmap.canvas`."*
 
-### `list_tags`
+### `edit_canvas`
 
-Every tag with the number of notes that carry it. Reads frontmatter `tags` and `tag` (a list or a comma-separated string, with or without `#`) and inline `#tags` in the body. By default a note tagged `a/b` also counts toward `a`; pass `includeParents: false` to count each nested tag only under its own name.
+Make one change to a canvas per call. `add_node` adds a `text`, `file`, `link` or `group` node; without `x`/`y` it goes right of the right-most node, at 400×200 unless sized, and a missing canvas is created. `update_node` changes only the fields passed, and `null` removes `color`, `label` or `subpath`. `delete_node` also removes the node's edges. `connect` adds an edge between two existing nodes, and `disconnect` removes one by id. Ids are 16 hex characters, as Obsidian makes them. Every other field of existing nodes and edges is kept. A `file` node whose target is missing gets a warning, not an error. The file is written atomically in Obsidian's layout: tab-indented, one node or edge per line.
 
-<!-- GENERATED:tool:list_tags -->
+<!-- GENERATED:tool:edit_canvas -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `sort` | `"count"` \| `"name"`? | Default `count` (descending). `name` sorts alphabetically. |
-| `limit` | number? | Max tags to return. Default 100. |
-| `prefix` | string? | Only tags starting with this text, e.g. `project/`. |
-| `includeParents` | boolean? | Default `true`: a note tagged `a/b` also counts toward `a`. |
-<!-- /GENERATED:tool:list_tags -->
+| `path` | string | Vault-relative path of the `.canvas` file. The extension is optional. |
+| `operation` | `"add_node"` \| `"update_node"` \| `"delete_node"` \| `"connect"` \| `"disconnect"` |  |
+| `nodeId` | string? | Node to change (`update_node`, `delete_node`). |
+| `type` | `"text"` \| `"file"` \| `"link"` \| `"group"`? | Node type (`add_node`). |
+| `text` | string? | Markdown content of a `text` node. |
+| `file` | string? | Vault-relative file a `file` node shows. |
+| `subpath` | string \| null? | Heading or block of a `file` node, e.g. `#Heading`. `null` removes it. |
+| `url` | string? | URL of a `link` node. |
+| `label` | string \| null? | Label of a `group` node or an edge. `null` removes it. |
+| `color` | string \| null? | Preset `"1"`-`"6"` or hex like `"#ff0000"`. `null` removes it. |
+| `x` | number? |  |
+| `y` | number? |  |
+| `width` | number? | Default 400. |
+| `height` | number? | Default 200. |
+| `fromNode` | string? | Edge start node id (`connect`). |
+| `toNode` | string? | Edge end node id (`connect`). |
+| `fromSide` | `"top"` \| `"right"` \| `"bottom"` \| `"left"`? |  |
+| `toSide` | `"top"` \| `"right"` \| `"bottom"` \| `"left"`? |  |
+| `fromEnd` | `"none"` \| `"arrow"`? | Default `none`. |
+| `toEnd` | `"none"` \| `"arrow"`? | Default `arrow`. |
+| `edgeId` | string? | Edge to remove (`disconnect`). |
+<!-- /GENERATED:tool:edit_canvas -->
 
-> *"Use `list_tags` with `prefix: 'project/'` to show which project tags I use most."*
+> *"Use `edit_canvas` to add a text node 'Open questions' to `Projects/Roadmap.canvas` and connect it to the `Launch` node."*
 
-### `list_bookmarks`
+## Map the graph
 
-The bookmarks of the Obsidian core Bookmarks plugin, read from `.obsidian/bookmarks.json`, as a tree of groups, files, folders, searches, headings and blocks. Returns an empty list with a `note` when the file is absent or not valid. A `types` filter without `group` flattens group contents to the top level.
+### `find_connections`
 
-<!-- GENERATED:tool:list_bookmarks -->
+N-hop link neighborhood around a note. Returns inbound + outbound links grouped by hop distance, optionally the full subgraph for visualization.
+
+<!-- GENERATED:tool:find_connections -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `types` | array? | Only these bookmark types. Without `group`, group contents are flattened. |
-<!-- /GENERATED:tool:list_bookmarks -->
+| `name` | string | Starting note (path or fuzzy match). |
+| `depth` | number? | Number of hops to traverse. Default 1, max 3. |
+| `returnSubgraph` | boolean? | Return all edges in the neighborhood as a full subgraph instead of a flat list. |
+| `includeStubs` | boolean? | Default `false`. Set `true` to include broken-wikilink stub neighbours (`frontmatter._stub: true`). |
+<!-- /GENERATED:tool:find_connections -->
 
-> *"Use `list_bookmarks` to show the notes I bookmarked."*
+Response is wrapped as `{data, context}` — `context.next_actions` suggests `detect_themes` when the neighbourhood is large (> 10) and `find_path_between` to the furthest neighbour. Clients that ignore `context` keep working.
 
-## Properties
+#### `find_connections` `context` envelope shape
 
-### `list_property_values`
+```jsonc
+{
+  "data": [ /* neighbours, or {nodes, edges} when returnSubgraph: true */ ],
+  "context": {
+    "state": {
+      "last_connections_root": "Epistemology.md",
+      "last_connections_count": 7
+    },
+    "next_actions": [
+      { "description": "Cluster this neighbourhood via detect_themes" },
+      { "description": "Trace path from Epistemology.md to <furthest>.md via find_path_between" }
+    ]
+  }
+}
+```
 
-The distinct values of one frontmatter property across notes, with how often each occurs, ordered by count. Each element of a list value counts separately, and a number stays distinct from the same text as a string. `notesWithKey` tells how many notes have the key at all.
+- `context.state.last_connections_root` — the resolved-from path of the call (lets the client correlate follow-ups).
+- `context.state.last_connections_count` — neighbour count returned this call.
+- `context.next_actions[]` — list of single-sentence suggestions an LLM can route directly into the next tool call. Empty when no useful follow-up exists (zero neighbours, depth=1 on a single-edge note). Skipping `context` is always safe — `data` carries everything load-bearing.
 
-<!-- GENERATED:tool:list_property_values -->
+> *"Use `find_connections` to show everything within 2 hops of `Epistemology.md`."*
+
+### `find_path_between`
+
+Shortest link chain(s) between two notes. Optionally return their shared neighbors as well.
+
+<!-- GENERATED:tool:find_path_between -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `key` | string | Frontmatter key, e.g. `status`. |
-| `folder` | string? | Only notes under this folder. |
-| `limit` | number? | Max distinct values to return. Default 100. |
-<!-- /GENERATED:tool:list_property_values -->
+| `from` | string | Source note (path or fuzzy match). |
+| `to` | string | Target note (path or fuzzy match). |
+| `maxDepth` | number? | Maximum path length in hops. Default 3. |
+| `includeCommon` | boolean? | Also return notes that both `from` and `to` link to (shared neighbors). |
+| `includeStubs` | boolean? | Default `false`. Set `true` to include broken-wikilink stub nodes (`frontmatter._stub: true`) in the path search. |
+<!-- /GENERATED:tool:find_path_between -->
 
-> *"Use `list_property_values` for `status` under `Projects/` to see which statuses I use."*
+> *"Use `find_path_between` to find how `Bayesian updating` connects to `Kelly criterion`."*
 
-### `update_properties`
+### `detect_themes`
 
-Set and remove several frontmatter properties of one note in a single atomic write. Creates the frontmatter block when the note has none and drops it when the last key goes. The body and keys not named stay as they are; the YAML is re-serialised the same way as `edit_note`'s `patch_frontmatter`. A key named in both `set` and `remove` is set. `dryRun: true` returns the new frontmatter without writing.
+Auto-detected topic clusters via [Louvain community detection](https://en.wikipedia.org/wiki/Louvain_method) over the backlink graph. Served from the community-detection cache; to recompute at a different resolution, call `reindex({resolution: X})` first.
 
-<!-- GENERATED:tool:update_properties -->
+<!-- GENERATED:tool:detect_themes -->
 | Arg | Type | Description |
 |---|---|---|
 | `vault` | string | The vault to work in. `list_vaults` describes each vault. |
-| `name` | string | Path or fuzzy match of the note. |
-| `set` | object? | Keys to write, with their values. A `null` value removes the key. |
-| `remove` | array? | Keys to remove. Absent keys are skipped. |
-| `dryRun` | boolean? | Return the new frontmatter without writing. |
-<!-- /GENERATED:tool:update_properties -->
+| `themeId` | string? | Drill into a single cluster by its id or label. |
+| `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link targets (`frontmatter._stub: true`) in cluster membership. Older cached community data may still carry stub-dominated clusters until the next reindex regenerates the community table. |
+<!-- /GENERATED:tool:detect_themes -->
 
-> *"Use `update_properties` on 'Q4 planning' to set `status: done` and remove `due`."*
+Each cluster carries `staleMembersFiltered` — cached `nodeIds` that no longer exist on disk and were filtered on this read; a positive value triggers live regeneration of `summary` so the two fields stay consistent. If the vault's overall Louvain modularity is `< 0.3`, the response wraps as `{clusters, warning, modularity}` — the clusters aren't clearly separable and may not reflect meaningful themes.
+
+> *"Use `detect_themes` to surface the main themes across my vault."*
+
+### `rank_notes`
+
+Top notes by `influence` (PageRank over backlinks), `bridging` (betweenness centrality, normalized 0–1 so scores compare across vaults), or `both`.
+
+<!-- GENERATED:tool:rank_notes -->
+| Arg | Type | Description |
+|---|---|---|
+| `vault` | string | The vault to work in. `list_vaults` describes each vault. |
+| `metric` | `"influence"` \| `"bridging"` \| `"both"`? | Ranking metric. Default `"both"`. `"influence"` = PageRank; `"bridging"` = betweenness centrality. |
+| `limit` | number? | Max results to return. Default 20. |
+| `themeId` | string? | Restrict ranking to members of one theme cluster. |
+| `includeStubs` | boolean? = false | Default `false`. Set `true` to include unresolved wiki-link target stubs (`frontmatter._stub: true`) in the ranked set. With stubs in, popular link targets dominate eigenvector-style centrality even when they have no real content behind them. |
+| `minIncomingLinks` | number? = 2 | Minimum incoming links for influence ranking. Default 2. Pass 0 to see unfiltered PageRank. |
+<!-- /GENERATED:tool:rank_notes -->
+
+> *"Use `rank_notes` with `metric: 'influence'` to list the top 10 most-linked-to notes."*
 
 ## Maintenance
 
