@@ -10,7 +10,7 @@ You only need this path if you want to modify the server. Normal users install f
 ## Setup
 
 ```bash
-git clone https://github.com/sweir1/obsidian-brain.git
+git clone https://github.com/martijnarts/obsidian-brain.git
 cd obsidian-brain
 npm install
 npm run build
