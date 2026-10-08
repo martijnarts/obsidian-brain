@@ -56,7 +56,6 @@ function buildCtx(
     writer: undefined as unknown as ServerContext['writer'],
     pipeline: undefined as unknown as ServerContext['pipeline'],
     config: { vaultPath: '/fake/vault' } as unknown as ServerContext['config'],
-    obsidian: undefined as unknown as ServerContext['obsidian'],
     ensureEmbedderReady: async () => {},
     enqueueBackgroundReindex: () => {},
   } as unknown as ServerContext;

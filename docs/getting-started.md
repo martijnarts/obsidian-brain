@@ -67,7 +67,6 @@ This table covers the knobs typical users need. For the full reference (includin
 ## Next steps
 
 - Browse the [tool reference](tools.md) — 19 tools grouped by intent.
-- Install the optional [companion plugin](plugin.md) to unlock `active_note`, `dataview_query`, and `base_query`.
 - Read [Architecture](architecture.md) for *why* stdio, SQLite, and local embeddings.
 - See [Configuration](configuration.md) for the full environment-variable reference.
 - See [Models](models.md) for the preset table, MTEB rankings, license catalogue, and BYOM recipes.

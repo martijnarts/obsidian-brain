@@ -10,7 +10,7 @@ import { join } from 'node:path';
  * Allowed: CHANGELOG (the version history), roadmap (forward-looking),
  * migration-aaronsb.md (cross-references a different project's versions).
  *
- * External dependency contracts ("Obsidian ≥ 1.10.0", "plugin v0.2.0+",
+ * External dependency contracts (such as
  * "Node ≥ 20") stay — those ARE the contract users need to satisfy. The
  * regex below specifically matches *temporal* version refs ("since/in/as of
  * vX.Y.Z"), not contract refs.
@@ -73,12 +73,9 @@ describe('no obsidian-brain version refs in user-facing source strings', () => {
   // lookbehind excludes word-chars and hyphens immediately before `v`.
   const SRC_VERSION_RE = /(?<![\w-])v\d+\.\d+(?:\.\d+)?\b/g;
 
-  // Files where vX.Y.Z legitimately refers to a different package (companion
-  // plugin compat, dataview plugin compat) or to internal SQL DDL comments
+  // Files where vX.Y.Z legitimately refers to internal SQL DDL comments
   // that never reach user-facing output.
   const SRC_ALLOWLIST = new Set([
-    'src/obsidian/client.ts',       // companion-plugin / dataview-plugin compat refs
-    'src/tools/dataview-query.ts',  // dataview-plugin v0.2.0+ compat in tool description
     'src/store/db.ts',              // internal SQL DDL comments inside CREATE TABLE strings
   ]);
 

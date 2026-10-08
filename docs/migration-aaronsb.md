@@ -19,12 +19,12 @@ If you were using [`aaronsb/obsidian-mcp-plugin`](https://github.com/aaronsb/obs
 
 ## Feature equivalents
 
-Three features live inside a running Obsidian process; if you want those, install the optional [companion plugin](plugin.md):
+How aaronsb's Obsidian-process features map to obsidian-brain:
 
 | aaronsb feature | obsidian-brain equivalent |
 |---|---|
-| Active editor / cursor awareness | `active_note` (via companion plugin) |
-| Dataview DQL queries | `dataview_query` (via companion plugin + Dataview community plugin) |
-| Obsidian Bases queries | `base_query` (via companion plugin + core Bases plugin) |
+| Active editor / cursor awareness | No equivalent |
+| Dataview DQL queries | `query_notes` |
+| Obsidian Bases queries | No equivalent |
 
-Inline Dataview `key:: value` fields are parsed into searchable frontmatter with or without the plugin.
+Inline Dataview `key:: value` fields are parsed into searchable frontmatter.

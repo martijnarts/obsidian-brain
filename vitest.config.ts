@@ -88,15 +88,6 @@ export default defineConfig({
         // TODO: write test/pipeline/watcher.test.ts, remove exclusion.
         '**/src/pipeline/watcher.ts',
 
-        // Plugin-dependent tools. These only work when the Obsidian
-        // companion plugin is running (server talks to it over localhost
-        // HTTP). Meaningful unit tests require mocking the plugin HTTP
-        // contract, which nobody's written yet.
-        // TODO: add mocked plugin HTTP contract helper, write per-tool
-        // unit tests, remove each exclusion individually as tests land.
-        '**/src/tools/active-note.ts',
-        '**/src/tools/base-query.ts',
-        '**/src/tools/dataview-query.ts',
 
         // Surprisingly untested — test/graph/pathfinding.test.ts covers
         // the underlying graph primitive but the tool wrapper itself has

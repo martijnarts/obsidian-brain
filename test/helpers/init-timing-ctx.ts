@@ -56,7 +56,6 @@ export function buildCtx(
     writer,
     pipeline,
     config: { vaultPath: vault, dataDir: vault, dbPath: ':memory:' },
-    obsidian: null as unknown as ServerContext['obsidian'],
     ensureEmbedderReady,
     getBootstrap: () => null,
     embedderReady: () => embedderInitialized,

@@ -22,14 +22,13 @@ Preflight steps (in order):
 1. `gen-docs --check`
 2. `gen-tools-docs --check`
 3. `gen-readme-recent --check`
-4. `check-plugin`
-5. `check-env-vars`
-6. `build` (tsc)
-7. `test:coverage`
-8. `test:python` (stdlib unittest for `scripts/build-seed.py`; needs `python3` on PATH)
-9. `smoke`
-10. `docs:build --strict`
-11. `codespell` — best-effort; warns + skips if binary missing (`pip install codespell`)
+4. `check-env-vars`
+5. `build` (tsc)
+6. `test:coverage`
+7. `test:python` (stdlib unittest for `scripts/build-seed.py`; needs `python3` on PATH)
+8. `smoke`
+9. `docs:build --strict`
+10. `codespell` — best-effort; warns + skips if binary missing (`pip install codespell`)
 
 Streams output live, prints a pass/fail summary with timings + a git-state footer, exits 1 on any required failure.
 
@@ -40,7 +39,7 @@ If green, skip to [How to release — one command](#how-to-release--one-command)
 1. **CHANGELOG entry** at the top of `docs/CHANGELOG.md`. Format must match `## vX.Y.Z — YYYY-MM-DD — <title>` exactly — the `release.yml` `awk` extractor keys off this. See [CHANGELOG conventions](#changelog-conventions).
 2. **Prune `docs/roadmap.md`'s "Planned / In progress"** if listed items are now shipping. "Recently shipped" auto-populates from CHANGELOG — don't touch it.
 3. **If you touched a CLI subcommand or flag, update `docs/cli.md`.** `test/cli/help-snapshot.test.ts` snapshots `--help` as a forcing function. Regenerate with `vitest -u test/cli/help-snapshot.test.ts`; review the diff.
-4. **No self-version refs in docs prose** (everywhere except `docs/CHANGELOG.md`, `docs/roadmap.md`, `docs/migration-aaronsb.md`) **AND in user-facing source strings** (tool descriptions in `src/tools/*.ts`, stderr writes, CLI help, error messages, bootstrap reasons in `src/pipeline/bootstrap.ts`). Phrases like "since v1.4.0" rot the moment a feature ships further back than the string remembers. Describe behaviour in present tense. **External dependency contracts** (`plugin v0.2.0+`, `Obsidian ≥ 1.10.0`, `Node ≥ 20`) **stay** — that's the user contract.
+4. **No self-version refs in docs prose** (everywhere except `docs/CHANGELOG.md`, `docs/roadmap.md`, `docs/migration-aaronsb.md`) **AND in user-facing source strings** (tool descriptions in `src/tools/*.ts`, stderr writes, CLI help, error messages, bootstrap reasons in `src/pipeline/bootstrap.ts`). Phrases like "since v1.4.0" rot the moment a feature ships further back than the string remembers. Describe behaviour in present tense. **External dependency contracts** (`Node ≥ 20`) **stay** — that's the user contract.
 
    Bootstrap reason strings: plain English. "embedding model changed", not "embedder identity hash changed". Technical detail belongs in code comments.
 
@@ -49,7 +48,7 @@ If green, skip to [How to release — one command](#how-to-release--one-command)
    ```bash
    # Docs grep (manual sanity-check; same logic as the test below):
    grep -rnE "(since|in|as of|added in) v[0-9]+\\.[0-9]+(\\.[0-9]+)?\\b" docs/ \
-     | grep -v "CHANGELOG.md\\|roadmap.md\\|migration-aaronsb.md\\|plugin v\\|plugin ≥"
+     | grep -v "CHANGELOG.md\\|roadmap.md\\|migration-aaronsb.md"
 
    # CI-blocking test (scans src/**/*.ts string literals for vX.Y(.Z) outside
    # hyphenated identifiers like bge-small-en-v1.5):
@@ -235,7 +234,7 @@ git push origin dev                    # plain push, no force
 18. Publish to MCP Registry.
 19. Create / refresh GitHub Release (mark as latest).
 
-`ci.yml` runs the full validation suite (tests + coverage, smoke, docs:build, gen-docs drift, codespell, plugin version check) on the same commit in parallel. `release.yml` deliberately does **not** re-run any of that — step 3's CI gate is the authoritative proof.
+`ci.yml` runs the full validation suite (tests + coverage, smoke, docs:build, gen-docs drift, codespell) on the same commit in parallel. `release.yml` deliberately does **not** re-run any of that — step 3's CI gate is the authoritative proof.
 
 ### Main-branch guard
 
@@ -281,19 +280,6 @@ inside
 ```
 
 CHANGELOG header **must** be `## vX.Y.Z — YYYY-MM-DD — Title` (em dash `—`, U+2014). Wrong dash, extra spaces, or wrong capitalisation → no release notes (generic fallback). See [CHANGELOG conventions](#changelog-conventions).
-
----
-
-## Plugin version-matching
-
-Companion plugin lives at `../obsidian-brain-plugin/` (sibling repo, not on npm). Rule: **major.minor must match** (server `1.6.3` + plugin `1.6.1` is fine; server `1.7.0` + plugin `1.6.x` is not).
-
-Bump locations in the plugin repo:
-
-- `manifest.json` — `"version"` field (Obsidian reads this at install time)
-- `versions.json` — new key for the new version with the minimum Obsidian API version it requires
-
-`npm run check-plugin` reads both manifests, compares major.minor, exits 1 with a clear message on mismatch. Exits 0 with a warning if the plugin directory doesn't exist (normal in CI where only the server is checked out).
 
 ---
 

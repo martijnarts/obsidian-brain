@@ -144,7 +144,6 @@ nav:
   - Models: models.md
   - CLI: cli.md
   - Tools: tools.md
-  - Companion plugin: plugin.md
 
   - How it works:
       - Architecture: architecture.md

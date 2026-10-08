@@ -230,15 +230,6 @@ jobs:
             npm run gen-readme-recent -- --check
           fi
 
-      - name: Plugin major.minor check
-        run: |
-          # Advisory only — the sibling plugin repo isn't checked out in CI,
-          # so the script exits 0 with a warning. Local runs (via `npm run
-          # promote`) do the real check.
-          if [ -f scripts/check-plugin-version.mjs ]; then
-            npm run check-plugin
-          fi
-
       - name: Env-var drift check (server.json vs src/)
         # v1.7.5+: every `process.env.X` read in `src/` must appear in
         # `server.json packages[0].environmentVariables[]` (or be on the
