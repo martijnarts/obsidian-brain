@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ServerContext } from '../src/context.js';
 import { closeContext, registerTools, runStartupIndex } from '../src/server.js';
+import { EXPOSED_TOOL_COUNT } from './helpers/tool-count.js';
 
 interface FakeCtx {
   ctx: ServerContext;
@@ -53,7 +54,7 @@ function fakeCtx(
 }
 
 describe('registerTools', () => {
-  it('registers all 23 tools', () => {
+  it('registers every tool once', () => {
     const names: string[] = [];
     const server = {
       tool: (name: string) => names.push(name),
@@ -61,7 +62,8 @@ describe('registerTools', () => {
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registerTools(server as any, fakeCtx().ctx);
-    expect(new Set(names).size).toBe(23);
+    expect(new Set(names).size).toBe(EXPOSED_TOOL_COUNT - 1);
+    expect(names).toHaveLength(EXPOSED_TOOL_COUNT - 1);
     expect(names).toEqual(expect.arrayContaining(['search', 'edit_note', 'index_status']));
   });
 });

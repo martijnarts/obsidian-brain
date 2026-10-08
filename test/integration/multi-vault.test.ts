@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { EXPOSED_TOOL_COUNT } from '../helpers/tool-count.js';
 
 const cliPath = join(process.cwd(), 'dist', 'cli', 'index.js');
 
@@ -129,7 +130,7 @@ describe.each(transports)('obsidian-brain server over $name, two vaults', ({ sta
 
   it('requires a vault argument, limited to the configured names, on every tool but list_vaults', async () => {
     const { tools } = await running.client.listTools();
-    expect(tools).toHaveLength(24);
+    expect(tools).toHaveLength(EXPOSED_TOOL_COUNT);
     for (const tool of tools) {
       if (tool.name === 'list_vaults') {
         expect(tool.inputSchema.required ?? []).not.toContain('vault');
