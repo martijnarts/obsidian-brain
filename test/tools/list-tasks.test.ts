@@ -122,7 +122,7 @@ describe('list_tasks', () => {
     expect((await tool.cb({ folder: 'Nope' })).content[0].text).toMatch(/Folder not found/);
     expect((await tool.cb({ folder: 'Inbox.md' })).content[0].text).toMatch(/Folder not found/);
     expect((await tool.cb({ folder: '.obsidian' })).content[0].text).toMatch(/Hidden folders/);
-    expect((await tool.cb({ folder: '../..' })).content[0].text).toMatch(/escapes the vault/);
+    expect((await tool.cb({ folder: '../..' })).content[0].text).toMatch(/outside the vault/);
   });
 
   it('errors on a missing, ambiguous or unreadable note', async () => {
@@ -140,7 +140,7 @@ describe('list_tasks', () => {
       expect(out.tasks.some((t: { text: string }) => t.text === 'secret')).toBe(false);
 
       upsertNode(db, { id: 'Linked.md', title: 'Linked', content: '', frontmatter: {} });
-      expect((await tool.cb({ name: 'Linked' })).content[0].text).toMatch(/escapes the vault/);
+      expect((await tool.cb({ name: 'Linked' })).content[0].text).toMatch(/outside the vault/);
     } finally {
       await rm(outside, { recursive: true, force: true });
     }

@@ -9,7 +9,7 @@
 import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import { dirname } from 'path';
-import { resolveInVault } from './paths.js';
+import { resolveVaultPath, writeFileAtomic } from './vault-path.js';
 
 export type CanvasNodeType = 'text' | 'file' | 'link' | 'group';
 export type CanvasSide = 'top' | 'right' | 'bottom' | 'left';
@@ -113,7 +113,7 @@ function serializeArray(items: unknown[]): string {
 
 /** Read a canvas; `null` when the file does not exist. */
 export async function readCanvas(vaultPath: string, relPath: string): Promise<CanvasDocument | null> {
-  const abs = resolveInVault(vaultPath, relPath);
+  const { abs } = resolveVaultPath(vaultPath, relPath);
   let raw: string;
   try {
     raw = await fs.readFile(abs, 'utf-8');
@@ -126,11 +126,9 @@ export async function readCanvas(vaultPath: string, relPath: string): Promise<Ca
 
 /** Write a canvas atomically (temp file + rename), creating parent folders. */
 export async function writeCanvas(vaultPath: string, relPath: string, doc: CanvasDocument): Promise<void> {
-  const abs = resolveInVault(vaultPath, relPath);
+  const { abs } = resolveVaultPath(vaultPath, relPath);
   await fs.mkdir(dirname(abs), { recursive: true });
-  const tmp = `${abs}.tmp`;
-  await fs.writeFile(tmp, serializeCanvas(doc), 'utf-8');
-  await fs.rename(tmp, abs);
+  await writeFileAtomic(abs, serializeCanvas(doc));
 }
 
 /** A 16-hex-char id, unique among `doc`'s nodes and edges, like Obsidian's. */

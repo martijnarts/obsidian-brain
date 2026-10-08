@@ -3,8 +3,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { readNoteFile } from './note-file.js';
-import { writeFileAtomic } from '../vault/vault-path.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
+import { readNoteFile, writeFileAtomic } from '../vault/vault-path.js';
 import { replaceTaskStatus, scanTasks, taskState } from '../vault/tasks.js';
 
 /**
@@ -27,22 +27,22 @@ export function registerSetTaskStatusTool(server: McpServer, ctx: ServerContext)
     },
     async (args) => {
       const status = toStatusChar(args.status);
-      const note = await readNoteFile(args.name, ctx);
+      const note = await readNoteFile(ctx.config.vaultPath, resolveSingleNote(args.name, ctx.db));
 
       const lineCount = note.content.split('\n').length;
       if (args.line > lineCount) {
-        throw new Error(`Line ${args.line} is past the end of "${note.path}" (${lineCount} lines).`);
+        throw new Error(`Line ${args.line} is past the end of "${note.rel}" (${lineCount} lines).`);
       }
       const task = scanTasks(note.content).find((t) => t.line === args.line);
       if (task === undefined) {
         const text = note.content.split('\n')[args.line - 1]!.replace(/\r$/, '');
         throw new Error(
-          `Line ${args.line} of "${note.path}" is not a task: ${JSON.stringify(text)}. Use list_tasks to find the line.`,
+          `Line ${args.line} of "${note.rel}" is not a task: ${JSON.stringify(text)}. Use list_tasks to find the line.`,
         );
       }
       if (args.expectedText !== undefined && args.expectedText.trim() !== task.text.trim()) {
         throw new Error(
-          `Task text on line ${args.line} of "${note.path}" is ${JSON.stringify(task.text)}, not ${JSON.stringify(args.expectedText)}. Run list_tasks again and retry.`,
+          `Task text on line ${args.line} of "${note.rel}" is ${JSON.stringify(task.text)}, not ${JSON.stringify(args.expectedText)}. Run list_tasks again and retry.`,
         );
       }
 
@@ -52,7 +52,7 @@ export function registerSetTaskStatusTool(server: McpServer, ctx: ServerContext)
         runBackgroundReindex(ctx);
       }
       return {
-        path: note.path,
+        path: note.rel,
         line: args.line,
         previousStatus: task.status,
         status,

@@ -5,22 +5,8 @@
  * byte it does not mean to change.
  */
 
-import { promises as fs } from 'fs';
-import { resolve, sep } from 'path';
 import type { DatabaseHandle } from '../store/db.js';
-import { errorMessage } from '../util/errors.js';
-
-/**
- * Normalise a client-supplied vault folder: forward slashes, no leading or
- * trailing slash. `''` means the vault root.
- */
-export function normalizeFolder(folder: string): string {
-  return folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-}
-
-export function isUnderFolder(id: string, folder: string): boolean {
-  return folder === '' || id.startsWith(`${folder}/`);
-}
+import { inFolder, normalizeFolder } from './vault-path.js';
 
 /**
  * Every indexed real note (stubs excluded) under `folder` and outside every
@@ -31,49 +17,14 @@ export function listNotePaths(
   folder?: string,
   excludeFolders?: string[],
 ): string[] {
-  const root = normalizeFolder(folder ?? '');
-  const excluded = (excludeFolders ?? []).map(normalizeFolder).filter((f) => f !== '');
+  const root = normalizeFolder(folder);
+  const excluded = (excludeFolders ?? []).map((f) => normalizeFolder(f)).filter((f) => f !== '');
   const rows = db
     .prepare("SELECT id FROM nodes WHERE id NOT LIKE '\\_stub/%' ESCAPE '\\' ORDER BY id")
     .all() as Array<{ id: string }>;
   return rows
     .map((r) => r.id)
-    .filter((id) => isUnderFolder(id, root) && !excluded.some((f) => isUnderFolder(id, f)));
-}
-
-/**
- * Absolute path of a vault-relative file, refusing anything that resolves
- * outside the vault: `..` segments, absolute paths, and symlinks whose real
- * target lies elsewhere.
- */
-export async function vaultFilePath(vaultPath: string, relPath: string): Promise<string> {
-  const root = await fs.realpath(vaultPath);
-  const abs = resolve(root, relPath);
-  if (abs !== root && !abs.startsWith(root + sep)) {
-    throw new Error(`Path escapes the vault: ${relPath}`);
-  }
-  const real = await fs.realpath(abs);
-  if (!real.startsWith(root + sep)) {
-    throw new Error(`Path escapes the vault: ${relPath}`);
-  }
-  return abs;
-}
-
-/** Read a note, or `null` when it is missing or lies outside the vault. */
-export async function readNoteFile(vaultPath: string, relPath: string): Promise<string | null> {
-  try {
-    return await fs.readFile(await vaultFilePath(vaultPath, relPath), 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
-/** Write through a temp file and rename, so a reader never sees half a file. */
-export async function writeNoteFile(vaultPath: string, relPath: string, content: string): Promise<void> {
-  const abs = await vaultFilePath(vaultPath, relPath);
-  const tmp = `${abs}.tmp`;
-  await fs.writeFile(tmp, content, 'utf-8');
-  await fs.rename(tmp, abs);
+    .filter((id) => inFolder(id, root) && !excluded.some((f) => inFolder(id, f)));
 }
 
 /** Split a file into its YAML frontmatter block (fences included) and body. */
@@ -193,28 +144,4 @@ export function findWikiLinks(text: string): WikiLinkMatch[] {
     });
   }
   return out;
-}
-
-const MAX_PATTERN_LENGTH = 500;
-const NESTED_QUANTIFIER = /\((?:[^()\\]|\\.)*(?:[+*]|\{\d+,?\d*\})(?:[^()\\]|\\.)*\)(?:[+*]|\{\d+,?\d*\})/;
-
-/**
- * Compile a client regex with the guards every pattern tool applies: a
- * length cap, and no quantified group that itself holds a quantifier (the
- * classic catastrophic-backtracking shape). `literal` escapes the pattern
- * so it matches as plain text.
- */
-export function compileUserRegex(pattern: string, flags: string, literal = false): RegExp {
-  if (pattern.length > MAX_PATTERN_LENGTH) {
-    throw new Error(`Pattern is longer than ${MAX_PATTERN_LENGTH} characters`);
-  }
-  if (literal) return new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
-  if (NESTED_QUANTIFIER.test(pattern)) {
-    throw new Error('Pattern has a nested quantifier, which can backtrack catastrophically. Simplify it.');
-  }
-  try {
-    return new RegExp(pattern, flags);
-  } catch (err) {
-    throw new Error(`Invalid regex: ${errorMessage(err)}`);
-  }
 }

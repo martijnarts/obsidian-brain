@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { ServerContext } from '../context.js';
 import { similarity } from '../vault/fuzzy.js';
-import { assertFolderIndexed, inFolder, normalizeFolder } from './folder-scope.js';
+import { inFolder, normalizeFolder } from '../vault/vault-path.js';
 
 type MatchedOn = 'name' | 'title' | 'alias';
 
@@ -87,10 +87,10 @@ export function registerFindNotesByNameTool(server: McpServer, ctx: ServerContex
           frontmatter: string;
         }>
       ).filter((r) => !r.id.startsWith('_stub/'));
-      assertFolderIndexed(
-        rows.map((r) => r.id),
-        folder,
-      );
+      // A typo in the folder reads as an error, not as zero results.
+      if (folder !== '' && !rows.some((r) => inFolder(r.id, folder))) {
+        throw new Error(`Folder not found: "${args.folder}"`);
+      }
 
       const hits: Hit[] = [];
       for (const row of rows) {

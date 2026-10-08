@@ -12,9 +12,9 @@ import {
   headingKey,
   lineAt,
   listNotePaths,
-  readNoteFile,
   splitFrontmatter,
 } from '../vault/scan.js';
+import { readNoteFile } from '../vault/vault-path.js';
 
 type Reason = 'note_not_found' | 'heading_not_found' | 'block_not_found';
 
@@ -64,7 +64,7 @@ export function registerFindBrokenLinksTool(server: McpServer, ctx: ServerContex
 
       const anchorsOf = async (path: string, raw?: string): Promise<Anchors | null> => {
         if (!anchorCache.has(path)) {
-          const text = raw ?? (await readNoteFile(vault, path));
+          const text = raw ?? (await readNoteFile(vault, path).then((n) => n.content, () => null));
           const body = text === null ? null : splitFrontmatter(text).body;
           anchorCache.set(
             path,
@@ -82,7 +82,7 @@ export function registerFindBrokenLinksTool(server: McpServer, ctx: ServerContex
       const broken: BrokenLink[] = [];
       let scannedFiles = 0;
       for (const source of sources) {
-        const raw = await readNoteFile(vault, source);
+        const raw = await readNoteFile(vault, source).then((n) => n.content, () => null);
         if (raw === null) continue;
         scannedFiles++;
         const { frontmatter, body } = splitFrontmatter(raw);

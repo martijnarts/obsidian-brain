@@ -105,7 +105,7 @@ describe('tools/list_attachments', () => {
   });
 
   it('errors on a missing folder, a file as folder and an escape', async () => {
-    expect(err(await tool.call({ folder: 'nope' }))).toMatch(/Folder not found: nope/);
+    expect(err(await tool.call({ folder: 'nope' }))).toMatch(/Folder not found: "nope"/);
     expect(err(await tool.call({ folder: 'orphan.zip' }))).toMatch(/Folder not found/);
     expect(err(await tool.call({ folder: '../' }))).toMatch(/outside the vault/);
     expect(err(await tool.call({ limit: 0 }))).toMatch(/invalid arguments/);

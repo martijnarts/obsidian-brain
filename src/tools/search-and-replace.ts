@@ -3,15 +3,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import {
-  compileUserRegex,
-  fencedCodeRanges,
-  lineAt,
-  listNotePaths,
-  readNoteFile,
-  splitFrontmatter,
-  writeNoteFile,
-} from '../vault/scan.js';
+import { fencedCodeRanges, lineAt, listNotePaths, splitFrontmatter } from '../vault/scan.js';
+import { readNoteFile, resolveVaultPath, writeFileAtomic } from '../vault/vault-path.js';
+import { compileUserRegex } from '../util/safe-regex.js';
 import { errorMessage } from '../util/errors.js';
 
 const SAMPLES_PER_FILE = 3;
@@ -60,7 +54,7 @@ export function registerSearchAndReplaceTool(server: McpServer, ctx: ServerConte
 
       const planned: Array<{ path: string; raw: string; hits: Hit[] }> = [];
       for (const path of listNotePaths(ctx.db, args.folder)) {
-        const raw = await readNoteFile(vault, path);
+        const raw = await readNoteFile(vault, path).then((n) => n.content, () => null);
         if (raw === null) continue;
         const hits = findHits(raw, re, args.replacement, args.regex === true, {
           includeFrontmatter: args.includeFrontmatter === true,
@@ -95,7 +89,7 @@ export function registerSearchAndReplaceTool(server: McpServer, ctx: ServerConte
       const files: Array<{ path: string; matches: number }> = [];
       for (const f of planned) {
         try {
-          await writeNoteFile(vault, f.path, applyHits(f.raw, f.hits));
+          await writeFileAtomic(resolveVaultPath(vault, f.path).abs, applyHits(f.raw, f.hits));
           files.push({ path: f.path, matches: f.hits.length });
         } catch (err) {
           failed.push({ path: f.path, error: errorMessage(err) });

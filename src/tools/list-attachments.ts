@@ -4,7 +4,7 @@ import { join, posix } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { ServerContext } from '../context.js';
-import { resolveVaultPath } from '../vault/vault-path.js';
+import { resolveFolder } from '../vault/vault-path.js';
 
 interface Attachment {
   path: string;
@@ -39,10 +39,7 @@ export function registerListAttachmentsTool(server: McpServer, ctx: ServerContex
 
       let scope = '';
       if (args.folder !== undefined) {
-        const { rel, abs } = resolveVaultPath(ctx.config.vaultPath, args.folder);
-        const st = await stat(abs).catch(() => undefined);
-        if (!st?.isDirectory()) throw new Error(`Folder not found: ${args.folder}`);
-        scope = rel;
+        scope = (await resolveFolder(ctx.config.vaultPath, args.folder)).rel;
       }
 
       // References resolve against every attachment in the vault, not just

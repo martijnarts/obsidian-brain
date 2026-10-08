@@ -5,8 +5,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { readNoteFile } from './note-file.js';
-import { writeFileAtomic } from '../vault/vault-path.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
+import { readNoteFile, writeFileAtomic } from '../vault/vault-path.js';
 import { allNodeIds } from '../store/nodes.js';
 import {
   allBlockIds,
@@ -42,19 +42,19 @@ export function registerEnsureBlockIdTool(server: McpServer, ctx: ServerContext)
         throw new Error(`Block id "${args.id}" is invalid: use only letters, digits and dashes.`);
       }
 
-      const note = await readNoteFile(args.name, ctx);
+      const note = await readNoteFile(ctx.config.vaultPath, resolveSingleNote(args.name, ctx.db));
       const lines = note.content.split('\n');
       const target = args.line !== undefined
-        ? lineTarget(args.line, lines.length, note.path)
-        : headingTarget(lines, args.heading!, note.path);
+        ? lineTarget(args.line, lines.length, note.rel)
+        : headingTarget(lines, args.heading!, note.rel);
 
       const block = locateBlock(lines, target);
-      const link = (id: string): string => `[[${linkTarget(note.path, ctx)}#^${id}]]`;
+      const link = (id: string): string => `[[${linkTarget(note.rel, ctx)}#^${id}]]`;
 
       const existing = existingBlockId(lines, block);
       if (existing !== null) {
         return {
-          path: note.path,
+          path: note.rel,
           id: existing.id,
           created: false,
           line: existing.line + 1,
@@ -65,19 +65,19 @@ export function registerEnsureBlockIdTool(server: McpServer, ctx: ServerContext)
 
       const taken = allBlockIds(lines);
       if (args.id !== undefined && taken.has(args.id)) {
-        throw new Error(`Block id ^${args.id} is already used in "${note.path}".`);
+        throw new Error(`Block id ^${args.id} is already used in "${note.rel}".`);
       }
       const id = args.id ?? generateBlockId(taken);
       const written = attachBlockId(lines, block, id);
       const next = written.lines.join('\n');
-      const diff = createPatch(note.path, note.content, next, 'original', 'proposed');
+      const diff = createPatch(note.rel, note.content, next, 'original', 'proposed');
 
       if (args.dryRun !== true) {
         await writeFileAtomic(note.abs, next);
         runBackgroundReindex(ctx);
       }
       return {
-        path: note.path,
+        path: note.rel,
         id,
         created: true,
         dryRun: args.dryRun === true,

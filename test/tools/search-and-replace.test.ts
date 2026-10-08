@@ -102,9 +102,9 @@ describe('search_and_replace', () => {
   it('rejects unsafe, invalid and over-long patterns', async () => {
     const call = await setup({ 'A.md': 'aaa' });
     for (const [pattern, msg] of [
-      ['(a+)+', /nested quantifier/],
+      ['(a+)+', /quantified group/],
       ['[', /Invalid regex/],
-      ['a'.repeat(501), /longer than 500/],
+      ['a'.repeat(501), /too long/],
     ] as const) {
       const res = await call({ pattern, replacement: 'x', regex: true });
       expect(res.isError).toBe(true);

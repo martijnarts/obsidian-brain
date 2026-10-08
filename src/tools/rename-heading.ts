@@ -3,17 +3,16 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { resolveNodeName } from '../resolve/name-match.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
 import { buildStemLookup, resolveLink } from '../vault/wiki-links.js';
 import {
   findHeadings,
   findWikiLinks,
   headingKey,
   listNotePaths,
-  readNoteFile,
   splitFrontmatter,
-  writeNoteFile,
 } from '../vault/scan.js';
+import { readNoteFile, resolveVaultPath, writeFileAtomic } from '../vault/vault-path.js';
 
 /**
  * `rename_heading` — rename one heading in a note and rewrite every link to
@@ -38,10 +37,9 @@ export function registerRenameHeadingTool(server: McpServer, ctx: ServerContext)
       if (/[#|^[\]\n]/.test(to)) {
         throw new Error('`to` cannot contain #, |, ^, [, ] or a line break, because links to it would break.');
       }
-      const notePath = resolveToSinglePath(args.name, ctx);
+      const notePath = resolveSingleNote(args.name, ctx.db);
       const vault = ctx.config.vaultPath;
-      const noteRaw = await readNoteFile(vault, notePath);
-      if (noteRaw === null) throw new Error(`Cannot read ${notePath}`);
+      const noteRaw = (await readNoteFile(vault, notePath)).content;
 
       const { frontmatter, body } = splitFrontmatter(noteRaw);
       const headings = findHeadings(body);
@@ -65,7 +63,7 @@ export function registerRenameHeadingTool(server: McpServer, ctx: ServerContext)
 
       const planned: Array<{ path: string; text: string; links: number }> = [];
       for (const path of allPaths) {
-        const raw = path === notePath ? renamedNote : await readNoteFile(vault, path);
+        const raw = path === notePath ? renamedNote : await readNoteFile(vault, path).then((n) => n.content, () => null);
         if (raw === null) continue;
         const res = rewriteHeadingLinks(raw, fromKey, to, (target) =>
           target === '' ? path === notePath : resolveLink(target, stemLookup, allPathsSet, path) === notePath,
@@ -74,7 +72,7 @@ export function registerRenameHeadingTool(server: McpServer, ctx: ServerContext)
       }
 
       if (args.dryRun !== true) {
-        for (const f of planned) await writeNoteFile(vault, f.path, f.text);
+        for (const f of planned) await writeFileAtomic(resolveVaultPath(vault, f.path).abs, f.text);
         // Fire-and-forget reindex, once for the whole batch.
         runBackgroundReindex(ctx);
       }
@@ -119,27 +117,4 @@ export function rewriteHeadingLinks(
     links++;
   }
   return { text: frontmatter + out + body.slice(at), links };
-}
-
-function resolveToSinglePath(name: string, ctx: ServerContext): string {
-  const matches = resolveNodeName(name, ctx.db);
-  if (matches.length === 0) {
-    throw new Error(`No note found matching "${name}"`);
-  }
-  const first = matches[0]!;
-  const ambiguous =
-    matches.length > 1 &&
-    (first.matchType === 'substring' ||
-      first.matchType === 'case-insensitive' ||
-      first.matchType === 'alias');
-  if (ambiguous) {
-    const candidates = matches
-      .slice(0, 10)
-      .map((m) => `- ${m.title} (${m.nodeId})`)
-      .join('\n');
-    throw new Error(
-      `Multiple notes match "${name}". Please be more specific. Candidates:\n${candidates}`,
-    );
-  }
-  return first.nodeId;
 }

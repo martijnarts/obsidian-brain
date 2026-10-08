@@ -3,7 +3,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
-import { listNotePaths, maskCode, readNoteFile, splitFrontmatter, writeNoteFile } from '../vault/scan.js';
+import { listNotePaths, maskCode, splitFrontmatter } from '../vault/scan.js';
+import { readNoteFile, resolveVaultPath, writeFileAtomic } from '../vault/vault-path.js';
 import { errorMessage } from '../util/errors.js';
 
 /**
@@ -37,13 +38,13 @@ export function registerRenameTagTool(server: McpServer, ctx: ServerContext): vo
       const files: Array<{ path: string; inline: number; frontmatter: number }> = [];
       const failed: Array<{ path: string; error: string }> = [];
       for (const path of listNotePaths(ctx.db)) {
-        const raw = await readNoteFile(vault, path);
+        const raw = await readNoteFile(vault, path).then((n) => n.content, () => null);
         if (raw === null) continue;
         const res = renameTagInNote(raw, from, to, nested);
         if (res.inline + res.frontmatter === 0) continue;
         if (!dryRun) {
           try {
-            await writeNoteFile(vault, path, res.text);
+            await writeFileAtomic(resolveVaultPath(vault, path).abs, res.text);
           } catch (err) {
             failed.push({ path, error: errorMessage(err) });
             continue;

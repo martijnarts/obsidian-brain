@@ -26,7 +26,7 @@ export function registerReadNotesTool(server: McpServer, ctx: ServerContext): vo
       const max = args.maxContentLength ?? 2000;
       const notes = args.names.map((name) => {
         try {
-          const path = resolveSingleNote(name, ctx.db);
+          const path = resolveSingleNote(name, ctx.db, { allowStubs: true });
           const node = getNode(ctx.db, path);
           if (!node) throw new Error(`No note found matching "${name}"`);
           const truncated = node.content.length > max;

@@ -6,7 +6,7 @@ import { registerTool } from './register.js';
 import { runBackgroundReindex } from './background-reindex.js';
 import type { ServerContext } from '../context.js';
 import type { DatabaseHandle } from '../store/db.js';
-import { resolveNodeName } from '../resolve/name-match.js';
+import { resolveSingleNote } from '../resolve/single-note.js';
 import { moveNote } from '../vault/mover.js';
 import { rewriteWikiLinks } from '../vault/wiki-links.js';
 import { getEdgesByTarget } from '../store/edges.js';
@@ -78,7 +78,7 @@ export function registerMoveNoteTool(server: McpServer, ctx: ServerContext): voi
     async (args) => {
       const { source, destination, dryRun } = args;
 
-      const fileRelPath = resolveToSinglePath(source, ctx);
+      const fileRelPath = resolveSingleNote(source, ctx.db);
 
       if (dryRun === true) {
         // Compute what would happen without mutating anything.
@@ -205,27 +205,4 @@ export async function rewriteInboundLinks(
     }
   }
   return { files, occurrences, rewrittenSources };
-}
-
-function resolveToSinglePath(name: string, ctx: ServerContext): string {
-  const matches = resolveNodeName(name, ctx.db);
-  if (matches.length === 0) {
-    throw new Error(`No note found matching "${name}"`);
-  }
-  const first = matches[0]!;
-  const ambiguous =
-    matches.length > 1 &&
-    (first.matchType === 'substring' ||
-      first.matchType === 'case-insensitive' ||
-      first.matchType === 'alias');
-  if (ambiguous) {
-    const candidates = matches
-      .slice(0, 10)
-      .map((m) => `- ${m.title} (${m.nodeId})`)
-      .join('\n');
-    throw new Error(
-      `Multiple notes match "${name}". Please be more specific. Candidates:\n${candidates}`,
-    );
-  }
-  return first.nodeId;
 }

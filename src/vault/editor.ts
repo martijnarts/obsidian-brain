@@ -16,6 +16,7 @@ import { join } from 'path';
 import matter from 'gray-matter';
 import { fuzzyFind } from './fuzzy.js';
 import { errorMessage } from '../util/errors.js';
+import { writeFileAtomic } from './vault-path.js';
 
 export type EditMode =
   | { kind: 'append'; content: string }
@@ -140,9 +141,7 @@ export async function editNote(
     checkExpectedContent(original, res, opts.expectedContent);
   }
 
-  const tmp = `${abs}.tmp`;
-  await fs.writeFile(tmp, res.next, 'utf-8');
-  await fs.rename(tmp, abs);
+  await writeFileAtomic(abs, res.next);
 
   return {
     path: abs,
@@ -190,9 +189,7 @@ export async function bulkEditNote(
     };
   }
 
-  const tmp = `${abs}.tmp`;
-  await fs.writeFile(tmp, current, 'utf-8');
-  await fs.rename(tmp, abs);
+  await writeFileAtomic(abs, current);
 
   return {
     path: abs,

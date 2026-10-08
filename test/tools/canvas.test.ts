@@ -97,8 +97,8 @@ describe('canvas tools', () => {
     });
 
     it('refuses paths outside the vault', async () => {
-      expect(unwrapError(await read({ path: '../outside.canvas' }))).toMatch(/escapes the vault/);
-      expect(unwrapError(await read({ path: '/etc/x.canvas' }))).toMatch(/must be vault-relative/);
+      expect(unwrapError(await read({ path: '../outside.canvas' }))).toMatch(/outside the vault/);
+      expect(unwrapError(await read({ path: '/etc/x.canvas' }))).toMatch(/vault-relative/);
     });
 
     it('refuses a symlink that leads out of the vault', async () => {
@@ -183,7 +183,7 @@ describe('canvas tools', () => {
 
     it('refuses a file node pointing outside the vault', async () => {
       const err = unwrapError(await edit({ path: 'Board.canvas', operation: 'add_node', type: 'file', file: '../x.md' }));
-      expect(err).toMatch(/escapes the vault/);
+      expect(err).toMatch(/outside the vault/);
       expect((await onDisk()).doc.nodes).toHaveLength(3);
     });
 

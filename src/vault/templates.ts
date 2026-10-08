@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { resolveInVault, toVaultRelative } from './paths.js';
+import { resolveVaultPath, toVaultRelative } from './vault-path.js';
 
 export interface TemplatesConfig {
   folder: string;
@@ -51,7 +51,7 @@ export function findTemplate(vaultPath: string, template: string, config: Templa
     ...names,
   ];
   for (const candidate of candidates) {
-    const abs = resolveInVault(vaultPath, candidate);
+    const { abs } = resolveVaultPath(vaultPath, candidate);
     if (existsSync(abs) && statSync(abs).isFile()) return toVaultRelative(vaultPath, abs);
   }
   throw new Error(`Template not found: "${template}" (looked in "${config.folder || '/'}" and the vault root)`);
