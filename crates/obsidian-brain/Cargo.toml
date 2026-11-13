@@ -38,6 +38,8 @@ hex = "0.4"
 walkdir = "2"
 chrono = { version = "0.4", features = ["serde"] }
 unicode-normalization = "0.1"
+yaml-rust2 = "0.10"
+getrandom = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
