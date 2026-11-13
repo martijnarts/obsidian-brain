@@ -45,7 +45,6 @@
             pkg-config
             onnxruntime
             sqlite
-            nodejs
           ];
           ORT_DYLIB_PATH = "${pkgs.onnxruntime}/lib/libonnxruntime${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
         } // ortEnv pkgs);
