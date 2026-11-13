@@ -17,6 +17,7 @@ use rmcp::{ErrorData as McpError, RoleServer, ServerHandler};
 use serde_json::{Value, json};
 
 use crate::context::VaultContext;
+use crate::util::js;
 use crate::vaults::Vaults;
 use tool::{JsonObject, ToolSpec};
 
@@ -81,14 +82,14 @@ impl Server {
     }
 
     /// Runs one call and wraps the outcome the way every client expects:
-    /// a string as it is, any other value pretty-printed, an error as
-    /// `Error: ...` with `isError`.
+    /// a string as it is, any other value as `JSON.stringify(v, null, 2)`,
+    /// an error as `Error: ...` with `isError`.
     pub async fn call(&self, name: &str, args: JsonObject) -> CallToolResult {
         match self.dispatch(name, args).await {
             Ok(Value::String(text)) => CallToolResult::success(vec![ContentBlock::text(text)]),
-            Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).unwrap_or_default(),
-            )]),
+            Ok(value) => {
+                CallToolResult::success(vec![ContentBlock::text(js::json_stringify_pretty(&value))])
+            }
             Err(err) => CallToolResult::error(vec![ContentBlock::text(format!("Error: {err:#}"))]),
         }
     }

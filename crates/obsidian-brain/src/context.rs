@@ -140,6 +140,11 @@ impl VaultContext {
         Ok(Self::from_parts(config, db, shared, owns))
     }
 
+    /// The embedder this context shares with the other vaults.
+    pub(crate) fn shared_embedder(&self) -> &SharedEmbedder {
+        &self.shared
+    }
+
     /// A context over an index that is already open, for tests and for
     /// callers that build their own store. Must run inside a Tokio runtime.
     pub fn from_parts(

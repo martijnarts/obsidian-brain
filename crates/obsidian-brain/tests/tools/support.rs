@@ -12,11 +12,13 @@ use std::sync::Arc;
 use obsidian_brain::config::VaultConfig;
 use obsidian_brain::context::VaultContext;
 use obsidian_brain::embeddings::{Embedder, share_embedder};
+use obsidian_brain::mcp::Server;
 use obsidian_brain::store::Db;
 use obsidian_brain::store::edges::insert_edge;
 use obsidian_brain::store::nodes::upsert_node;
 use obsidian_brain::types::{ParsedEdge, ParsedNode};
 use obsidian_brain::vault::parser::parse_vault;
+use obsidian_brain::vaults::Vaults;
 use serde_json::{Map, Value, json};
 
 pub use fakes::{FakeEmbedder, context, copy_dir, fixture_vault, write};
@@ -190,19 +192,40 @@ pub fn edge(ctx: &VaultContext, source: &str, target: &str, context: &str) {
     ctx.db.with(|c| insert_edge(c, &edge)).unwrap();
 }
 
-/// Call a tool the way the MCP layer does. `Err` holds the error text,
-/// after `Error: ` for a handler error.
-pub async fn call(ctx: &Arc<VaultContext>, tool: &str, args: Value) -> Result<Value, String> {
-    let spec = obsidian_brain::tools::all()
-        .into_iter()
-        .find(|t| t.name == tool)
-        .unwrap_or_else(|| panic!("no tool {tool}"));
-    let Value::Object(args) = args else {
+/// Call a tool through the MCP server, as a client does: `vault` is added
+/// when absent. Returns `isError` and the text of the result.
+pub async fn call_text(ctx: &Arc<VaultContext>, tool: &str, args: Value) -> (bool, String) {
+    let Value::Object(mut args) = args else {
         panic!("arguments must be an object")
     };
-    spec.call(ctx.clone(), args)
-        .await
-        .map_err(|e| format!("{e:#}"))
+    if !args.contains_key("vault") {
+        args.insert("vault".into(), ctx.config.name.clone().into());
+    }
+    let server = Server::new(
+        Arc::new(Vaults::single(ctx.clone())),
+        obsidian_brain::tools::all(),
+    );
+    let result = server.call(tool, args).await;
+    let text = result
+        .content
+        .iter()
+        .filter_map(|c| c.as_text().map(|t| t.text.as_str()))
+        .collect();
+    (result.is_error == Some(true), text)
+}
+
+/// [`call_text`] with the text decoded. `Ok` holds the result parsed back
+/// from its JSON, or the text when it is not an object or a list. `Err`
+/// holds the error text, after `Error: ` for a handler error.
+pub async fn call(ctx: &Arc<VaultContext>, tool: &str, args: Value) -> Result<Value, String> {
+    let (is_error, text) = call_text(ctx, tool, args).await;
+    if is_error {
+        return Err(text.strip_prefix("Error: ").unwrap_or(&text).to_string());
+    }
+    match serde_json::from_str::<Value>(&text) {
+        Ok(v @ (Value::Object(_) | Value::Array(_))) => Ok(v),
+        _ => Ok(Value::String(text)),
+    }
 }
 
 /// [`call`] that must succeed.

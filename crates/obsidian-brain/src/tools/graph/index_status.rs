@@ -31,7 +31,7 @@ fn sql_value(v: ValueRef<'_>) -> Value {
     match v {
         ValueRef::Null => Value::Null,
         ValueRef::Integer(i) => i.into(),
-        ValueRef::Real(x) => js::number_value(x),
+        ValueRef::Real(x) => x.into(),
         ValueRef::Text(t) => String::from_utf8_lossy(t).into_owned().into(),
         ValueRef::Blob(b) => String::from_utf8_lossy(b).into_owned().into(),
     }
@@ -144,9 +144,9 @@ fn report(conn: &Connection, live: Live) -> anyhow::Result<Value> {
         Some(m) => m,
         None => live.model.clone(),
     };
-    let embedding_dim = match get_metadata(conn, "embedding_dim")? {
-        Some(d) => js::number_value(js::number(Some(&d))),
-        None => js::number_value(live.dim? as f64),
+    let embedding_dim: Value = match get_metadata(conn, "embedding_dim")? {
+        Some(d) => js::number(Some(&d)).into(),
+        None => live.dim?.into(),
     };
     let provider = match get_metadata(conn, "embedder_provider")? {
         Some(p) => p,

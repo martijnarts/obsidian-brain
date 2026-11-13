@@ -214,7 +214,7 @@ fn find(c: &rusqlite::Connection, args: Args) -> anyhow::Result<Value> {
             row.insert("matchedOn".into(), h.matched_on.as_str().into());
             // Math.round(score * 1000) / 1000
             let rounded = (h.score * 1000.0 + 0.5).floor() / 1000.0;
-            row.insert("score".into(), js::number_value(rounded));
+            row.insert("score".into(), rounded.into());
             if let Some(alias) = &h.alias {
                 row.insert("alias".into(), alias.clone().into());
             }

@@ -152,52 +152,141 @@ pub fn to_js_string(v: &Value) -> String {
     }
 }
 
-/// `JSON.stringify(v)`: compact, with JS number formatting.
+/// `JSON.stringify(v)`: compact, with JS number formatting and JS key order.
 pub fn json_stringify(v: &Value) -> String {
-    let mut out = String::new();
-    write_json(&mut out, v);
-    out
+    write_js_json(v, serde_json::ser::CompactFormatter)
 }
 
-fn write_json(out: &mut String, v: &Value) {
-    match v {
-        Value::Null => out.push_str("null"),
-        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64().filter(|i| i.unsigned_abs() <= 1 << 53) {
-                out.push_str(&i.to_string());
-            } else {
-                let x = as_f64(n);
-                out.push_str(&if x.is_finite() {
-                    number_to_string(x)
-                } else {
-                    "null".into()
-                });
-            }
-        }
-        Value::String(s) => out.push_str(&serde_json::to_string(s).expect("strings serialize")),
-        Value::Array(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
+/// `JSON.stringify(v, null, 2)`.
+pub fn json_stringify_pretty(v: &Value) -> String {
+    write_js_json(v, serde_json::ser::PrettyFormatter::new())
+}
+
+fn write_js_json<F: serde_json::ser::Formatter>(v: &Value, inner: F) -> String {
+    use serde::Serialize;
+    let mut out = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut out, JsFormatter(inner));
+    JsOrder(v)
+        .serialize(&mut ser)
+        .expect("a JSON value serializes");
+    String::from_utf8(out).expect("serde_json writes UTF-8")
+}
+
+/// A value serialized with its object keys in JS order: array-index keys
+/// first in ascending order, then the rest in insertion order.
+struct JsOrder<'a>(&'a Value);
+
+impl serde::Serialize for JsOrder<'_> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeSeq};
+        match self.0 {
+            Value::Array(items) => {
+                let mut seq = s.serialize_seq(Some(items.len()))?;
+                for item in items {
+                    seq.serialize_element(&JsOrder(item))?;
                 }
-                write_json(out, item);
+                seq.end()
             }
-            out.push(']');
-        }
-        Value::Object(map) => {
-            out.push('{');
-            for (i, (k, item)) in map.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
+            Value::Object(map) => {
+                let mut index: Vec<(u64, &String, &Value)> = map
+                    .iter()
+                    .filter(|(k, _)| is_array_index(k))
+                    .map(|(k, v)| (k.parse().unwrap_or(0), k, v))
+                    .collect();
+                index.sort_by_key(|(n, _, _)| *n);
+                let mut out = s.serialize_map(Some(map.len()))?;
+                for (_, k, v) in index {
+                    out.serialize_entry(k, &JsOrder(v))?;
                 }
-                out.push_str(&serde_json::to_string(k).expect("strings serialize"));
-                out.push(':');
-                write_json(out, item);
+                for (k, v) in map.iter().filter(|(k, _)| !is_array_index(k)) {
+                    out.serialize_entry(k, &JsOrder(v))?;
+                }
+                out.end()
             }
-            out.push('}');
+            other => other.serialize(s),
         }
+    }
+}
+
+/// A serde_json formatter that writes numbers as `JSON.stringify` does:
+/// the digits of [`number_to_string`], and integers past 2^53 rounded to
+/// the nearest double first.
+struct JsFormatter<F>(F);
+
+const MAX_EXACT: u64 = 1 << 53;
+
+impl<F: serde_json::ser::Formatter> JsFormatter<F> {
+    fn number<W: ?Sized + std::io::Write>(&mut self, w: &mut W, x: f64) -> std::io::Result<()> {
+        if x.is_finite() {
+            w.write_all(number_to_string(x).as_bytes())
+        } else {
+            w.write_all(b"null")
+        }
+    }
+}
+
+macro_rules! delegate {
+    ($($name:ident($($arg:ident: $ty:ty),*);)*) => {
+        $(
+            fn $name<W: ?Sized + std::io::Write>(&mut self, w: &mut W $(, $arg: $ty)*) -> std::io::Result<()> {
+                self.0.$name(w $(, $arg)*)
+            }
+        )*
+    };
+}
+
+impl<F: serde_json::ser::Formatter> serde_json::ser::Formatter for JsFormatter<F> {
+    fn write_i64<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: i64) -> std::io::Result<()> {
+        if v.unsigned_abs() <= MAX_EXACT {
+            self.0.write_i64(w, v)
+        } else {
+            self.number(w, v as f64)
+        }
+    }
+
+    fn write_u64<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: u64) -> std::io::Result<()> {
+        if v <= MAX_EXACT {
+            self.0.write_u64(w, v)
+        } else {
+            self.number(w, v as f64)
+        }
+    }
+
+    fn write_i128<W: ?Sized + std::io::Write>(
+        &mut self,
+        w: &mut W,
+        v: i128,
+    ) -> std::io::Result<()> {
+        self.number(w, v as f64)
+    }
+
+    fn write_u128<W: ?Sized + std::io::Write>(
+        &mut self,
+        w: &mut W,
+        v: u128,
+    ) -> std::io::Result<()> {
+        self.number(w, v as f64)
+    }
+
+    fn write_f32<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: f32) -> std::io::Result<()> {
+        self.number(w, f64::from(v))
+    }
+
+    fn write_f64<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: f64) -> std::io::Result<()> {
+        self.number(w, v)
+    }
+
+    delegate! {
+        begin_array();
+        end_array();
+        begin_array_value(first: bool);
+        end_array_value();
+        begin_object();
+        end_object();
+        begin_object_key(first: bool);
+        end_object_key();
+        begin_object_value();
+        end_object_value();
     }
 }
 
@@ -358,6 +447,61 @@ mod tests {
             json_stringify(&json!({"a": [1, 2.5, null], "b": "x\"\u{0}"})),
             r#"{"a":[1,2.5,null],"b":"x\"\u0000"}"#
         );
+    }
+
+    /// Expected texts captured from Node's `JSON.stringify`.
+    #[test]
+    fn json_stringify_numbers_match_node() {
+        let floats = [
+            (1.9169625785304565e-6, "0.0000019169625785304565"),
+            (1e0, "1"),
+            (-1e0, "-1"),
+            (5e-1, "0.5"),
+            (1e21, "1e+21"),
+            (1e-7, "1e-7"),
+            (9.999999999999999e20, "999999999999999900000"),
+            (1.5e-7, "1.5e-7"),
+            (1.23456e2, "123.456"),
+            (0.0, "0"),
+            (-0.0, "0"),
+            (3.0000000000000004e-1, "0.30000000000000004"),
+            (5e-324, "5e-324"),
+            (1.7976931348623157e308, "1.7976931348623157e+308"),
+            (1e-6, "0.000001"),
+            (1.2345678901234568e20, "123456789012345680000"),
+            (9.007199254740992e15, "9007199254740992"),
+            (1.8446744073709552e19, "18446744073709552000"),
+            (-1e-7, "-1e-7"),
+            (1.234e-6, "0.000001234"),
+        ];
+        for (x, want) in floats {
+            let v = Value::Number(serde_json::Number::from_f64(x).unwrap());
+            assert_eq!(json_stringify(&v), want, "{x:e}");
+            assert_eq!(json_stringify_pretty(&v), want, "{x:e}");
+        }
+        assert_eq!(json_stringify(&json!(u64::MAX)), "18446744073709552000");
+        assert_eq!(
+            json_stringify(&json!(9007199254740993i64)),
+            "9007199254740992"
+        );
+        assert_eq!(
+            json_stringify(&json!(-9007199254740992i64)),
+            "-9007199254740992"
+        );
+        assert_eq!(json_stringify(&json!(42)), "42");
+    }
+
+    /// `JSON.stringify(v, null, 2)` in Node, for the same value.
+    #[test]
+    fn json_stringify_pretty_matches_node() {
+        let v = json!({
+            "b": [1.5, {"2": "x", "a": null, "1": true}],
+            "s": "\u{2028}\u{2029}\u{7f}\u{1}\u{1f}\u{8}\t\"\\/é😀",
+            "e": [],
+            "o": {},
+        });
+        let want = "{\n  \"b\": [\n    1.5,\n    {\n      \"1\": true,\n      \"2\": \"x\",\n      \"a\": null\n    }\n  ],\n  \"s\": \"\u{2028}\u{2029}\u{7f}\\u0001\\u001f\\b\\t\\\"\\\\/é😀\",\n  \"e\": [],\n  \"o\": {}\n}";
+        assert_eq!(json_stringify_pretty(&v), want);
     }
 
     #[test]

@@ -16,10 +16,8 @@ mod reindex;
 mod set_task_status;
 
 use serde::de::{Deserialize, Deserializer, Error as _};
-use serde_json::Value;
 
 use crate::mcp::tool::ToolSpec;
-use crate::util::js;
 
 pub fn specs() -> Vec<ToolSpec> {
     vec![
@@ -67,16 +65,4 @@ fn non_empty<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
         ));
     }
     Ok(s)
-}
-
-/// Integral floats as JSON integers, as `JSON.stringify` prints them.
-fn js_numbers(value: Value) -> Value {
-    match value {
-        Value::Number(n) if n.is_f64() => js::number_value(js::as_f64(&n)),
-        Value::Array(items) => Value::Array(items.into_iter().map(js_numbers).collect()),
-        Value::Object(map) => {
-            Value::Object(map.into_iter().map(|(k, v)| (k, js_numbers(v))).collect())
-        }
-        other => other,
-    }
 }

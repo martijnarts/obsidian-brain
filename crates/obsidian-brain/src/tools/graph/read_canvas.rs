@@ -24,8 +24,6 @@ pub fn spec() -> ToolSpec {
         let path = canvas_path(&args.path);
         let doc = read_canvas(&ctx.config.vault_path, &path)?
             .ok_or_else(|| anyhow!("Canvas not found: {path}"))?;
-        Ok(super::js_numbers(
-            json!({ "path": path, "nodes": doc.nodes, "edges": doc.edges }),
-        ))
+        Ok(json!({ "path": path, "nodes": doc.nodes, "edges": doc.edges }))
     })
 }

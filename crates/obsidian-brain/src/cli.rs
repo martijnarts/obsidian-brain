@@ -222,7 +222,10 @@ async fn run(command: Command) -> anyhow::Result<()> {
             let result = index_all(&vaults, drop).await;
             vaults.close().await;
             let stats = result?;
-            println!("{}", serde_json::to_string_pretty(&stats)?);
+            println!(
+                "{}",
+                crate::util::js::json_stringify_pretty(&serde_json::to_value(&stats)?)
+            );
             Ok(())
         }
         Command::Watch { vaults, debounce } => {
@@ -258,7 +261,10 @@ async fn run(command: Command) -> anyhow::Result<()> {
             let vaults = Vaults::open(&[vault], &data_dir).await?;
             let result = search(&vaults, &query, limit, mode).await;
             vaults.close().await;
-            println!("{}", serde_json::to_string_pretty(&result?)?);
+            println!(
+                "{}",
+                crate::util::js::json_stringify_pretty(&serde_json::to_value(result?)?)
+            );
             Ok(())
         }
     }

@@ -96,6 +96,26 @@ async fn read_returns_nodes_and_edges_with_unknown_fields() {
     assert_eq!(out["edges"], board()["edges"]);
 }
 
+/// The text a client sees is `JSON.stringify(result, null, 2)`, numbers
+/// included.
+#[tokio::test]
+async fn read_prints_numbers_as_javascript_does() {
+    let f = setup();
+    f.write(
+        "Tiny.canvas",
+        r#"{"nodes":[{"id":"t","type":"text","text":"x","x":1.0,"y":1.9169625785304565e-6,"width":1e21,"height":2.5}],"edges":[]}"#,
+    );
+    let (is_error, text) =
+        crate::support::call_text(&f.ctx, "read_canvas", json!({ "path": "Tiny" })).await;
+    assert!(!is_error, "{text}");
+    assert!(
+        text.contains(
+            "\"x\": 1,\n      \"y\": 0.0000019169625785304565,\n      \"width\": 1e+21,\n      \"height\": 2.5\n"
+        ),
+        "{text}"
+    );
+}
+
 #[tokio::test]
 async fn read_appends_the_extension() {
     let f = setup();

@@ -219,10 +219,10 @@ impl Args {
                 .color
                 .clone()
                 .map(|v| v.map_or(Value::Null, Value::String)),
-            "x" => self.x.map(js::number_value),
-            "y" => self.y.map(js::number_value),
-            "width" => self.width.map(js::number_value),
-            "height" => self.height.map(js::number_value),
+            "x" => self.x.map(Value::from),
+            "y" => self.y.map(Value::from),
+            "width" => self.width.map(Value::from),
+            "height" => self.height.map(Value::from),
             "fromNode" => str_value(&self.from_node),
             "toNode" => str_value(&self.to_node),
             "fromSide" => enum_value(&self.from_side),
@@ -331,15 +331,15 @@ fn edit(vault: &Path, args: &Args) -> Result<Value> {
             let mut node = CanvasItem::new();
             node.insert("id".into(), generate_canvas_id(&doc).into());
             node.insert("type".into(), ty.into());
-            node.insert("x".into(), js::number_value(args.x.unwrap_or(px)));
-            node.insert("y".into(), js::number_value(args.y.unwrap_or(py)));
+            node.insert("x".into(), Value::from(args.x.unwrap_or(px)));
+            node.insert("y".into(), Value::from(args.y.unwrap_or(py)));
             node.insert(
                 "width".into(),
-                js::number_value(args.width.unwrap_or(DEFAULT_NODE_WIDTH)),
+                Value::from(args.width.unwrap_or(DEFAULT_NODE_WIDTH)),
             );
             node.insert(
                 "height".into(),
-                js::number_value(args.height.unwrap_or(DEFAULT_NODE_HEIGHT)),
+                Value::from(args.height.unwrap_or(DEFAULT_NODE_HEIGHT)),
             );
             for key in CONTENT_KEYS.into_iter().chain(["color"]) {
                 if let Some(value) = args.get(key).filter(|v| !v.is_null()) {
@@ -439,7 +439,7 @@ fn edit(vault: &Path, args: &Args) -> Result<Value> {
     if !warnings.is_empty() {
         out.insert("warnings".into(), json!(warnings));
     }
-    Ok(super::js_numbers(Value::Object(out)))
+    Ok(Value::Object(out))
 }
 
 pub fn spec() -> ToolSpec {

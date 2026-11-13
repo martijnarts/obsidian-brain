@@ -11,7 +11,6 @@ use serde_json::{Value, json};
 use crate::graph::KnowledgeGraph;
 use crate::graph::centrality::{betweenness_centrality_normalized, page_rank};
 use crate::mcp::tool::ToolSpec;
-use crate::util::js;
 
 const DESCRIPTION: &str = "Rank notes by importance: 'influence' (densely-connected hubs), 'bridging' (notes that connect otherwise-separate topic clusters), or both. Credibility guards (I): by default, `influence` excludes notes with fewer than `minIncomingLinks: 2` incoming edges — this filters out random-orphan noise that makes PageRank feel meaningless on personal vaults. Pass `minIncomingLinks: 0` to see the unfiltered ranking. Bridging scores are normalized by graph size (divided by n*(n-1)/2) so values compare across vaults of different sizes — a bridging score of 0.5 means the same thing in any vault. Broken-wikilink stub targets are excluded by default; pass `includeStubs: true` to include them.";
 
@@ -47,7 +46,7 @@ struct Args {
 }
 
 fn entry(id: &str, title: &str, score: f64) -> Value {
-    json!({ "id": id, "title": title, "score": js::number_value(score) })
+    json!({ "id": id, "title": title, "score": score })
 }
 
 pub fn spec() -> ToolSpec {
