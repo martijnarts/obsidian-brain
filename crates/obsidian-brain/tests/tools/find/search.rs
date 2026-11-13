@@ -93,7 +93,7 @@ async fn semantic_runs_once_the_embedder_is_ready() {
 #[tokio::test]
 async fn fulltext_hits_carry_read_hints() {
     let f = fixture(&[("Alpha.md", "resilient components\n")]);
-    f.index();
+    f.seed_index();
     let out = f
         .ok("search", json!({"query": "resilient", "mode": "fulltext"}))
         .await;

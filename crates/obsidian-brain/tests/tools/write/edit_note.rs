@@ -11,7 +11,7 @@ use crate::support::Vault;
 fn with_note(rel: &str, content: &str) -> Vault {
     let v = Vault::new();
     v.write(rel, content);
-    v.node(rel, "Note");
+    v.row(rel, "Note");
     v
 }
 

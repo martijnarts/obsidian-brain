@@ -1,11 +1,11 @@
 use obsidian_brain::store::sync::set_sync_mtime;
 use serde_json::{Value, json};
 
-use crate::support::{Fixture, fixture, ids};
+use crate::support::{Vault, fixture, ids};
 
 /// Three folders, one stub and one untagged leaf, so every filter has
 /// something to tell apart.
-fn notes() -> Fixture {
+fn notes() -> Vault {
     let f = fixture(&[]);
     f.upsert(
         "People/Alice.md",
@@ -23,7 +23,7 @@ fn notes() -> Fixture {
     f
 }
 
-async fn list(f: &Fixture, args: Value) -> Vec<String> {
+async fn list(f: &Vault, args: Value) -> Vec<String> {
     ids(&f.ok("list_notes", args).await)
 }
 

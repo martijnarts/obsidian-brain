@@ -3,8 +3,8 @@ use std::sync::Arc;
 use obsidian_brain::context::VaultContext;
 use serde_json::{Value, json};
 
-use super::support::write;
 use super::{context, err, node, ok};
+use crate::support::write;
 
 const PROJECT: &str = "---
 title: Project

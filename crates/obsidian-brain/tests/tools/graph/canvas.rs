@@ -31,7 +31,7 @@ impl Fixture {
     }
 
     fn write(&self, rel: &str, content: &str) {
-        super::support::write(self.vault(), rel, content);
+        crate::support::write(self.vault(), rel, content);
     }
 
     fn raw(&self, rel: &str) -> String {

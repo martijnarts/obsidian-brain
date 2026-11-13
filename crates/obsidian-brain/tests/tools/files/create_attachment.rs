@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::harness::{Harness, assert_contains, outside, symlink};
+use crate::support::{Vault, assert_contains, outside, symlink};
 
 const BYTES: [u8; 7] = [0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x10];
 const B64: &str = "iVBORwD/EA==";
@@ -18,7 +18,7 @@ fn names(dir: &std::path::Path) -> Vec<String> {
 
 #[tokio::test]
 async fn writes_the_decoded_bytes_and_creates_missing_parent_folders() {
-    let h = Harness::new();
+    let h = Vault::new();
     let data = h
         .ok(
             "create_attachment",
@@ -35,7 +35,7 @@ async fn writes_the_decoded_bytes_and_creates_missing_parent_folders() {
 
 #[tokio::test]
 async fn accepts_base64_with_line_breaks_and_without_padding() {
-    let h = Harness::new();
+    let h = Vault::new();
     let wrapped = format!("{}\n{}", &B64[..4], &B64[4..]);
     let wrapped = wrapped.trim_end_matches('=');
     h.ok(
@@ -48,7 +48,7 @@ async fn accepts_base64_with_line_breaks_and_without_padding() {
 
 #[tokio::test]
 async fn refuses_to_replace_an_existing_file_unless_overwrite_is_true() {
-    let h = Harness::new();
+    let h = Vault::new();
     h.write("pic.png", "old");
     assert_eq!(
         h.err(
@@ -80,7 +80,7 @@ async fn refuses_to_replace_an_existing_file_unless_overwrite_is_true() {
 
 #[tokio::test]
 async fn refuses_markdown_a_folder_the_root_and_invalid_base64() {
-    let h = Harness::new();
+    let h = Vault::new();
     std::fs::create_dir(h.abs("dir")).unwrap();
     let cases = [
         (json!({ "path": "Note.MD", "content": B64 }), "create_note"),
@@ -105,12 +105,12 @@ async fn refuses_markdown_a_folder_the_root_and_invalid_base64() {
     for (args, want) in cases {
         assert_contains(&h.err("create_attachment", args).await, &[want]);
     }
-    assert_eq!(names(&h.vault), ["dir"]);
+    assert_eq!(names(h.path()), ["dir"]);
 }
 
 #[tokio::test]
 async fn caps_the_decoded_size_at_10_mb() {
-    let h = Harness::new();
+    let h = Vault::new();
     let limit = 10 * 1024 * 1024;
     // The limit is 3 * 3495253 + 1 bytes: whole groups, then one or two
     // padded bytes.
@@ -136,7 +136,7 @@ async fn caps_the_decoded_size_at_10_mb() {
 
 #[tokio::test]
 async fn refuses_paths_outside_the_vault() {
-    let h = Harness::new();
+    let h = Vault::new();
     for path in ["../x.png", "/tmp/x.png"] {
         assert_contains(
             &h.err("create_attachment", json!({ "path": path, "content": B64 }))

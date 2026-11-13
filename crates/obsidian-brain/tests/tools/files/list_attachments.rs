@@ -2,10 +2,10 @@
 
 use serde_json::{Value, json};
 
-use super::harness::{Harness, INVALID, assert_contains};
+use crate::support::{INVALID, Vault, assert_contains};
 
-fn harness() -> Harness {
-    let h = Harness::new();
+fn harness() -> Vault {
+    let h = Vault::new();
     h.write("attachments/photo.png", [0u8; 10]);
     h.write("attachments/Scan.PDF", [0u8; 20]);
     h.write("docs/my file.pdf", [0u8; 5]);

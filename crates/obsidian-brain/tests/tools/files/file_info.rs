@@ -3,7 +3,7 @@
 use chrono::{DateTime, SecondsFormat};
 use serde_json::json;
 
-use super::harness::{Harness, assert_contains, outside, symlink};
+use crate::support::{Vault, assert_contains, outside, symlink};
 
 const NOTE: &str = "---
 tags: [project, \"#work\"]
@@ -21,15 +21,15 @@ Some #inline text with #project again.
 ```
 ";
 
-fn harness() -> Harness {
-    let h = Harness::new();
+fn harness() -> Vault {
+    let h = Vault::new();
     h.write("Projects/Plan.md", NOTE);
     h.write("assets/pic.png", [1u8, 2, 3, 4]);
     h.node("Projects/Plan.md", "Plan", "", json!({}));
     h.node("Other.md", "Other", "", json!({}));
-    h.edge("Projects/Plan.md", "Other.md");
-    h.edge("Projects/Plan.md", "_stub/Missing.md");
-    h.edge("Other.md", "Projects/Plan.md");
+    h.edge("Projects/Plan.md", "Other.md", "");
+    h.edge("Projects/Plan.md", "_stub/Missing.md", "");
+    h.edge("Other.md", "Projects/Plan.md", "");
     h
 }
 

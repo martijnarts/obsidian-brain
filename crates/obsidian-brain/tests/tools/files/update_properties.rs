@@ -2,22 +2,22 @@
 
 use serde_json::json;
 
-use super::harness::{Harness, assert_contains, outside, symlink};
+use crate::support::{Vault, assert_contains, outside, symlink};
 
 const BODY: &str = "# Heading\n\nBody text with [[link]].\n";
 
-fn note(h: &Harness, rel: &str, content: &str) {
+fn note(h: &Vault, rel: &str, content: &str) {
     note_titled(h, rel, content, rel.trim_end_matches(".md"));
 }
 
-fn note_titled(h: &Harness, rel: &str, content: &str, title: &str) {
+fn note_titled(h: &Vault, rel: &str, content: &str, title: &str) {
     h.write(rel, content);
     h.node(rel, title, "", json!({}));
 }
 
 #[tokio::test]
 async fn sets_and_removes_several_keys_in_one_write() {
-    let h = Harness::new();
+    let h = Vault::new();
     note(
         &h,
         "n.md",
@@ -48,7 +48,7 @@ async fn sets_and_removes_several_keys_in_one_write() {
 
 #[tokio::test]
 async fn creates_the_frontmatter_block_when_the_note_has_none() {
-    let h = Harness::new();
+    let h = Vault::new();
     note(&h, "plain.md", BODY);
     h.ok(
         "update_properties",
@@ -61,7 +61,7 @@ async fn creates_the_frontmatter_block_when_the_note_has_none() {
 
 #[tokio::test]
 async fn removing_the_last_key_drops_the_block() {
-    let h = Harness::new();
+    let h = Vault::new();
     note(&h, "one.md", &format!("---\nk: v\n---\n{BODY}"));
     h.ok(
         "update_properties",
@@ -74,7 +74,7 @@ async fn removing_the_last_key_drops_the_block() {
 
 #[tokio::test]
 async fn a_null_value_removes_the_key_and_set_wins_over_remove() {
-    let h = Harness::new();
+    let h = Vault::new();
     note(&h, "n.md", &format!("---\na: 1\nb: 2\n---\n{BODY}"));
     let out = h
         .ok(
@@ -90,7 +90,7 @@ async fn a_null_value_removes_the_key_and_set_wins_over_remove() {
 
 #[tokio::test]
 async fn reports_absent_keys_and_leaves_the_file_untouched_when_nothing_changes() {
-    let h = Harness::new();
+    let h = Vault::new();
     let original = format!("---\nz:   'spaced'\n---\n{BODY}");
     note(&h, "n.md", &original);
     let out = h
@@ -107,7 +107,7 @@ async fn reports_absent_keys_and_leaves_the_file_untouched_when_nothing_changes(
 
 #[tokio::test]
 async fn dry_run_returns_the_new_frontmatter_and_does_not_write() {
-    let h = Harness::new();
+    let h = Vault::new();
     let original = format!("---\na: 1\n---\n{BODY}");
     note(&h, "n.md", &original);
     let out = h
@@ -128,7 +128,7 @@ async fn dry_run_returns_the_new_frontmatter_and_does_not_write() {
 
 #[tokio::test]
 async fn resolves_a_note_by_title() {
-    let h = Harness::new();
+    let h = Vault::new();
     note_titled(&h, "Sub/Long name.md", BODY, "Long name");
     h.ok(
         "update_properties",
@@ -141,7 +141,7 @@ async fn resolves_a_note_by_title() {
 
 #[tokio::test]
 async fn rejects_calls_with_nothing_to_do_and_invalid_keys() {
-    let h = Harness::new();
+    let h = Vault::new();
     note(&h, "n.md", BODY);
     for args in [
         json!({ "name": "n.md" }),
@@ -172,7 +172,7 @@ async fn rejects_calls_with_nothing_to_do_and_invalid_keys() {
 
 #[tokio::test]
 async fn errors_on_a_missing_note_an_ambiguous_name_and_a_stub() {
-    let h = Harness::new();
+    let h = Vault::new();
     note_titled(&h, "Alpha one.md", BODY, "Alpha one");
     note_titled(&h, "Alpha two.md", BODY, "Alpha two");
     h.node("_stub/Ghost.md", "Ghost", "", json!({ "_stub": true }));
@@ -195,7 +195,7 @@ async fn errors_on_a_missing_note_an_ambiguous_name_and_a_stub() {
 
 #[tokio::test]
 async fn refuses_a_note_whose_file_is_a_symlink_out_of_the_vault() {
-    let h = Harness::new();
+    let h = Vault::new();
     let out = outside();
     let target = out.path().join("secret.md");
     std::fs::write(&target, BODY).unwrap();
@@ -214,7 +214,7 @@ async fn refuses_a_note_whose_file_is_a_symlink_out_of_the_vault() {
 
 #[tokio::test]
 async fn refuses_an_indexed_id_that_climbs_out_of_the_vault() {
-    let h = Harness::new();
+    let h = Vault::new();
     let out = outside();
     std::fs::write(out.path().join("x.md"), BODY).unwrap();
     let rel = format!(

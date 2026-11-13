@@ -42,7 +42,7 @@ async fn influence_with_min_zero_includes_low_inbound_nodes() {
     .await;
     let found = ids(&out);
     assert_eq!(found[0], "hub.md");
-    assert!(found.contains(&"orphan.md"));
+    assert!(found.contains(&"orphan.md".into()));
 }
 
 #[tokio::test]
@@ -60,10 +60,10 @@ async fn stubs_are_excluded_unless_asked() {
         json!({ "metric": "influence", "minIncomingLinks": 0, "includeStubs": true }),
     )
     .await;
-    assert!(ids(&default).contains(&"hub.md"));
-    assert!(ids(&with_stubs).contains(&"hub.md"));
-    assert!(!ids(&default).contains(&"stub.md"));
-    assert!(ids(&with_stubs).contains(&"stub.md"));
+    assert!(ids(&default).contains(&"hub.md".into()));
+    assert!(ids(&with_stubs).contains(&"hub.md".into()));
+    assert!(!ids(&default).contains(&"stub.md".into()));
+    assert!(ids(&with_stubs).contains(&"stub.md".into()));
 }
 
 #[tokio::test]

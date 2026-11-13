@@ -25,7 +25,7 @@ async fn move_note_refuses_destinations_outside_the_vault() {
             std::fs::create_dir(&outside).unwrap();
             std::os::unix::fs::symlink(&outside, v.path().join("linked")).unwrap();
             v.write("A.md", "# A\n");
-            v.node("A.md", "A");
+            v.row("A.md", "A");
             let err = v
                 .err(
                     "move_note",
@@ -44,7 +44,7 @@ async fn move_note_refuses_destinations_outside_the_vault() {
 async fn move_note_moves_a_note_into_a_new_folder() {
     let v = Vault::new();
     v.write("A.md", "# A\n");
-    v.node("A.md", "A");
+    v.row("A.md", "A");
     let out = v
         .ok(
             "move_note",
@@ -69,8 +69,8 @@ async fn a_dry_run_reports_without_mutating() {
     let v = Vault::new();
     v.write("alpha.md", "# Alpha\n");
     v.write("ref.md", "See [[alpha]] for details.\n");
-    v.node("alpha.md", "Alpha");
-    v.node("ref.md", "Ref");
+    v.row("alpha.md", "Alpha");
+    v.row("ref.md", "Ref");
     v.edge("ref.md", "alpha.md", "link");
     let before: Vec<String> = v.db().with(all_node_ids).unwrap();
     let out = v
@@ -104,11 +104,11 @@ async fn the_old_stub_is_migrated_and_orphan_stubs_are_pruned() {
         "_move_source.md",
         "See [[_move_target#Section A]] for context.\n",
     );
-    v.node("_move_target.md", "_move_target");
-    v.node("_move_source.md", "_move_source");
-    v.node("_stub/_move_target.md", "_move_target");
-    v.node("_stub/_move_target#Section A.md", "_move_target#Section A");
-    v.node("_stub/_move_target#Orphan.md", "_move_target#Orphan");
+    v.row("_move_target.md", "_move_target");
+    v.row("_move_source.md", "_move_source");
+    v.row("_stub/_move_target.md", "_move_target");
+    v.row("_stub/_move_target#Section A.md", "_move_target#Section A");
+    v.row("_stub/_move_target#Orphan.md", "_move_target#Orphan");
     v.edge("_move_source.md", "_stub/_move_target.md", "link");
     v.edge("_move_source.md", "_stub/_move_target#Section A.md", "link");
 

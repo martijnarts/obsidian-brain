@@ -12,7 +12,7 @@ use crate::support::Vault;
 async fn a_dry_run_then_apply_writes_the_file_and_clears_the_preview() {
     let v = Vault::new();
     v.write("happy.md", "# Hello\n");
-    v.node("happy.md", "Happy");
+    v.row("happy.md", "Happy");
     let preview = v
         .ok(
             "edit_note",
@@ -52,7 +52,7 @@ async fn an_unknown_preview_id_is_a_descriptive_error() {
 async fn a_file_changed_since_the_preview_is_left_alone() {
     let v = Vault::new();
     v.write("changed.md", "original content\n");
-    v.node("changed.md", "Changed");
+    v.row("changed.md", "Changed");
     let preview = v
         .ok(
             "edit_note",

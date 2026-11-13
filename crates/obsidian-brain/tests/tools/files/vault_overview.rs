@@ -3,15 +3,15 @@
 use obsidian_brain::store::sync::set_sync_mtime;
 use serde_json::json;
 
-use super::harness::Harness;
+use crate::support::Vault;
 
-fn mtime(h: &Harness, id: &str, ms: f64) {
+fn mtime(h: &Vault, id: &str, ms: f64) {
     h.ctx.db.with(|c| set_sync_mtime(c, id, ms, None)).unwrap();
 }
 
 #[tokio::test]
 async fn returns_an_all_empty_snapshot_for_an_empty_vault() {
-    let h = Harness::new();
+    let h = Vault::new();
     assert_eq!(
         h.ok("vault_overview", json!({})).await,
         json!({ "notes": 0, "attachments": 0, "folders": [], "topTags": [], "recent": [] })
@@ -20,7 +20,7 @@ async fn returns_an_all_empty_snapshot_for_an_empty_vault() {
 
 #[tokio::test]
 async fn counts_notes_attachments_folders_tags_and_recent_notes() {
-    let h = Harness::new();
+    let h = Vault::new();
     h.write("attachments/pic.png", "x");
     h.write("doc.pdf", "x");
     h.write("root.md", "# Root");
@@ -66,7 +66,7 @@ async fn counts_notes_attachments_folders_tags_and_recent_notes() {
 
 #[tokio::test]
 async fn top_tags_and_recent_limit_the_snapshot() {
-    let h = Harness::new();
+    let h = Vault::new();
     for i in 0..20 {
         let id = format!("n{i}.md");
         h.node(

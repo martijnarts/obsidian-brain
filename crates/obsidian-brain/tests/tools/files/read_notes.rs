@@ -2,10 +2,10 @@
 
 use serde_json::json;
 
-use super::harness::{Harness, INVALID, assert_contains};
+use crate::support::{INVALID, Vault, assert_contains};
 
-fn harness() -> Harness {
-    let h = Harness::new();
+fn harness() -> Vault {
+    let h = Vault::new();
     h.node("Alpha.md", "Alpha", "alpha body", json!({ "tags": ["a"] }));
     h.node("dir/Beta.md", "Beta", &"b".repeat(3000), json!({}));
     h.node("x/Gamma.md", "Gamma one", "", json!({}));
@@ -58,7 +58,7 @@ async fn honours_max_content_length_per_note() {
 
 #[tokio::test]
 async fn truncation_counts_utf16_units() {
-    let h = Harness::new();
+    let h = Vault::new();
     h.node("E.md", "E", "😀😀ab", json!({}));
     let out = h
         .ok(

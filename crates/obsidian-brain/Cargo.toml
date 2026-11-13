@@ -45,11 +45,3 @@ getrandom = "0.3"
 tokio = { version = "1", features = ["test-util"] }
 tempfile = "3"
 pretty_assertions = "1"
-
-[[test]]
-name = "tools_find"
-path = "tests/tools/find/main.rs"
-
-[[test]]
-name = "tools_write"
-path = "tests/tools/write/main.rs"
