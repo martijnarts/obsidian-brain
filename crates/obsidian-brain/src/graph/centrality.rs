@@ -1,9 +1,10 @@
 //! PageRank and betweenness centrality.
 //!
-//! Both follow graphology-metrics 2.4 step by step (pagerank.js,
-//! betweenness.js and the indexed Brandes routine of
-//! graphology-shortest-path), so scores match it to the last bit. That
-//! includes its quirks: see [`WeightedIndex`].
+//! Both follow graphology-metrics 2.4 (pagerank.js, betweenness.js and the
+//! indexed Brandes routine of graphology-shortest-path), so scores match it
+//! wherever its index is correct. graphology mis-indexes graphs with
+//! self-loops and graphs of exactly 128 or 32768 edges, and wraps path
+//! counts at 2^32; this port does not copy those bugs.
 
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
@@ -31,15 +32,9 @@ pub enum CentralityError {
 }
 
 /// graphology-indices' `WeightedNeighborhoodIndex` over the outbound edges
-/// of an undirected graph, every edge weighing 1.
-///
-/// Two quirks of the original are kept, because they change scores:
-/// - It sizes the arrays for `2 * size` entries, but a self-loop fills one
-///   entry, not two. The spare entries sit at the end of the last node's
-///   range, point at node 0 and weigh 0.
-/// - `starts` is the smallest unsigned typed array that holds
-///   `2 * size - 1`, so the final bound `2 * size` wraps to 0 when it is
-///   exactly 256 or 65536. The last node then has no neighbours.
+/// of an undirected graph, every edge weighing 1: the neighbours of node
+/// `i` are `neighborhood[starts[i]..starts[i + 1]]`. A self-loop is one
+/// entry.
 struct WeightedIndex {
     neighborhood: Vec<usize>,
     weights: Vec<f64>,
@@ -50,26 +45,18 @@ struct WeightedIndex {
 impl WeightedIndex {
     fn new(g: &UndirectedGraph) -> Self {
         let order = g.order();
-        let upper_bound = g.size() * 2;
-        let mask = pointer_mask(upper_bound);
-        let mut neighborhood = vec![0usize; upper_bound];
-        let mut weights = vec![0.0f64; upper_bound];
-        let mut out_degrees = vec![0.0f64; order];
-        let mut starts = vec![0usize; order + 1];
-        let mut n = 0;
+        let mut neighborhood = Vec::with_capacity(g.size() * 2);
+        let mut out_degrees = Vec::with_capacity(order);
+        let mut starts = Vec::with_capacity(order + 1);
         for i in 0..order {
-            starts[i] = n & mask;
-            for &j in g.adj_at(i) {
-                neighborhood[n] = j;
-                weights[n] = 1.0;
-                n += 1;
-                out_degrees[i] += 1.0;
-            }
+            starts.push(neighborhood.len());
+            neighborhood.extend_from_slice(g.adj_at(i));
+            out_degrees.push(g.adj_at(i).len() as f64);
         }
-        starts[order] = upper_bound & mask;
+        starts.push(neighborhood.len());
         Self {
+            weights: vec![1.0; neighborhood.len()],
             neighborhood,
-            weights,
             out_degrees,
             starts,
         }
@@ -77,18 +64,6 @@ impl WeightedIndex {
 
     fn range(&self, i: usize) -> std::ops::Range<usize> {
         self.starts[i]..self.starts[i + 1]
-    }
-}
-
-/// The value mask of mnemonist's `getPointerArray(size)`.
-fn pointer_mask(size: usize) -> usize {
-    let max_index = size as i64 - 1;
-    if max_index <= u8::MAX as i64 {
-        u8::MAX as usize
-    } else if max_index <= u16::MAX as i64 {
-        u16::MAX as usize
-    } else {
-        u32::MAX as usize
     }
 }
 
@@ -183,14 +158,15 @@ impl Ord for HeapItem {
 /// graphology-metrics `betweennessCentrality` with its defaults: the
 /// Dijkstra variant of Brandes (edge weight 1), normalized by
 /// `1 / ((n - 1)(n - 2))` when `n > 2`. Scores come back in node order.
-/// Path counts are u32 and wrap, as in the original `Uint32Array`.
+/// Path counts are f64, so they do not wrap as graphology's `Uint32Array`
+/// does.
 pub fn betweenness_raw(g: &UndirectedGraph) -> Vec<f64> {
     let n = g.order();
     let index = WeightedIndex::new(g);
 
     let mut stack = vec![0usize; n];
     let mut stack_size = 0usize;
-    let mut sigma = vec![0u32; n];
+    let mut sigma = vec![0.0f64; n];
     let mut preds: Vec<Vec<usize>> = vec![Vec::new(); n];
     let mut dist = vec![-1.0f64; n];
     let mut seen = vec![-1.0f64; n];
@@ -202,11 +178,11 @@ pub fn betweenness_raw(g: &UndirectedGraph) -> Vec<f64> {
         let mut count: u64 = 0;
         for v in 0..n {
             preds[v].clear();
-            sigma[v] = 0;
+            sigma[v] = 0.0;
             dist[v] = -1.0;
             seen[v] = -1.0;
         }
-        sigma[source] = 1;
+        sigma[source] = 1.0;
         seen[source] = 0.0;
         heap.push(Reverse(HeapItem {
             cost: 0.0,
@@ -224,7 +200,7 @@ pub fn betweenness_raw(g: &UndirectedGraph) -> Vec<f64> {
             stack[stack_size] = v;
             stack_size += 1;
             dist[v] = item.cost;
-            sigma[v] = sigma[v].wrapping_add(sigma[item.pred]);
+            sigma[v] += sigma[item.pred];
 
             for j in index.range(v) {
                 let w = index.neighborhood[j];
@@ -238,30 +214,26 @@ pub fn betweenness_raw(g: &UndirectedGraph) -> Vec<f64> {
                         node: w,
                     }));
                     count += 1;
-                    sigma[w] = 0;
+                    sigma[w] = 0.0;
                     preds[w].clear();
                     preds[w].push(v);
                 } else if cost == seen[w] {
-                    sigma[w] = sigma[w].wrapping_add(sigma[v]);
+                    sigma[w] += sigma[v];
                     preds[w].push(v);
                 }
             }
         }
 
-        // The original resets stack slots 1..=size, not 0..size. Slot 0 is
-        // the source, whose delta is never read.
-        for k in 1..=stack_size {
-            if k < n {
-                delta[stack[k]] = 0.0;
-            }
+        for &v in &stack[..stack_size] {
+            delta[v] = 0.0;
         }
 
         while stack_size != 0 {
             stack_size -= 1;
             let w = stack[stack_size];
-            let coefficient = (1.0 + delta[w]) / sigma[w] as f64;
+            let coefficient = (1.0 + delta[w]) / sigma[w];
             for &v in &preds[w] {
-                delta[v] += sigma[v] as f64 * coefficient;
+                delta[v] += sigma[v] * coefficient;
             }
             if w != source {
                 centralities[w] += delta[w];
@@ -496,37 +468,34 @@ mod tests {
         v.as_str().unwrap().parse().unwrap()
     }
 
+    fn graph_of(case: &Value) -> UndirectedGraph {
+        let db = open_db(":memory:").unwrap();
+        for n in case["nodes"].as_array().unwrap() {
+            let (id, title) = (n[0].as_str().unwrap(), n[1].as_str().unwrap());
+            node(&db, id, title, n[2].as_bool().unwrap());
+        }
+        for e in case["edges"].as_array().unwrap() {
+            let (s, t) = (e[0].as_str().unwrap(), e[1].as_str().unwrap());
+            edge(&db, s, t, e[2].as_str().unwrap());
+        }
+        let include_stubs = case["includeStubs"].as_bool().unwrap();
+        KnowledgeGraph::from_store(&db, include_stubs)
+            .unwrap()
+            .to_undirected()
+    }
+
     /// Scores recorded from graphology-metrics through the TypeScript code
-    /// (testdata/generate.mts). Every value must match to the bit. The
-    /// graphs cover self-loops, parallel and reciprocal edges, stubs,
-    /// isolated nodes and the 128-edge index wrap.
+    /// (testdata/generate.mts), for graphs where its index is correct: no
+    /// self-loops and not 128 or 32768 edges. Every value must match to
+    /// the bit.
     #[test]
     fn matches_graphology_exactly() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("testdata/graphology.json")).unwrap();
-        assert_eq!(cases.len(), 5);
+        assert_eq!(cases.len(), 2);
         for case in &cases {
             let name = case["name"].as_str().unwrap();
-            let db = open_db(":memory:").unwrap();
-            for n in case["nodes"].as_array().unwrap() {
-                node(
-                    &db,
-                    n[0].as_str().unwrap(),
-                    n[1].as_str().unwrap(),
-                    n[2].as_bool().unwrap(),
-                );
-            }
-            for e in case["edges"].as_array().unwrap() {
-                edge(
-                    &db,
-                    e[0].as_str().unwrap(),
-                    e[1].as_str().unwrap(),
-                    e[2].as_str().unwrap(),
-                );
-            }
-            let g =
-                KnowledgeGraph::from_store(&db, case["includeStubs"].as_bool().unwrap()).unwrap();
-            let u = g.to_undirected();
+            let u = graph_of(case);
 
             let pr = page_rank(&u).unwrap();
             let want: Vec<(String, f64)> = case["pageRank"]
@@ -557,5 +526,77 @@ mod tests {
                 assert_eq!(got, want, "{name}: {key}");
             }
         }
+    }
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() <= 1e-12 + 1e-9 * b.abs()
+    }
+
+    /// Scores from networkx (testdata/networkx_reference.py), an
+    /// independent implementation, on graphs that include self-loops,
+    /// parallel and reciprocal edges, stubs, isolated nodes and 128 edges.
+    /// networkx sums in another order, so values match to a tolerance.
+    #[test]
+    fn matches_networkx() {
+        let cases: Vec<Value> =
+            serde_json::from_str(include_str!("testdata/networkx.json")).unwrap();
+        assert_eq!(cases.len(), 5);
+        for case in &cases {
+            let name = case["name"].as_str().unwrap();
+            let u = graph_of(case);
+
+            let pr = page_rank(&u).unwrap();
+            let want = case["pageRank"].as_array().unwrap();
+            assert_eq!(pr.len(), want.len(), "{name}");
+            for ((id, got), w) in pr.iter().zip(want) {
+                assert_eq!(id, w[0].as_str().unwrap(), "{name}: pageRank order");
+                let w = w[1].as_f64().unwrap();
+                assert!(close(*got, w), "{name}: pageRank {id}: {got} vs {w}");
+            }
+
+            let raw = betweenness_raw(&u);
+            let want = case["betweenness"].as_array().unwrap();
+            assert_eq!(raw.len(), want.len(), "{name}");
+            for (i, w) in want.iter().enumerate() {
+                assert_eq!(u.node_ids()[i], w[0].as_str().unwrap(), "{name}");
+                let w = w[1].as_f64().unwrap();
+                assert!(
+                    close(raw[i], w),
+                    "{name}: betweenness {i}: {} vs {w}",
+                    raw[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn page_rank_sums_to_one_on_a_128_edge_path() {
+        let ids: Vec<String> = (0..129).map(|i| format!("p{i:03}.md")).collect();
+        let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+        let edges: Vec<_> = refs.windows(2).map(|w| (w[0], w[1])).collect();
+        let pr = page_rank(&kg(&refs, &edges).to_undirected()).unwrap();
+        let sum: f64 = pr.iter().map(|(_, v)| v).sum();
+        assert!((sum - 1.0).abs() < 1e-9, "{sum}");
+        // The path is symmetric, so its two ends score the same.
+        assert!(close(score(&pr, "p000.md"), score(&pr, "p128.md")));
+    }
+
+    #[test]
+    fn a_self_loop_changes_no_betweenness() {
+        let ids = ["a.md", "b.md", "c.md", "d.md", "e.md"];
+        let edges = [
+            ("a.md", "b.md"),
+            ("b.md", "c.md"),
+            ("c.md", "d.md"),
+            ("b.md", "e.md"),
+        ];
+        let plain = betweenness_raw(&kg(&ids, &edges).to_undirected());
+        // The last node in index order carries the loop.
+        let mut looped = edges.to_vec();
+        looped.push(("e.md", "e.md"));
+        assert_eq!(betweenness_raw(&kg(&ids, &looped).to_undirected()), plain);
+        let pr = page_rank(&kg(&ids, &looped).to_undirected()).unwrap();
+        let sum: f64 = pr.iter().map(|(_, v)| v).sum();
+        assert!((sum - 1.0).abs() < 1e-9, "{sum}");
     }
 }

@@ -1,9 +1,10 @@
-// Regenerates graphology.json from the TypeScript graph code, which
-// calls graphology-metrics. Run from a checkout with node_modules:
-//   node_modules/.bin/tsx <this file> <out.json>
-// and point ROOT at that checkout.
-// Builds graphs through the real TS store + graph code and records
-// graphology's PageRank and betweenness output.
+// Records graphology-metrics' PageRank and betweenness through the
+// TypeScript graph code. Run from a checkout with node_modules, with ROOT
+// pointing at it:
+//   node_modules/.bin/tsx generate.mts graphology.json specs.json
+// graphology.json keeps the graphs where graphology's index is correct
+// (no self-loops, not 128 or 32768 edges). specs.json holds every graph,
+// as input for networkx_reference.py.
 const ROOT = '/var/lib/coder/work/tmp-checkout/obsidian-brain-rust-port';
 const { openDb } = await import(ROOT + '/src/store/db.ts');
 const { upsertNode } = await import(ROOT + '/src/store/nodes.ts');
@@ -53,4 +54,6 @@ for (const spec of specs) {
   });
   db.close();
 }
-fs.writeFileSync(process.argv[2], JSON.stringify(out) + '\n');
+const exact = new Set(['small', 'star']);
+fs.writeFileSync(process.argv[2], JSON.stringify(out.filter((c) => exact.has((c as Spec).name))) + '\n');
+fs.writeFileSync(process.argv[3], JSON.stringify(specs) + '\n');
