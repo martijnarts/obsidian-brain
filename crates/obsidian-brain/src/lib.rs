@@ -5,6 +5,7 @@ pub mod embeddings;
 pub mod graph;
 pub mod mcp;
 pub mod pipeline;
+pub mod resolve;
 pub mod search;
 pub mod store;
 pub mod tools;
