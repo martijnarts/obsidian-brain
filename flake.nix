@@ -21,7 +21,9 @@
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           nativeBuildInputs = [ pkgs.pkg-config pkgs.makeWrapper ];
-          buildInputs = [ pkgs.onnxruntime ];
+          # sqlite-vec links -lsqlite3; the bundled SQLite of rusqlite
+          # resolves its symbols first.
+          buildInputs = [ pkgs.onnxruntime pkgs.sqlite ];
           env = ortEnv pkgs;
           postInstall = ''
             wrapProgram $out/bin/obsidian-brain \
