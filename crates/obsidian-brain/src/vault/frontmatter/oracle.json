@@ -1,0 +1,537 @@
+{
+ "parse": [
+  {
+   "raw": "",
+   "data": {},
+   "content": ""
+  },
+  {
+   "raw": "no frontmatter\n",
+   "data": {},
+   "content": "no frontmatter\n"
+  },
+  {
+   "raw": "---",
+   "data": {},
+   "content": ""
+  },
+  {
+   "raw": "---\n---\n",
+   "data": {},
+   "content": ""
+  },
+  {
+   "raw": "---\n---\nbody",
+   "data": {},
+   "content": "body"
+  },
+  {
+   "raw": "---\ntitle: unclosed\n",
+   "data": {
+    "title": "unclosed"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\ntitle: unclosed\nBody with no closing marker\n",
+   "error": "can not read a block mapping entry; a multiline key may not be an implicit key at line 4, column 1:"
+  },
+  {
+   "raw": "---\ntitle: Test\nnested:\n\tvalue: ok\n---\n\nBody.",
+   "data": {
+    "title": "Test",
+    "nested": null,
+    "value": "ok"
+   },
+   "content": "\nBody."
+  },
+  {
+   "raw": "---\n~\n---\nx",
+   "data": {},
+   "content": "x"
+  },
+  {
+   "raw": "---\n- a\n- b\n---\nx",
+   "data": [
+    "a",
+    "b"
+   ],
+   "content": "x"
+  },
+  {
+   "raw": "---\nb: 1\n2: x\na: 3\n1: y\n---\n",
+   "data": {
+    "1": "y",
+    "2": "x",
+    "b": 1,
+    "a": 3
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\nd: 2024-01-01\nt: 2024-01-01 10:00:00 +02:00\nbad: 2024-13-45\nold: 0024-01-01\noct: 0123\nzip: 09\nsex: 1:30\nf: 1.0\ne: 1e3\nn: .nan\ni: -.inf\nh: 0x1F\nb: 0b101\nneg0: -0\nyes: yes\nT: True\nnul: Null\nund: 1_000\n---\n",
+   "data": {
+    "d": "2024-01-01T00:00:00.000Z",
+    "t": "2024-01-01T08:00:00.000Z",
+    "bad": "2025-02-14T00:00:00.000Z",
+    "old": "1924-01-01T00:00:00.000Z",
+    "oct": 83,
+    "zip": "09",
+    "sex": 90,
+    "f": 1,
+    "e": 1000,
+    "n": null,
+    "i": null,
+    "h": 31,
+    "b": 5,
+    "neg0": 0,
+    "yes": "yes",
+    "T": true,
+    "nul": null,
+    "und": 1000
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\na: 1\na: 2\n---\n",
+   "error": "duplicated mapping key at line 3, column 1:"
+  },
+  {
+   "raw": "---\nbase: &b {x: 1}\nother:\n  <<: *b\n  y: 2\n---\n",
+   "data": {
+    "base": {
+     "x": 1
+    },
+    "other": {
+     "x": 1,
+     "y": 2
+    }
+   },
+   "content": ""
+  },
+  {
+   "raw": "﻿---\na: 1\n---\nbody",
+   "data": {
+    "a": 1
+   },
+   "content": "body"
+  },
+  {
+   "raw": "---\r\na: 1\r\nb: |\r\n  x\r\n  y\r\n---\r\nbody\r\n",
+   "data": {
+    "a": 1,
+    "b": "x\ny\n"
+   },
+   "content": "body\r\n"
+  },
+  {
+   "raw": "---\na: 1\n----\nrest",
+   "data": {
+    "a": 1
+   },
+   "content": "-\nrest"
+  },
+  {
+   "raw": "---yaml\na: 1\n---\n",
+   "data": {
+    "a": 1
+   },
+   "content": ""
+  },
+  {
+   "raw": "---foo\na: 1\n---\n",
+   "error": "gray-matter engine \"foo\" is not registered"
+  },
+  {
+   "raw": "----\na: 1\n---\n",
+   "data": {},
+   "content": "----\na: 1\n---\n"
+  },
+  {
+   "raw": "---\n# only comment\n---\nbody",
+   "data": {},
+   "content": "body"
+  },
+  {
+   "raw": "---\na: !foo x\n---\n",
+   "error": "unknown tag !<!foo> at line 2, column 10:"
+  },
+  {
+   "raw": "---\na: !!str 12\nb: !!int '7'\n---\n",
+   "data": {
+    "a": "12",
+    "b": 7
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\n'1': a\ntrue: b\n~: c\n[x, y]: d\n---\n",
+   "data": {
+    "1": "a",
+    "true": "b",
+    "null": "c",
+    "x,y": "d"
+   },
+   "content": ""
+  },
+  {
+   "raw": "--- \na: 1\n---\n",
+   "data": {
+    "a": 1
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\na: 1\n---",
+   "data": {
+    "a": 1
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\na: |\n  line\n\n  two\nb: >-\n  folded\n  text\n---\n",
+   "data": {
+    "a": "line\n\ntwo\n",
+    "b": "folded text"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\n# comment\ntitle: \"Quoted: yes\" # trailing\n'single key': 'it''s'\nlist:\n- a\n- b # c\nmap:\n  inner: [1, 2]\n  deep:\n    x: ~\n---\nBody\n",
+   "data": {
+    "title": "Quoted: yes",
+    "single key": "it's",
+    "list": [
+     "a",
+     "b"
+    ],
+    "map": {
+     "inner": [
+      1,
+      2
+     ],
+     "deep": {
+      "x": null
+     }
+    }
+   },
+   "content": "Body\n"
+  },
+  {
+   "raw": "---\nmulti: this is\n  a plain\n  multi-line scalar\nq: \"line\\nbreak\"\n---\n",
+   "data": {
+    "multi": "this is a plain multi-line scalar",
+    "q": "line\nbreak"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\ntags: [a, b]\naliases:\n  - A. Smith\ncreated: 2024-03-05T10:20:30.123456Z\n---\n",
+   "data": {
+    "tags": [
+     "a",
+     "b"
+    ],
+    "aliases": [
+     "A. Smith"
+    ],
+    "created": "2024-03-05T10:20:30.123Z"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\nkey with spaces: v\nemptyval:\nnum_str: '007'\n---\n",
+   "data": {
+    "key with spaces": "v",
+    "emptyval": null,
+    "num_str": "007"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\njson: {\"a\": 1}\n---\n",
+   "data": {
+    "json": {
+     "a": 1
+    }
+   },
+   "content": ""
+  },
+  {
+   "raw": "---json\n{\"a\": 1, \"b\": [true]}\n---\nbody",
+   "data": {
+    "a": 1,
+    "b": [
+     true
+    ]
+   },
+   "content": "body"
+  },
+  {
+   "raw": "---\na: 1\n...\n---\nafter",
+   "data": {
+    "a": 1
+   },
+   "content": "after"
+  },
+  {
+   "raw": "---\na: b: c\n---\n",
+   "error": "incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line at line 2, column 5:"
+  },
+  {
+   "raw": "---\n[1, 2]\n---\n",
+   "data": [
+    1,
+    2
+   ],
+   "content": ""
+  },
+  {
+   "raw": "---\nfoo\n---\n",
+   "data": "foo",
+   "content": ""
+  },
+  {
+   "raw": "---\n  a: 1\n  b: 2\n---\n",
+   "data": {
+    "a": 1,
+    "b": 2
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\na:\n  - x: 1\n    y: 2\n  - z\n---\n",
+   "data": {
+    "a": [
+     {
+      "x": 1,
+      "y": 2
+     },
+     "z"
+    ]
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\na: &x hello\nb: *x\n---\n",
+   "data": {
+    "a": "hello",
+    "b": "hello"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\n? complex\n: value\n---\n",
+   "data": {
+    "complex": "value"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\na: 'multi\n  line single'\n---\n",
+   "data": {
+    "a": "multi line single"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\nnum: 1.50\nexp: 6.02e23\nneg: -.5\n---\n",
+   "data": {
+    "num": 1.5,
+    "exp": 6.02e+23,
+    "neg": "-.5"
+   },
+   "content": ""
+  },
+  {
+   "raw": "---\nx: 1\n---\n---\ny: 2\n---\n",
+   "data": {
+    "x": 1
+   },
+   "content": "---\ny: 2\n---\n"
+  }
+ ],
+ "dump": [
+  {
+   "value": {
+    "plain": "hello world",
+    "empty": "",
+    "yes": "yes",
+    "n": 1,
+    "date": "2024-01-01",
+    "colon": "a: b",
+    "hash": "a #b",
+    "hash2": "a#b",
+    "dash": "- x",
+    "quote": "it's",
+    "tab": "a\tb",
+    "multi": "line1\nline2\n",
+    "multi2": "line1\nline2",
+    "keep": "a\n\n",
+    "lead": "  indented\nx",
+    "f": 1.5,
+    "neg": -3,
+    "t": true,
+    "z": null,
+    "big": 1e+21,
+    "small": 1e-7,
+    "tiny": 0.000001,
+    "ws": " lead",
+    "trail": "trail ",
+    "star": "*x",
+    "amp": "&x",
+    "q": "?x",
+    "pct": "%x",
+    "at": "@x",
+    "bt": "`x",
+    "bang": "!x",
+    "gt": ">x",
+    "pipe": "|x",
+    "brace": "{x",
+    "brk": "[x",
+    "comma": "a, b",
+    "inner": "x: y",
+    "nul": "null",
+    "tilde": "~",
+    "int": "12",
+    "float": "1.5",
+    "hex": "0x1F",
+    "sexa": "1:30",
+    "ts": "2024-01-01 10:00:00",
+    "merge": "<<",
+    "nbsp": "a b",
+    "cr": "a\rb",
+    "bell": "a\u0007b",
+    "uni": "café ünïcödé",
+    "key": "v"
+   },
+   "yaml": "plain: hello world\nempty: ''\n'yes': 'yes'\n'n': 1\ndate: '2024-01-01'\ncolon: 'a: b'\nhash: 'a #b'\nhash2: a#b\ndash: '- x'\nquote: it's\ntab: \"a\\tb\"\nmulti: |\n  line1\n  line2\nmulti2: |-\n  line1\n  line2\nkeep: |+\n  a\n\nlead: |2-\n    indented\n  x\nf: 1.5\nneg: -3\nt: true\nz: null\nbig: 1e+21\nsmall: 1.e-7\ntiny: 0.000001\nws: ' lead'\ntrail: 'trail '\nstar: '*x'\namp: '&x'\nq: '?x'\npct: '%x'\nat: '@x'\nbt: '`x'\nbang: '!x'\ngt: '>x'\npipe: '|x'\nbrace: '{x'\nbrk: '[x'\ncomma: 'a, b'\ninner: 'x: y'\nnul: 'null'\ntilde: '~'\nint: '12'\nfloat: '1.5'\nhex: '0x1F'\nsexa: '1:30'\nts: '2024-01-01 10:00:00'\nmerge: '<<'\nnbsp: \"a\\_b\"\ncr: \"a\\rb\"\nbell: \"a\\ab\"\nuni: café ünïcödé\nkey: v\n"
+  },
+  {
+   "value": {
+    "2": 7,
+    "10": 8,
+    "key: colon": 1,
+    "#hash": 2,
+    "- dash": 3,
+    "": 4,
+    "true": 5,
+    "multi\nline": 6
+   },
+   "yaml": "'2': 7\n'10': 8\n'key: colon': 1\n'#hash': 2\n'- dash': 3\n'': 4\n'true': 5\n\"multi\\nline\": 6\n"
+  },
+  {
+   "value": {
+    "tags": [
+     "a",
+     "b"
+    ],
+    "meta": {
+     "source": "x",
+     "stats": {
+      "count": 3
+     }
+    },
+    "e": [],
+    "o": {},
+    "list": [
+     {
+      "a": 1,
+      "b": 2
+     },
+     [
+      1,
+      2
+     ],
+     "s",
+     null,
+     [],
+     {}
+    ]
+   },
+   "yaml": "tags:\n  - a\n  - b\nmeta:\n  source: x\n  stats:\n    count: 3\ne: []\no: {}\nlist:\n  - a: 1\n    b: 2\n  - - 1\n    - 2\n  - s\n  - null\n  - []\n  - {}\n"
+  },
+  {
+   "value": {
+    "long": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word",
+    "longml": "alpha beta gamma delta alpha beta gamma delta alpha beta gamma delta alpha beta gamma delta alpha beta gamma delta alpha beta gamma delta \n\n  indented line here\nshort\nx x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x ",
+    "url": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "yaml": "long: >-\n  word word word word word word word word word word word word word word word\n  word word word word word word word word word word word word word word word\nlongml: >-\n  alpha beta gamma delta alpha beta gamma delta alpha beta gamma delta alpha\n  beta gamma delta alpha beta gamma delta alpha beta gamma delta \n\n    indented line here\n  short\n\n  x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\n  x x x x x x x x x x x \nurl: >-\n  https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+  },
+  {
+   "value": [
+    "a",
+    {
+     "b": 1
+    }
+   ],
+   "yaml": "- a\n- b: 1\n"
+  },
+  {
+   "value": "just a string",
+   "yaml": "just a string\n"
+  },
+  {
+   "value": 42,
+   "yaml": "42\n"
+  },
+  {
+   "value": null,
+   "yaml": "null\n"
+  },
+  {
+   "value": true,
+   "yaml": "true\n"
+  },
+  {
+   "value": [],
+   "yaml": "[]\n"
+  },
+  {
+   "value": {
+    "deep": {
+     "a": {
+      "b": {
+       "c": {
+        "d": "long text long text long text long text long text long text long text long text long text long text long text long text "
+       }
+      }
+     }
+    }
+   },
+   "yaml": "deep:\n  a:\n    b:\n      c:\n        d: >-\n          long text long text long text long text long text long text long text\n          long text long text long text long text long text \n"
+  }
+ ],
+ "stringify": [
+  {
+   "content": "Body.\n",
+   "data": {
+    "title": "T",
+    "tags": [
+     "a"
+    ]
+   },
+   "out": "---\ntitle: T\ntags:\n  - a\n---\nBody.\n"
+  },
+  {
+   "content": "no newline",
+   "data": {
+    "a": 1
+   },
+   "out": "---\na: 1\n---\nno newline\n"
+  },
+  {
+   "content": "",
+   "data": {
+    "title": "X"
+   },
+   "out": "---\ntitle: X\n---\n\n"
+  },
+  {
+   "content": "body\n",
+   "data": {},
+   "out": "body\n"
+  }
+ ]
+}
