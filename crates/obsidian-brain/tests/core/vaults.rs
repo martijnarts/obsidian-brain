@@ -80,7 +80,7 @@ async fn describe_reports_each_vault() {
     vaults
         .get("beta")
         .unwrap()
-        .set_init_error("embedder unavailable");
+        .set_init_error(&anyhow::anyhow!("embedder unavailable"));
     let path = dir.path().to_str().unwrap();
     assert_eq!(
         vaults.describe(),

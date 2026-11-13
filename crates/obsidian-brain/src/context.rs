@@ -17,7 +17,9 @@ use tokio::sync::{mpsc, watch};
 
 use crate::config::VaultConfig;
 use crate::embeddings::metadata_resolver::{ResolverDeps, resolve_model_metadata};
-use crate::embeddings::{Embedder, SharedEmbedder, create_embedder, share_embedder};
+use crate::embeddings::{
+    Embedder, EmbedderLoadError, SharedEmbedder, create_embedder, share_embedder,
+};
 use crate::pipeline::{BootstrapResult, IndexPipeline, bootstrap};
 use crate::search::Search;
 use crate::store::Db;
@@ -73,7 +75,24 @@ impl ReindexQueue {
 }
 
 /// The state of the embedder load: `None` until it finishes.
-type InitState = Option<Result<(), String>>;
+type InitState = Option<Result<(), InitFailure>>;
+
+/// A failed embedder load, with the JS error name the TypeScript server
+/// showed: `EmbedderLoadError` for a classified load failure, else `Error`.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{message}")]
+pub struct InitFailure {
+    pub name: &'static str,
+    pub message: String,
+}
+
+/// JS `String(err)` of an error: `<name>: <message>`.
+fn js_error_string(err: &anyhow::Error) -> String {
+    match err.downcast_ref::<InitFailure>() {
+        Some(f) => format!("{}: {}", f.name, f.message),
+        None => format!("Error: {err:#}"),
+    }
+}
 
 /// One open vault.
 pub struct VaultContext {
@@ -168,10 +187,20 @@ impl VaultContext {
             && let Some(ctx) = self.this.upgrade()
         {
             tokio::spawn(async move {
-                let outcome = ctx.load_embedder().await.map_err(|e| format!("{e:#}"));
-                if let Err(msg) = &outcome {
+                let outcome =
+                    ctx.load_embedder()
+                        .await
+                        .map_err(|e| match e.downcast::<InitFailure>() {
+                            Ok(f) => f,
+                            Err(e) => InitFailure {
+                                name: "Error",
+                                message: format!("{e:#}"),
+                            },
+                        });
+                if let Err(f) = &outcome {
                     // The first error wins.
-                    lock(&ctx.init_error).get_or_insert_with(|| format!("Error: {msg}"));
+                    lock(&ctx.init_error)
+                        .get_or_insert_with(|| format!("{}: {}", f.name, f.message));
                 }
                 ctx.init.send_replace(Some(outcome));
             });
@@ -183,13 +212,24 @@ impl VaultContext {
             .map_err(|_| anyhow!("embedder load was dropped"))?;
         match state.as_ref() {
             Some(Ok(())) => Ok(()),
-            Some(Err(msg)) => Err(anyhow!("{msg}")),
+            Some(Err(f)) => Err(f.clone().into()),
             None => unreachable!("wait_for returns a loaded state"),
         }
     }
 
     async fn load_embedder(&self) -> anyhow::Result<()> {
-        self.shared.init().await.map_err(|e| anyhow!("{e:#}"))?;
+        if let Err(e) = self.shared.init().await {
+            let name = if e.downcast_ref::<EmbedderLoadError>().is_some() {
+                "EmbedderLoadError"
+            } else {
+                "Error"
+            };
+            return Err(InitFailure {
+                name,
+                message: format!("{e:#}"),
+            }
+            .into());
+        }
         let dim = self.embedder.dimensions()?;
         tracing::debug!(dim, "embedder loaded");
 
@@ -235,15 +275,16 @@ impl VaultContext {
     }
 
     /// Why the embedder or the startup index failed, as JS `String(err)`
-    /// showed it: `Error: <message>`.
+    /// showed it: `<name>: <message>`, where the name is `EmbedderLoadError`
+    /// for a classified load failure and `Error` otherwise.
     pub fn init_error(&self) -> Option<String> {
         lock(&self.init_error).clone()
     }
 
     /// Record a startup failure. Unlike the embedder load, this replaces an
     /// earlier error.
-    pub fn set_init_error(&self, message: impl std::fmt::Display) {
-        *lock(&self.init_error) = Some(format!("Error: {message}"));
+    pub fn set_init_error(&self, err: &anyhow::Error) {
+        *lock(&self.init_error) = Some(js_error_string(err));
     }
 
     /// Queue `work` behind every reindex queued before it. The jobs run one

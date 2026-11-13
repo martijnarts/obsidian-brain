@@ -224,7 +224,7 @@ pub async fn index_vaults_in_turn<'a, I, F, Fut>(
 /// `ctx.init_error()` instead of returned.
 pub async fn run_startup_index(ctx: Arc<VaultContext>, db_is_empty: bool) {
     if let Err(err) = startup_index(&ctx, db_is_empty).await {
-        ctx.set_init_error(format!("{err:#}"));
+        ctx.set_init_error(&err);
         tracing::error!(error = %err, "background init failed: {err:#}");
     }
 }
