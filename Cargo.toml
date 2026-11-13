@@ -6,3 +6,10 @@ members = ["crates/obsidian-brain"]
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.92"
+
+# Line tables keep backtraces readable at a fraction of the disk.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
