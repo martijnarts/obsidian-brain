@@ -167,21 +167,32 @@ async fn run(command: Command) -> anyhow::Result<()> {
             let server = Server::new(vaults.clone(), crate::tools::all());
             let result = match transport {
                 Transport::Stdio => {
-                    // The handshake completes before any model loads; the
-                    // embedder and the first index follow in the background.
-                    let running = server.serve(rmcp::transport::stdio()).await?;
-                    start_background(&vaults, &shutdown);
-                    spawn_orphan_watchdog(shutdown.clone());
-                    let service = running.cancellation_token();
+                    // The model loads and the first index runs in the
+                    // background once the handshake is done, so the client
+                    // never waits for them.
                     tokio::select! {
-                        r = running.waiting() => {
-                            shutdown.trigger("MCP transport closed");
-                            r.map(|_| ()).map_err(Into::into)
-                        }
-                        _ = shutdown.token.cancelled() => {
-                            service.cancel();
-                            Ok(())
-                        }
+                        served = server.serve(rmcp::transport::stdio()) => match served {
+                            Err(err) => {
+                                shutdown.trigger("MCP transport closed");
+                                Err(err.into())
+                            }
+                            Ok(running) => {
+                                start_background(&vaults, &shutdown);
+                                spawn_orphan_watchdog(shutdown.clone());
+                                let service = running.cancellation_token();
+                                tokio::select! {
+                                    r = running.waiting() => {
+                                        shutdown.trigger("MCP transport closed");
+                                        r.map(|_| ()).map_err(Into::into)
+                                    }
+                                    _ = shutdown.token.cancelled() => {
+                                        service.cancel();
+                                        Ok(())
+                                    }
+                                }
+                            }
+                        },
+                        _ = shutdown.token.cancelled() => Ok(()),
                     }
                 }
                 Transport::Http => {
