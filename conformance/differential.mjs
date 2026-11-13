@@ -55,8 +55,8 @@ const CALLS = [
   ['read_note', { name: 'Nope' }],
   ['find_notes_by_name', { query: 'gadg' }],
   ['grep_vault', { query: 'widgets', folder: 'Concepts' }],
-  ['grep_vault', { pattern: 'ünï\\w+', regex: true }],
-  ['grep_vault', { pattern: '(?<=Caf)é', regex: true }],
+  ['grep_vault', { query: "ünï\\w+", regex: true }],
+  ['grep_vault', { query: "(?<=Caf)é", regex: true }],
   ['query_notes', { filter: { has_tag: [{ var: 'tags' }, 'demo'] }, sort: { field: 'title' } }],
   ['query_notes', { filter: { '==': [{ var: 'type' }, 'Concept'] }, fields: ['type'] }],
   ['read_notes', { names: ['Welcome', 'Widgets'] }],
@@ -185,7 +185,11 @@ function normalize(text, side) {
     .replace(/\b1[6-9]\d{11}(\.\d+)?\b/g, '<EPOCH_MS>')
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<UUID>')
     .replace(/"(previewId|id)": "[0-9a-z-]{8,}"/g, '"$1": "<ID>"')
-    .replace(/"(durationMs|elapsedMs|ms)": \d+(\.\d+)?/g, '"$1": <MS>');
+    .replace(/"(durationMs|elapsedMs|ms)": \d+(\.\d+)?/g, '"$1": <MS>')
+    // Block ids and canvas ids are random.
+    .replace(/\^[a-z0-9]{6}\b/g, '^<BLOCK>')
+    .replace(/"id": "[a-z0-9]{6}"/g, '"id": "<BLOCK>"')
+    .replace(/"id":"[0-9a-f]{16}"/g, (m) => (m.includes('0123456789abcdef') ? m : '"id":"<CANVAS>"'));
 }
 
 function resolveArgs(argsIn, prev) {
