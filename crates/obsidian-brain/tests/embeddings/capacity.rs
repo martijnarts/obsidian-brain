@@ -1,5 +1,4 @@
-//! Ported from `capacity.test.ts` and `capacity-drift-floor.test.ts`. The
-//! Ollama probe runs against a local mock server.
+//! Tests of the embedder capacity and its drift floor. The Ollama probe runs against a local mock server.
 
 use std::collections::HashMap;
 

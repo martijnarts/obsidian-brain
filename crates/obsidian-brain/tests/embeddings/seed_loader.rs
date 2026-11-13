@@ -1,4 +1,4 @@
-//! Ported from `seed-loader.test.ts`.
+//! Tests of the bundled model seed loader.
 
 use obsidian_brain::embeddings::seed_loader::{
     SeedEntry, adapt_entry, get_seed_meta, load_seed, parse_seed,

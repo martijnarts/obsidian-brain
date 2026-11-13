@@ -1,4 +1,4 @@
-//! Ported from `src/graph` of the TypeScript server.
+//! The link graph: construction, centrality and paths.
 
 pub mod builder;
 pub mod centrality;

@@ -1,5 +1,4 @@
-//! Ported from `test/tools/delete-note.test.ts` and the `delete_note` case
-//! of `test/integration/graph-tools.test.ts`.
+//! Tests of the `delete_note` tool.
 
 use obsidian_brain::store::edges::{count_edges_by_source, count_edges_by_target};
 use obsidian_brain::store::nodes::get_node;

@@ -1,4 +1,4 @@
-//! Ported from `test/tools/create-attachment.test.ts`.
+//! Tests of the `create_attachment` tool.
 
 use serde_json::json;
 

@@ -1,4 +1,4 @@
-//! Ported from `test/pipeline/empty-note-fallback.test.ts`.
+//! Tests of the fallback chunk for notes with no embeddable body.
 
 use std::sync::Arc;
 

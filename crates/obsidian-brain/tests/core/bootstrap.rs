@@ -1,7 +1,5 @@
-//! Ported from `test/pipeline/bootstrap.test.ts` and
-//! `test/pipeline/model-change.test.ts`. The schema-migration-chain cases
-//! (v4 to v7, the "internal data layout" reason) have no counterpart: the
-//! Rust index rebuilds itself on a layout change instead.
+//! Tests of the startup compatibility check and the reindex after a model
+//! change. The index rebuilds itself on a layout change.
 
 use obsidian_brain::pipeline::{BootstrapResult, bootstrap};
 use obsidian_brain::store::Db;

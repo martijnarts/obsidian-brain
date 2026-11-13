@@ -1,5 +1,4 @@
-//! Ported from `src/vault` of the TypeScript server: the vault layer that
-//! reads, parses and edits notes. `writer`, `mover` and `scan` also touch
+//! The vault layer that reads, parses and edits notes. `writer`, `mover` and `scan` also touch
 //! the store; the rest works without it.
 
 pub mod block_id;

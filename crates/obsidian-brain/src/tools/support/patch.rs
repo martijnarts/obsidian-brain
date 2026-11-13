@@ -1,7 +1,7 @@
 //! jsdiff 9's `createPatch` (the npm `diff` package): a unified diff of two
 //! texts, line by line, with four lines of context. The edit script
-//! follows jsdiff's Myers variant, so the hunks match the TypeScript
-//! server's byte for byte.
+//! follows jsdiff's Myers variant, so the hunks match jsdiff's byte for
+//! byte.
 
 /// One run of equal, added or removed tokens, linked to the run before it.
 #[derive(Clone, Copy)]

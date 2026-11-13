@@ -332,9 +332,8 @@ mod tests {
     }
 
     #[test]
-    fn matches_the_typescript_on_js_whitespace_case_folding_and_line_ends() {
-        // Expected outputs captured from the TypeScript `renameTagInNote`.
-        // A CRLF frontmatter key line never matches there, so it is kept.
+    fn handles_js_whitespace_case_folding_and_line_ends() {
+        // A CRLF frontmatter key line never matches, so it is kept.
         let cases: &[(&str, &str, &str, &str, usize, usize)] = &[
             (
                 "---\r\ntags: [old]\r\n---\r\n#old\r\n",

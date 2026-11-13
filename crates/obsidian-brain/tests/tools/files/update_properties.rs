@@ -1,4 +1,4 @@
-//! Ported from `test/tools/update-properties.test.ts`.
+//! Tests of the `update_properties` tool.
 
 use serde_json::json;
 

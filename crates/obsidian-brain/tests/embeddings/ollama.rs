@@ -1,5 +1,5 @@
-//! Ported from `ollama.test.ts` and `ollama-num-ctx.test.ts`, against a
-//! local mock server instead of a `fetch` mock.
+//! Tests of the Ollama embedder and its `num_ctx`, against a local mock
+//! server.
 
 use std::collections::HashMap;
 

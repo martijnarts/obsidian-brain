@@ -1,7 +1,7 @@
 //! Splits a markdown note into embedding-sized chunks.
 //!
-//! Every length here is in UTF-16 code units, as the TypeScript chunker
-//! measured them, so a note splits at the same places.
+//! Every length here is in UTF-16 code units, the unit of the chunk size
+//! limits and the reference embeddings.
 
 use std::sync::LazyLock;
 

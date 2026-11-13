@@ -1,6 +1,4 @@
-//! Ported from `test/pipeline/indexer.test.ts`, with a fake embedder in
-//! place of the real model. The schema-migration cases have no counterpart:
-//! the Rust index rebuilds instead of migrating.
+//! Tests of the indexer, with a fake embedder in place of the real model.
 
 use std::sync::Arc;
 

@@ -1,4 +1,4 @@
-//! Ported from `test/tools/list-property-values.test.ts`.
+//! Tests of the `list_property_values` tool.
 
 use serde_json::json;
 

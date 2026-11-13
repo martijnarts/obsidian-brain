@@ -1,4 +1,4 @@
-//! Ported from `test/pipeline/indexer-fault-tolerance.test.ts`.
+//! Tests of the fault-tolerant embed loop of the indexer.
 
 use std::sync::Arc;
 

@@ -77,8 +77,8 @@ impl ReindexQueue {
 /// The state of the embedder load: `None` until it finishes.
 type InitState = Option<Result<(), InitFailure>>;
 
-/// A failed embedder load, with the JS error name the TypeScript server
-/// showed: `EmbedderLoadError` for a classified load failure, else `Error`.
+/// A failed embedder load, with the error name clients see:
+/// `EmbedderLoadError` for a classified load failure, else `Error`.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{message}")]
 pub struct InitFailure {

@@ -1,6 +1,5 @@
-//! Ported from `factory.test.ts` and the factory half of
-//! `ollama-num-ctx.test.ts`. A type check stands in for `instanceof`: the
-//! provider name tells the two embedders apart.
+//! Tests of the embedder factory. The provider name tells the two embedders
+//! apart.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

@@ -49,7 +49,7 @@ pub enum LineOp {
     Replace,
 }
 
-/// One edit, shaped like the TypeScript `EditMode` (`{kind: 'append', ...}`).
+/// One edit, shaped as `{kind: 'append', ...}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -99,7 +99,7 @@ pub enum EditMode {
 }
 
 impl EditMode {
-    /// The TypeScript `kind` string.
+    /// The `kind` string.
     pub fn kind(&self) -> &'static str {
         match self {
             EditMode::Append { .. } => "append",

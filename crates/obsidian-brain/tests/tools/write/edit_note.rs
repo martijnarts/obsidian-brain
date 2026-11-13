@@ -1,7 +1,6 @@
-//! Ported from `test/tools/edit-note.test.ts` (the `parseValueJson` cases
-//! are unit tests in the tool), `test/tools/edit-note-expected-content.test.ts`,
-//! `test/tools/edit-buffer-vaults.test.ts` and the `edit_note` case of
-//! `test/integration/graph-tools.test.ts`.
+//! Tests of the `edit_note` tool: its modes, the expected-content guard and
+//! the edit buffer per vault. The value-parsing cases are unit tests in the
+//! tool.
 
 use obsidian_brain::store::edges::get_edges_by_target;
 use serde_json::{Value, json};

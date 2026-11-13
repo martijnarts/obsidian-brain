@@ -1,4 +1,4 @@
-//! Ported from `test/search/unified.test.ts` and `test/search/rrf.test.ts`.
+//! Tests of unified search and Reciprocal Rank Fusion.
 //! A bag-of-words fake embedder stands in for the real model.
 
 use std::sync::Arc;

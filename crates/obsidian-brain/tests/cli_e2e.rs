@@ -1,8 +1,6 @@
 //! The real binary end to end, with no model: the embedder is Ollama at a
 //! dead port, so every embed fails and is skipped, and notes are still
-//! indexed for full-text search. Ported from the parts of
-//! `test/integration/{cli-vault-commands,multi-vault,server-stdin-shutdown}.test.ts`
-//! that need no tools.
+//! indexed for full-text search.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;

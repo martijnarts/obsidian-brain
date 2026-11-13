@@ -1,4 +1,4 @@
-//! Ported from `chunker.test.ts` and `chunker.properties.test.ts`.
+//! Tests of the markdown chunker.
 
 use obsidian_brain::embeddings::chunker::{
     ChunkerConfig, DEFAULT_CHUNKER_CONFIG, build_chunk_embedding_text, chunk_id, chunk_markdown,

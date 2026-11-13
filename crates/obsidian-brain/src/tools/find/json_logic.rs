@@ -1,5 +1,4 @@
-//! A JsonLogic evaluator with the semantics of json-logic-js, which the
-//! TypeScript `query_notes` used: JS loose equality and comparison, JS
+//! A JsonLogic evaluator with the semantics of json-logic-js: JS loose equality and comparison, JS
 //! number parsing, and JsonLogic truthiness (an empty array is falsy, `"0"`
 //! is truthy). `datalogic-rs` follows the JsonLogic spec instead and
 //! differs from json-logic-js on coercions and on unknown operators.

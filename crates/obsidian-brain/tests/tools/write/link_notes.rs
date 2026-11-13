@@ -1,4 +1,4 @@
-//! Ported from the `link_notes` case of `test/integration/graph-tools.test.ts`.
+//! Tests of the `link_notes` tool.
 
 use obsidian_brain::store::edges::get_edges_by_target;
 use serde_json::json;

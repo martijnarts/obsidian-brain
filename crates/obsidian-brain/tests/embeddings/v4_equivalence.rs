@@ -82,7 +82,7 @@ async fn embedder_v4_equivalence() {
     let mut floor = (f64::INFINITY, String::new());
     for file in &files {
         let content = std::fs::read_to_string(fixture_dir.join(file)).unwrap();
-        // Empty files embed a single space, as the TypeScript test did.
+        // Empty files embed a single space, as the baseline did.
         let input = if content.trim().is_empty() {
             " ".to_string()
         } else {

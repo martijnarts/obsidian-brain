@@ -1,5 +1,4 @@
-//! Ported from `test/integration/server-init-timing/write-tools-*.test.ts`:
-//! every write tool returns while the embedder is still loading, and its
+//! Every write tool returns while the embedder is still loading, and its
 //! reindex runs once the embedder is ready.
 
 use std::sync::Arc;

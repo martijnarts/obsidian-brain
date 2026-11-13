@@ -1,9 +1,6 @@
-//! Ported from `test/tools/create-move-path-guard.test.ts` (the
-//! `move_note` half), `test/tools/move-note/dry-run.test.ts`, the full-flow
-//! case of `test/tools/move-note/stub-pruning.test.ts` and the `move_note`
-//! case of `test/integration/graph-tools.test.ts`. The link-rewrite cases
-//! are unit tests in the tool; the `pruneOrphanStubs` cases belong to the
-//! store.
+//! Tests of the `move_note` tool: the path guard, dry runs, stub pruning
+//! and the full flow. The link-rewrite cases are unit tests in the tool;
+//! the stub-pruning queries are tested with the store.
 
 use obsidian_brain::store::edges::get_edges_by_target;
 use obsidian_brain::store::nodes::{all_node_ids, get_node};

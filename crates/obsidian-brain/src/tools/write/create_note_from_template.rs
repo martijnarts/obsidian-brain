@@ -4,7 +4,7 @@
 //!
 //! The rendered template is written as it is, with `title` set in its
 //! frontmatter by line, so the template's own quoting, comments and key
-//! order survive. The TypeScript server re-serialised the whole block.
+//! order survive.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;

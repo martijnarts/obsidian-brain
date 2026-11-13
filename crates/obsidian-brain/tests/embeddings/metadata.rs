@@ -1,7 +1,4 @@
-//! Ported from `metadata-cache.test.ts` and `metadata-resolver.test.ts`.
-//! The Hugging Face fetch step is gone, so its tests now check the
-//! fall-through to the probe or the defaults. `clearMetadataCache` served
-//! only the dropped `models refresh-cache` CLI.
+//! Tests of the model metadata cache and the metadata resolver chain.
 
 use obsidian_brain::embeddings::PrefixSource;
 use obsidian_brain::embeddings::metadata_cache::{

@@ -1,5 +1,5 @@
-//! Ported from `src/util` of the TypeScript server. The debug log and the
-//! logger became `tracing`.
+//! Shared helpers: JavaScript-compatible string and number functions,
+//! error messages and safe regexes.
 
 pub mod errors;
 pub mod js;

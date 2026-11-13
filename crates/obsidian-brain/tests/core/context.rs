@@ -1,8 +1,6 @@
-//! Ported from `test/context.test.ts`, `test/shared-embedder.test.ts` and
-//! the `closeContext` and `runStartupIndex` cases of
-//! `test/server-helpers.test.ts`. The ABI-mismatch and auto-heal cases are
-//! Node-only and not ported. The `OBSIDIAN_BRAIN_NO_CATCHUP` case runs in
-//! the end-to-end test, which can set the environment.
+//! Tests of the vault context, the shared embedder, closing a context and
+//! the startup index. The `OBSIDIAN_BRAIN_NO_CATCHUP` case runs in the
+//! end-to-end test, which can set the environment.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

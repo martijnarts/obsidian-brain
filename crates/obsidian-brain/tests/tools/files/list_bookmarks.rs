@@ -1,4 +1,4 @@
-//! Ported from `test/tools/list-bookmarks.test.ts`.
+//! Tests of the `list_bookmarks` tool.
 
 use serde_json::{Value, json};
 

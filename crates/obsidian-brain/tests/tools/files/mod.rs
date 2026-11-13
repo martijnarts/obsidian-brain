@@ -1,4 +1,4 @@
-//! The file tools. Ported from the matching files in `test/tools/`.
+//! Tests of the file tools.
 
 mod create_attachment;
 mod file_info;

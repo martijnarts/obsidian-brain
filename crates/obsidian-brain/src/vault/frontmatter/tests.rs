@@ -1,6 +1,5 @@
 //! `oracle.json` holds what gray-matter 4.0.3 and js-yaml 3.15.2 return for
-//! each case, generated with Node from the TypeScript server's
-//! dependencies. The edit tests check that untouched lines stay
+//! each case. The edit tests check that untouched lines stay
 //! byte-identical.
 
 use pretty_assertions::assert_eq;

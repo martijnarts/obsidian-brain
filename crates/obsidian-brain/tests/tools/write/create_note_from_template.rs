@@ -1,7 +1,5 @@
-//! Ported from the `create_note_from_template` cases of
-//! `test/tools/create-note-from-template.test.ts`. The `formatDate`,
-//! `renderTemplate` and `readTemplatesConfig` cases belong to the vault
-//! layer and are ported there.
+//! Tests of the `create_note_from_template` tool. The date format, template
+//! rendering and templates config cases are tested with the vault layer.
 
 use obsidian_brain::store::edges::get_edges_by_target;
 use obsidian_brain::store::nodes::get_node;

@@ -1,4 +1,4 @@
-//! Ported from `src/store` of the TypeScript server.
+//! The SQLite index: schema and per-table queries.
 //!
 //! Every store function takes a `&rusqlite::Connection`, so callers can
 //! run several of them inside one transaction. [`Db`] is the shared handle

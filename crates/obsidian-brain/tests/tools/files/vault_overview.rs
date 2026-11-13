@@ -1,4 +1,4 @@
-//! Ported from `test/tools/vault-overview.test.ts`.
+//! Tests of the `vault_overview` tool.
 
 use obsidian_brain::store::sync::set_sync_mtime;
 use serde_json::json;

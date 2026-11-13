@@ -1,4 +1,4 @@
-//! Ported from `src/search` of the TypeScript server.
+//! Semantic, full-text and hybrid search over the index.
 
 pub mod unified;
 

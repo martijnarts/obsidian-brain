@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// Frontmatter as JSON. YAML dates become ISO strings, as `JSON.stringify`
-/// made them in the TypeScript server.
+/// Frontmatter as JSON. YAML dates become ISO strings, in the form of
+/// `JSON.stringify`.
 pub type Frontmatter = Map<String, Value>;
 
 /// One note, or one stub for an unresolved wiki-link target.

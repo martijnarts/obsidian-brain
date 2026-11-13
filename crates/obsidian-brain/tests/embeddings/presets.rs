@@ -1,4 +1,4 @@
-//! Ported from `presets.test.ts`.
+//! Tests of the embedding presets and their resolver.
 
 use std::sync::Mutex;
 

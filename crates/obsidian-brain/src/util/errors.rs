@@ -1,4 +1,4 @@
-//! Error messages in the form the TypeScript server showed them.
+//! Error messages in the form clients see them.
 
 use std::fmt::Display;
 use std::io;

@@ -39,8 +39,8 @@ pub struct Edited {
 ///
 /// Every result is parsed again and must give exactly the expected data
 /// and the same body. When it does not, or the block cannot be edited by
-/// line, the block is re-serialised with `matter.stringify` as the
-/// TypeScript server did (`in_place` is then false).
+/// line, the block is re-serialised with `matter.stringify` rules
+/// (`in_place` is then false).
 pub fn edit_frontmatter(raw: &str, ops: &[FrontmatterOp]) -> Result<Edited, FrontmatterError> {
     let parsed = parse(raw)?;
     let mut data = parsed.data.clone();

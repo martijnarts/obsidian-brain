@@ -207,7 +207,7 @@ impl IndexPipeline {
                     let snippet = js::utf16_slice(&msg, 0, 300);
                     tracing::error!(
                         error_snippet = %snippet,
-                        "SQL error during reindex — likely schema drift or stale npx cache. Run: rm -rf ~/.npm/_npx && relaunch. Error: {snippet}"
+                        "SQL error during reindex — likely a damaged index. Delete the index of this vault and restart. Error: {snippet}"
                     );
                     return Err(anyhow!(
                         "reindex failed: SQL error (likely schema drift or stale install) — {msg}"

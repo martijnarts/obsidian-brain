@@ -12,7 +12,7 @@ use super::{Result, StoreError};
 /// default 384-dim models. [`ensure_vec_tables`] reconciles it at runtime.
 pub const DEFAULT_EMBEDDING_DIM: usize = 384;
 
-/// The layout version of the Rust index, kept under `schema_version` in
+/// The layout version of the index, kept under `schema_version` in
 /// `index_metadata`. On a mismatch the index is dropped and rebuilt, so
 /// there are no in-place migrations.
 pub const SCHEMA_VERSION: i64 = 1;
@@ -45,7 +45,7 @@ pub fn open_db(path: impl AsRef<Path>) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))?;
     conn.busy_timeout(Duration::from_millis(5000))?;
-    // better-sqlite3 turned foreign keys on; the chunks cascade relies on it.
+    // The chunks cascade relies on foreign keys.
     conn.execute_batch("PRAGMA foreign_keys = ON")?;
 
     match stored_schema_version(&conn)? {

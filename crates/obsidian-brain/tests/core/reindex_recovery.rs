@@ -1,7 +1,5 @@
-//! Ported from `test/pipeline/reindex-recovery.test.ts`. The SQL-error
-//! cases spied on better-sqlite3 to inject errors; here a dropped table
-//! raises a real one. The case of a non-SQL error that escapes every guard
-//! has no way in without such a spy and is not ported.
+//! Tests of the reindex recovery after an error. A dropped table raises a
+//! real SQL error.
 
 use std::sync::Arc;
 
@@ -129,7 +127,7 @@ async fn an_sql_error_is_rethrown_with_guidance() {
     let text = logs.text();
     assert!(
         text.lines()
-            .any(|l| l.contains("schema drift") && l.contains("rm -rf")),
+            .any(|l| l.contains("damaged index") && l.contains("Delete the index")),
         "{text}"
     );
 }

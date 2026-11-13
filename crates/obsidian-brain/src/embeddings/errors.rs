@@ -77,7 +77,7 @@ pub fn classify_load_error(model_id: &str, err: anyhow::Error) -> EmbedderLoadEr
         return with_cause(
             EmbedderLoadErrorKind::NoOnnx,
             format!(
-                "Model '{model_id}' has no ONNX weights. transformers.js requires ONNX — use the Xenova port (try 'Xenova/{base}'), or set EMBEDDING_PROVIDER=ollama to switch providers."
+                "Model '{model_id}' has no ONNX weights. The local embedder needs ONNX weights: use the Xenova port (try 'Xenova/{base}'), or set EMBEDDING_PROVIDER=ollama to switch providers."
             ),
         );
     }

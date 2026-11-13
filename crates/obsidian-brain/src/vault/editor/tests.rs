@@ -1,6 +1,5 @@
-//! Ported from `test/vault/editor/*`, `test/vault/editor-v122.test.ts` and
-//! the pure parts of `test/tools/edit-note-expected-content.test.ts` and
-//! `test/tools/update-properties.test.ts`.
+//! Tests of the edit modes, the expected-content guard and the frontmatter
+//! property edits.
 
 use pretty_assertions::assert_eq;
 use serde_json::json;

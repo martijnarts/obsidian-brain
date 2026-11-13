@@ -1,6 +1,5 @@
 //! A one-request-per-connection HTTP server that answers from a queue of
-//! canned responses and records every request, in place of the vitest
-//! `fetch` mocks.
+//! canned responses and records every request.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};

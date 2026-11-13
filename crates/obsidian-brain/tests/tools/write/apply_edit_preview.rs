@@ -1,6 +1,4 @@
-//! Ported from `test/tools/apply-edit-preview.test.ts`, the
-//! `apply_edit_preview` case of `test/integration/graph-tools.test.ts` and
-//! the preview case of `test/integration/multi-vault.test.ts`.
+//! Tests of the `apply_edit_preview` tool, in one vault and across several.
 
 use obsidian_brain::store::edges::get_edges_by_target;
 use obsidian_brain::tools::support::PREVIEW_STORE;

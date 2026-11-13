@@ -1,13 +1,12 @@
 //! YAML frontmatter: split a note the way gray-matter does, parse the block
 //! with js-yaml's results, and edit keys in place.
 //!
-//! The TypeScript server rewrote the whole block with `matter.stringify`
-//! on every write. Here [`edit_frontmatter`] changes only the lines of the
-//! keys it sets or removes; comments, quoting, key order and list style of
-//! every other line stay byte-identical. New lines are written in js-yaml's
+//! [`edit_frontmatter`] changes only the lines of the keys it sets or
+//! removes; comments, quoting, key order and list style of every other
+//! line stay byte-identical. New lines are written in js-yaml's
 //! style. When an edit cannot be made by line (a flow-style block, a merged
-//! key, tab indentation), it falls back to re-serialising the block as the
-//! TypeScript server did, and says so in [`Edited::in_place`].
+//! key, tab indentation), it falls back to re-serialising the whole block,
+//! and says so in [`Edited::in_place`].
 
 mod dump;
 mod edit;

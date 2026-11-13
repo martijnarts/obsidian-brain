@@ -1,4 +1,4 @@
-//! Ported from `test/tools/folders.test.ts`.
+//! Tests of the `create_folder` and `delete_folder` tools.
 
 use obsidian_brain::store::edges::{count_edges_by_source, count_edges_by_target};
 use obsidian_brain::store::nodes::get_node;

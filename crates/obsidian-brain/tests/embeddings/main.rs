@@ -1,4 +1,4 @@
-//! Tests of the embeddings module, ported from `test/embeddings/`.
+//! Tests of the embeddings module.
 
 mod capacity;
 mod chunker;

@@ -1,5 +1,4 @@
-//! The read and validation half of `overrides.test.ts`. The write half
-//! (`saveOverride`, `removeOverride`) served only the dropped `models` CLI.
+//! Tests of reading and validating the user model overrides.
 
 use obsidian_brain::embeddings::overrides::{ModelOverride, load_overrides_from};
 use serde_json::json;

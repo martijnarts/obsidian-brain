@@ -59,7 +59,7 @@ pub fn node_title(frontmatter: &Frontmatter, rel_path: &str) -> String {
 /// `parse_vault` and the watcher's single-file reindex.
 ///
 /// `node.content` is the body without frontmatter, as gray-matter's
-/// `content` was in the TypeScript server.
+/// `content`.
 pub fn parse_file_from_content(
     rel_path: &str,
     raw: &str,

@@ -1,7 +1,5 @@
-//! Ported from `test/tools/create-move-path-guard.test.ts` (the
-//! `create_note` half), the `create_note` case of
-//! `test/integration/graph-tools.test.ts` and the write cases of
-//! `test/integration/multi-vault.test.ts`.
+//! Tests of the `create_note` tool: the path guard, the full flow and
+//! writes across several vaults.
 
 use obsidian_brain::store::edges::get_edges_by_target;
 use obsidian_brain::store::nodes::get_node;

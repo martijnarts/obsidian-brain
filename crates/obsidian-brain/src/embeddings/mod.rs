@@ -1,5 +1,4 @@
-//! Ported from `src/embeddings` of the TypeScript server: the embedders, the
-//! markdown chunker, and the model metadata and capacity they rely on.
+//! The embedders, the markdown chunker, and the model metadata and capacity they rely on.
 
 pub mod capacity;
 pub mod chunker;

@@ -1,5 +1,5 @@
-//! Ported from the lifecycle cases of `test/vaults.test.ts`. The tool
-//! router cases belong to `mcp` and its own tests. `OBSIDIAN_BRAIN_NO_WATCH`
+//! Tests of the vault set lifecycle. The tool router cases belong to `mcp`
+//! and its own tests. `OBSIDIAN_BRAIN_NO_WATCH`
 //! is covered end to end, where the environment can be set.
 
 use std::sync::atomic::Ordering;

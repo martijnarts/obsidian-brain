@@ -2,7 +2,7 @@
 //! infrastructure the tools share in [`support`].
 //!
 //! Each group module returns its tools from `specs()`. `all()` sorts them
-//! into [`ORDER`], the order of the TypeScript server.
+//! into [`ORDER`], the order clients see in `tools/list`.
 
 mod files;
 mod find;

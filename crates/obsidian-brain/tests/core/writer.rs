@@ -1,4 +1,4 @@
-//! Ported from `test/vault/writer.test.ts`.
+//! Tests of the vault writer.
 
 use obsidian_brain::store::Db;
 use obsidian_brain::store::edges::get_edges_by_source;

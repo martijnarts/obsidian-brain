@@ -1,8 +1,5 @@
 //! Tests of the core: the vault writer and mover, the pipeline, search,
-//! the vault context and the vault set. Ported from `test/pipeline/`,
-//! `test/search/`, `test/vault/{writer,mover}.test.ts`,
-//! `test/context.test.ts`, `test/vaults.test.ts`,
-//! `test/shared-embedder.test.ts` and `test/integration.test.ts`.
+//! the vault context and the vault set.
 
 mod bootstrap;
 mod context;

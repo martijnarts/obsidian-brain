@@ -484,10 +484,9 @@ mod tests {
             .to_undirected()
     }
 
-    /// Scores recorded from graphology-metrics through the TypeScript code
-    /// (testdata/generate.mts), for graphs where its index is correct: no
-    /// self-loops and not 128 or 32768 edges. Every value must match to
-    /// the bit.
+    /// Scores recorded from graphology-metrics, for graphs where its index
+    /// is correct: no self-loops and not 128 or 32768 edges. Every value
+    /// must match to the bit.
     #[test]
     fn matches_graphology_exactly() {
         let cases: Vec<Value> =
@@ -532,9 +531,9 @@ mod tests {
         (a - b).abs() <= 1e-12 + 1e-9 * b.abs()
     }
 
-    /// Scores from networkx (testdata/networkx_reference.py), an
-    /// independent implementation, on graphs that include self-loops,
-    /// parallel and reciprocal edges, stubs, isolated nodes and 128 edges.
+    /// Scores recorded from networkx, an independent implementation, on
+    /// graphs that include self-loops, parallel and reciprocal edges,
+    /// stubs, isolated nodes and 128 edges.
     /// networkx sums in another order, so values match to a tolerance.
     #[test]
     fn matches_networkx() {

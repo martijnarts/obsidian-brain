@@ -2,9 +2,8 @@
 //! embedder: model and dim changes, swapped weights, the empty-chunks and
 //! FTS tokenizer upgrades, and prefix-strategy changes.
 //!
-//! The TypeScript server also ran a chain of in-place schema migrations
-//! here. The Rust index rebuilds itself when its layout version changes
-//! (see `store::db::open_db`), so that chain has no counterpart.
+//! The index rebuilds itself when its layout version changes (see
+//! `store::db::open_db`).
 
 use rusqlite::Connection;
 use serde::Serialize;

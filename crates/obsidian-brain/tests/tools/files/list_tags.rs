@@ -1,4 +1,4 @@
-//! Ported from `test/tools/list-tags.test.ts`.
+//! Tests of the `list_tags` tool.
 
 use serde_json::{Value, json};
 

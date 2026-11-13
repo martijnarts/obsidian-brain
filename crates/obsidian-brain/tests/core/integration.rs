@@ -1,4 +1,4 @@
-//! Ported from `test/integration.test.ts`: the whole pipeline over the
+//! The whole pipeline over the
 //! fixture vault, with a bag-of-words fake embedder in place of the model.
 
 use std::sync::Arc;

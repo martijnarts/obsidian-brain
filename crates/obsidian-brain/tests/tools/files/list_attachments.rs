@@ -1,4 +1,4 @@
-//! Ported from `test/tools/list-attachments.test.ts`.
+//! Tests of the `list_attachments` tool.
 
 use serde_json::{Value, json};
 

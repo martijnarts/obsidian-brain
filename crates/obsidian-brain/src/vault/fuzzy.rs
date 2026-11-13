@@ -8,8 +8,8 @@
 //!   1. Direct substring search (case-insensitive).
 //!   2. If no exact hit, sliding-window Levenshtein over word groups.
 //!
-//! Lengths and scores are computed over UTF-16 code units, as in JS, so the
-//! scores match the TypeScript server. The offsets returned are byte
+//! Lengths and scores are computed over UTF-16 code units, as in JS. The
+//! offsets returned are byte
 //! offsets into the haystack.
 
 use crate::util::js::{self, is_js_whitespace};

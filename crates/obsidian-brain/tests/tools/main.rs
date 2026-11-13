@@ -1,5 +1,4 @@
-//! Tests of the vault tools, one directory per tool group. Ported from
-//! `test/tools/`.
+//! Tests of the vault tools, one directory per tool group.
 
 mod files;
 mod find;

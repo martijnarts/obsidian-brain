@@ -1,4 +1,4 @@
-//! Ported from `test/vault/mover.test.ts`.
+//! Tests of the note mover.
 
 use std::path::Path;
 

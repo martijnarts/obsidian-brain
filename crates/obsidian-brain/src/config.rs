@@ -43,7 +43,7 @@ impl VaultConfig {
         Self {
             name: name.to_string(),
             vault_path: vault_path.to_path_buf(),
-            // A new file name, so the TypeScript index is never read by mistake.
+            // A new file name, so a 1.x index (kg.db) is never read.
             db_path: data_dir.join("index.db"),
             data_dir,
         }

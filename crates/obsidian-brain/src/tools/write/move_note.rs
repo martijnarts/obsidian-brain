@@ -212,8 +212,8 @@ pub(super) fn rewrite_inbound_links(
 
 #[cfg(test)]
 mod tests {
-    //! Ported from `test/tools/move-note/{rewrite-inbound-links,
-    //! ghost-link-fix,rename-node}.test.ts`.
+    //! Tests of the inbound link rewrite, the ghost-link fix and the node
+    //! rename.
 
     use super::*;
     use crate::store::Db;

@@ -1,7 +1,6 @@
-//! Ported from `embedder.test.ts`, `embedder-idle-unload.test.ts`,
-//! `embedder-prefix.test.ts` and `embedder-preflight.test.ts`. A fake
-//! loader stands in for the transformers.js pipeline mock; the tests on the
-//! real model download it and are ignored by default.
+//! Tests of the local embedder: idle unload, prefixes and the load checks.
+//! A fake loader stands in for the model; the tests on the real model
+//! download it and are ignored by default.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

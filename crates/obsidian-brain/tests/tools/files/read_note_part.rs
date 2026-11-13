@@ -1,4 +1,4 @@
-//! Ported from `test/tools/read-note-part.test.ts`.
+//! Tests of the `read_note_part` tool.
 
 use serde_json::json;
 

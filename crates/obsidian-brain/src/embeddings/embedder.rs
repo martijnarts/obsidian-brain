@@ -1,7 +1,7 @@
 //! The local embedder: a sentence-embedding model from Hugging Face, run
 //! with ONNX Runtime. It reproduces the transformers.js `feature-extraction`
-//! pipeline the TypeScript server used, with `dtype: 'q8'`, mean pooling
-//! and L2 normalisation, so it yields the same vectors from the same files.
+//! pipeline with `dtype: 'q8'`, mean pooling and L2 normalisation, so it
+//! yields the same vectors from the same files.
 //!
 //! It loads `onnx/model_quantized.onnx` (and its external data files, when
 //! `config.json` declares them), `tokenizer.json`, and

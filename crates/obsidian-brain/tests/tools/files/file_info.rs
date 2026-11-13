@@ -1,4 +1,4 @@
-//! Ported from `test/tools/file-info.test.ts`.
+//! Tests of the `file_info` tool.
 
 use chrono::{DateTime, SecondsFormat};
 use serde_json::json;

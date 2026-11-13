@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use obsidian_brain::embeddings::{Embedder, TaskType};
 use rusqlite::Connection;
 
-/// The two tables, exactly as `src/store/db.ts` creates them.
+/// The two tables, exactly as the store creates them.
 pub fn open_test_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
