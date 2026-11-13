@@ -9,9 +9,9 @@ use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use super::js;
 use super::presets::DEFAULT_OLLAMA_MODEL;
 use super::types::{Embedder, EmbedderMetadata, PrefixSource, TaskType};
+use crate::util::js;
 
 /// The lifecycle of an Ollama embedder, readable at any time so tools can
 /// report pull progress instead of blocking on a long pull.

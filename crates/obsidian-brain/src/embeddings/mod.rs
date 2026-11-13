@@ -15,8 +15,6 @@ pub mod seed_loader;
 pub mod types;
 pub mod user_config;
 
-mod js;
-
 pub use errors::{EmbedderLoadError, EmbedderLoadErrorKind};
 pub use factory::{SharedEmbedder, create_embedder, model_cache_dir, share_embedder};
 pub use types::{Embedder, EmbedderMetadata, PrefixSource, TaskType};

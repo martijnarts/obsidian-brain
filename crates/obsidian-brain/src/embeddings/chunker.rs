@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 use regex::Regex;
 use sha2::{Digest, Sha256};
 
-use super::js;
 use crate::types::Chunk;
+use crate::util::js;
 
 /// Per-chunk configuration. Callers pass the capacity budget as
 /// `chunk_size`.
@@ -113,7 +113,7 @@ pub fn chunk_markdown(content: &str, config: &ChunkerConfig) -> Vec<Chunk> {
         for piece in split_oversize(&section.content, config) {
             let restored = restore_protected(&piece, &regions);
             let restored = js::trim(&restored);
-            if js::len(restored) < config.min_chunk_chars {
+            if js::utf16_len(restored) < config.min_chunk_chars {
                 continue;
             }
             let heading = section.heading.clone();
@@ -251,7 +251,7 @@ fn split_by_headings(text: &str, max_depth: usize) -> Vec<Section> {
 /// Split a section that exceeds `chunk_size`: paragraph break, then
 /// sentence, then hard cut. Sentinel tokens never split.
 fn split_oversize(text: &str, config: &ChunkerConfig) -> Vec<String> {
-    if js::len(text) <= config.chunk_size {
+    if js::utf16_len(text) <= config.chunk_size {
         return vec![text.to_string()];
     }
 
@@ -281,7 +281,7 @@ fn pack_pieces(pieces: &[&str], glue: &str, config: &ChunkerConfig) -> Vec<Strin
         } else {
             format!("{acc}{glue}{piece}")
         };
-        if js::len(&candidate) <= config.chunk_size {
+        if js::utf16_len(&candidate) <= config.chunk_size {
             acc = candidate;
         } else {
             if !acc.is_empty() {
@@ -296,7 +296,7 @@ fn pack_pieces(pieces: &[&str], glue: &str, config: &ChunkerConfig) -> Vec<Strin
 
     let mut result = Vec::new();
     for chunk in out {
-        if js::len(&chunk) <= config.chunk_size {
+        if js::utf16_len(&chunk) <= config.chunk_size {
             result.push(chunk);
         } else {
             result.extend(split_oversize(&chunk, config));
@@ -315,8 +315,8 @@ fn split_into_sentences(text: &str) -> Vec<String> {
     }
     // The tail starts at the summed match length, not the last match end,
     // exactly as `text.slice(joined.length)` did.
-    let joined_len: usize = matches.iter().map(|m| js::len(m)).sum();
-    let tail = js::slice(text, joined_len, js::len(text));
+    let joined_len: usize = matches.iter().map(|m| js::utf16_len(m)).sum();
+    let tail = js::utf16_slice(text, joined_len, js::utf16_len(text));
     if !js::trim(&tail).is_empty() {
         matches.push(tail);
     }
@@ -335,8 +335,8 @@ fn hard_cut(text: &str, size: usize) -> Vec<String> {
     let tokens: Vec<(usize, usize)> = PROTECT_TOKEN_RE
         .find_iter(text)
         .map(|m| {
-            let start = js::len(&text[..m.start()]);
-            (start, start + js::len(m.as_str()))
+            let start = js::utf16_len(&text[..m.start()]);
+            (start, start + js::utf16_len(m.as_str()))
         })
         .collect();
 

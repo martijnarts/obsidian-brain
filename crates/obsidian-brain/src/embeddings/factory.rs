@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::embedder::{TransformersEmbedder, TransformersEmbedderOptions};
-use super::js;
 use super::ollama::OllamaEmbedder;
 use super::presets::{EmbeddingProvider, resolve_preset_config};
 use super::types::Embedder;
+use crate::util::js;
 
 /// Where model files are cached: `TRANSFORMERS_CACHE` when set, else
 /// `<data dir>/models`.

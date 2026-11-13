@@ -2,15 +2,20 @@
 
 use std::net::SocketAddr;
 use std::process::ExitCode;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use rmcp::ServiceExt;
+use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::resolve_data_dir;
 use crate::mcp::{Server, http};
-use crate::vaults::{VaultSpec, Vaults};
+use crate::pipeline::{WatcherOptions, read_watcher_opts_from_env};
+use crate::search::SearchUnique;
+use crate::store::db::drop_embedding_state;
+use crate::vaults::{VaultSpec, Vaults, index_vaults_in_turn, run_startup_index};
 
 #[derive(Parser)]
 #[command(
@@ -104,12 +109,41 @@ pub fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(run(cli.command)) {
+    let code = match runtime.block_on(run(cli.command)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("obsidian-brain: {err:#}");
             ExitCode::FAILURE
         }
+    };
+    // A blocked stdin read or a stuck task must not keep the process alive
+    // after a clean shutdown.
+    runtime.shutdown_timeout(HARD_EXIT);
+    code
+}
+
+/// How long shutdown waits for stray tasks before the process exits.
+const HARD_EXIT: Duration = Duration::from_secs(4);
+
+/// How often the stdio server checks that the process that spawned it is
+/// still alive.
+const ORPHAN_CHECK: Duration = Duration::from_secs(60);
+
+/// A shutdown trigger that remembers the first reason given.
+#[derive(Clone, Default)]
+struct Shutdown {
+    token: CancellationToken,
+    reason: Arc<OnceLock<String>>,
+}
+
+impl Shutdown {
+    fn trigger(&self, reason: &str) {
+        let _ = self.reason.set(reason.to_string());
+        self.token.cancel();
+    }
+
+    fn reason(&self) -> &str {
+        self.reason.get().map_or("unknown", String::as_str)
     }
 }
 
@@ -125,49 +159,196 @@ async fn run(command: Command) -> anyhow::Result<()> {
             if transport == Transport::Stdio && listen.is_some() {
                 anyhow::bail!("--listen only applies with --transport http.");
             }
+            // Armed before the vaults open, so an early SIGTERM still shuts
+            // down cleanly.
+            let shutdown = Shutdown::default();
+            spawn_signal_handler(shutdown.clone());
             let vaults = Arc::new(Vaults::open(&vaults, &data_dir).await?);
             let server = Server::new(vaults.clone(), crate::tools::all());
-            let cancel = CancellationToken::new();
-            spawn_signal_handler(cancel.clone());
             let result = match transport {
                 Transport::Stdio => {
+                    // The handshake completes before any model loads; the
+                    // embedder and the first index follow in the background.
                     let running = server.serve(rmcp::transport::stdio()).await?;
+                    start_background(&vaults, &shutdown);
+                    spawn_orphan_watchdog(shutdown.clone());
+                    let service = running.cancellation_token();
                     tokio::select! {
-                        r = running.waiting() => r.map(|_| ()).map_err(Into::into),
-                        _ = cancel.cancelled() => Ok(()),
+                        r = running.waiting() => {
+                            shutdown.trigger("MCP transport closed");
+                            r.map(|_| ()).map_err(Into::into)
+                        }
+                        _ = shutdown.token.cancelled() => {
+                            service.cancel();
+                            Ok(())
+                        }
                     }
                 }
                 Transport::Http => {
                     let listen = listen.unwrap_or_else(|| "127.0.0.1:8080".parse().unwrap());
+                    start_background(&vaults, &shutdown);
                     http::serve(
                         server,
                         http::HttpOptions {
                             listen,
                             allowed_hosts,
                         },
-                        cancel,
+                        shutdown.token.clone(),
                     )
                     .await
                 }
             };
+            tracing::info!(
+                reason = shutdown.reason(),
+                "shutting down ({}).",
+                shutdown.reason()
+            );
             vaults.close().await;
             result
         }
-        Command::Index { .. } | Command::Watch { .. } | Command::Search { .. } => {
-            anyhow::bail!("not ported yet")
+        Command::Index { vaults, drop } => {
+            let vaults = Vaults::open(&vaults, &data_dir).await?;
+            let result = index_all(&vaults, drop).await;
+            vaults.close().await;
+            let stats = result?;
+            println!("{}", serde_json::to_string_pretty(&stats)?);
+            Ok(())
+        }
+        Command::Watch { vaults, debounce } => {
+            let shutdown = Shutdown::default();
+            spawn_signal_handler(shutdown.clone());
+            spawn_stdin_eof_watch(shutdown.clone());
+            let vaults = Vaults::open(&vaults, &data_dir).await?;
+            for ctx in vaults.iter() {
+                if let Err(err) = ctx.ensure_embedder_ready().await {
+                    vaults.close().await;
+                    return Err(err);
+                }
+            }
+            vaults.watch_all(WatcherOptions {
+                debounce_ms: Some(debounce),
+                stability_ms: None,
+            });
+            shutdown.token.cancelled().await;
+            tracing::info!(
+                reason = shutdown.reason(),
+                "shutting down ({}).",
+                shutdown.reason()
+            );
+            vaults.close().await;
+            Ok(())
+        }
+        Command::Search {
+            query,
+            vault,
+            limit,
+            mode,
+        } => {
+            let vaults = Vaults::open(&[vault], &data_dir).await?;
+            let result = search(&vaults, &query, limit, mode).await;
+            vaults.close().await;
+            println!("{}", serde_json::to_string_pretty(&result?)?);
+            Ok(())
         }
     }
 }
 
-fn spawn_signal_handler(cancel: CancellationToken) {
+/// Index each vault in turn. `drop` first clears its embeddings and sync
+/// state, forcing a rebuild from scratch.
+async fn index_all(vaults: &Vaults, drop: bool) -> anyhow::Result<serde_json::Map<String, Value>> {
+    let mut stats = serde_json::Map::new();
+    for name in vaults.names() {
+        let ctx = vaults.get(&name).expect("a listed vault");
+        if drop {
+            ctx.db.with(drop_embedding_state)?;
+            eprintln!("obsidian-brain: dropped existing embeddings + sync state of \"{name}\"");
+        }
+        ctx.ensure_embedder_ready().await?;
+        let s = ctx.pipeline.index(&ctx.config.vault_path).await?;
+        stats.insert(name, serde_json::to_value(s)?);
+    }
+    Ok(stats)
+}
+
+async fn search(
+    vaults: &Vaults,
+    query: &str,
+    limit: usize,
+    mode: SearchMode,
+) -> anyhow::Result<Value> {
+    let ctx = vaults.iter().next().expect("one vault").clone();
+    Ok(match mode {
+        SearchMode::Fulltext => serde_json::to_value(ctx.search.fulltext(query, limit)?)?,
+        SearchMode::Semantic => {
+            ctx.ensure_embedder_ready().await?;
+            serde_json::to_value(ctx.search.semantic(query, limit).await?)?
+        }
+        SearchMode::Hybrid => {
+            ctx.ensure_embedder_ready().await?;
+            serde_json::to_value(ctx.search.hybrid(query, limit, SearchUnique::Notes).await?)?
+        }
+    })
+}
+
+/// The startup index of every vault, one at a time, and a watcher per
+/// vault unless `OBSIDIAN_BRAIN_NO_WATCH=1`.
+fn start_background(vaults: &Arc<Vaults>, shutdown: &Shutdown) {
+    let v = vaults.clone();
+    let stopped = shutdown.token.clone();
+    tokio::spawn(async move {
+        index_vaults_in_turn(v.iter(), run_startup_index, || stopped.is_cancelled()).await;
+    });
+    vaults.start_watchers(read_watcher_opts_from_env());
+}
+
+fn spawn_signal_handler(shutdown: Shutdown) {
     tokio::spawn(async move {
         let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .expect("SIGTERM handler");
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = term.recv() => {}
+        let reason = tokio::select! {
+            _ = tokio::signal::ctrl_c() => "SIGINT",
+            _ = term.recv() => "SIGTERM",
+        };
+        shutdown.trigger(reason);
+    });
+}
+
+/// A host that crashes or is force-quit sends no SIGTERM, and the server
+/// would run on forever. Once a minute, check that the parent is the one
+/// that spawned us; a dead parent reparents us. Closed stdin is not the
+/// signal: some hosts close it briefly while they load.
+fn spawn_orphan_watchdog(shutdown: Shutdown) {
+    let original = std::os::unix::process::parent_id();
+    tracing::debug!(parent_pid = original, "orphan watchdog armed");
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(ORPHAN_CHECK);
+        tick.tick().await;
+        loop {
+            tokio::select! {
+                _ = shutdown.token.cancelled() => return,
+                _ = tick.tick() => {
+                    if std::os::unix::process::parent_id() != original {
+                        shutdown.trigger("parent process died (orphaned)");
+                        return;
+                    }
+                }
+            }
         }
-        tracing::info!("shutting down");
-        cancel.cancel();
+    });
+}
+
+/// `watch` also stops when its stdin closes. A plain thread reads it, so a
+/// blocked read never holds up the runtime.
+fn spawn_stdin_eof_watch(shutdown: Shutdown) {
+    std::thread::spawn(move || {
+        let mut sink = [0u8; 4096];
+        let mut stdin = std::io::stdin();
+        loop {
+            match std::io::Read::read(&mut stdin, &mut sink) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+        }
+        shutdown.trigger("stdin EOF");
     });
 }

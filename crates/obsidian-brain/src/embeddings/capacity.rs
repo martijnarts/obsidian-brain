@@ -13,9 +13,9 @@ use regex::Regex;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
-use super::js;
 use super::metadata_cache::model_hash;
 use super::types::Embedder;
+use crate::util::js;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

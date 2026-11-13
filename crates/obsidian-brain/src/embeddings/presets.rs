@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 
-use super::js;
+use crate::util::js;
 
 pub const DEFAULT_PRESET: &str = "english";
 pub const DEFAULT_OLLAMA_MODEL: &str = "nomic-embed-text";

@@ -14,11 +14,11 @@
 use rusqlite::Connection;
 use serde::Serialize;
 
-use super::js;
 use super::metadata_cache::{CachedMetadata, load_cached_metadata, upsert_cached_metadata};
 use super::overrides::{ModelOverride, Overrides, load_overrides};
 use super::seed_loader::{Seed, SeedEntry, load_seed};
 use super::types::{Embedder, EmbedderMetadata, PrefixSource};
+use crate::util::js;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]

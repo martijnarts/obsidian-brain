@@ -31,8 +31,8 @@ use serde_json::Value;
 use tokenizers::pipeline::{EncodeOptions, Override, PipelineTokenizer};
 
 use super::errors::classify_load_error;
-use super::js;
 use super::types::{Embedder, EmbedderMetadata, TaskType};
+use crate::util::js;
 
 pub const DEFAULT_MODEL: &str = "Xenova/all-MiniLM-L6-v2";
 

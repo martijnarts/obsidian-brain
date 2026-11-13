@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::js;
+use crate::util::js;
 
 pub fn get_user_config_dir_from(env: &HashMap<String, String>) -> PathBuf {
     if let Some(explicit) = js::env_value(env, "OBSIDIAN_BRAIN_CONFIG_DIR") {

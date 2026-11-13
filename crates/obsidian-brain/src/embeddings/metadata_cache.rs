@@ -8,8 +8,8 @@
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 
-use super::js;
 use super::types::PrefixSource;
+use crate::util::js;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CachedMetadata {

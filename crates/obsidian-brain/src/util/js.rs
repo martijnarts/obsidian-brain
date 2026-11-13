@@ -1,7 +1,16 @@
 //! JavaScript semantics the port has to reproduce: number formatting,
-//! `String.prototype.trim` whitespace, `JSON.stringify` and UTF-16 offsets.
+//! `String.prototype.trim` whitespace, `JSON.stringify`, UTF-16 offsets,
+//! and the `process.env` number parsing of `Number()` and `parseInt()`.
+
+use std::collections::HashMap;
 
 use serde_json::Value;
+
+/// The JS `\s` class, for use inside a regex character class.
+pub const WS: &str = r"\t\n\x0B\x0C\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}";
+
+/// The JS `.` class without the `s` flag: anything but a line terminator.
+pub const DOT: &str = r"[^\n\r\x{2028}\x{2029}]";
 
 /// The characters `String.prototype.trim` and `\s` treat as whitespace.
 /// Unlike `char::is_whitespace`, this includes U+FEFF and excludes U+0085.
@@ -246,6 +255,65 @@ pub fn js_object_order(map: &mut serde_json::Map<String, Value>) {
     map.extend(rest);
 }
 
+/// `s.slice(start, end)` on UTF-16 indices. A cut through a surrogate
+/// pair yields U+FFFD, which is what Node writes for a lone surrogate when
+/// the string leaves JS as UTF-8.
+pub fn utf16_slice(s: &str, start: usize, end: usize) -> String {
+    let units: Vec<u16> = s.encode_utf16().collect();
+    let end = end.min(units.len());
+    let start = start.min(end);
+    String::from_utf16_lossy(&units[start..end])
+}
+
+/// The process environment as a map, the shape of `process.env`.
+pub fn process_env() -> HashMap<String, String> {
+    std::env::vars().collect()
+}
+
+/// A non-empty, trimmed env value.
+pub fn env_value<'a>(env: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {
+    env.get(key).map(|v| trim(v)).filter(|v| !v.is_empty())
+}
+
+/// `Number(raw)` for an env value: `Number('')` is 0, junk is NaN, and an
+/// unset value (`Number(undefined)`) is NaN.
+pub fn number(raw: Option<&str>) -> f64 {
+    match raw {
+        None => f64::NAN,
+        Some(s) => {
+            let t = trim(s);
+            if t.is_empty() {
+                0.0
+            } else {
+                t.parse::<f64>().unwrap_or(f64::NAN)
+            }
+        }
+    }
+}
+
+/// `parseInt(raw, 10)`: leading digits after optional whitespace and sign.
+pub fn parse_int(raw: Option<&str>) -> Option<i64> {
+    let s = trim(raw?);
+    let (sign, rest) = match s.as_bytes().first() {
+        Some(b'-') => (-1, &s[1..]),
+        Some(b'+') => (1, &s[1..]),
+        _ => (1, s),
+    };
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse::<i64>().ok().map(|n| sign * n)
+}
+
+/// Milliseconds since the epoch, as `Date.now()`.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +389,23 @@ mod tests {
         assert_eq!(utf16_to_byte(s, 3), 5);
         assert_eq!(byte_to_utf16(s, 5), 3);
         assert_eq!(trim("\u{feff} x \u{a0}"), "x");
+        assert_eq!(trim("\u{85}x"), "\u{85}x");
+    }
+
+    #[test]
+    fn utf16_slice_replaces_a_cut_surrogate() {
+        assert_eq!(utf16_slice("a😀b", 0, 2), "a\u{FFFD}");
+        assert_eq!(utf16_slice("a😀b", 1, 3), "😀");
+    }
+
+    #[test]
+    fn js_number_and_parse_int() {
+        assert_eq!(number(Some("")), 0.0);
+        assert!(number(Some("banana")).is_nan());
+        assert!(number(None).is_nan());
+        assert_eq!(number(Some(" 42 ")), 42.0);
+        assert_eq!(parse_int(Some("200abc")), Some(200));
+        assert_eq!(parse_int(Some("abc")), None);
+        assert_eq!(parse_int(Some("-5")), Some(-5));
     }
 }
