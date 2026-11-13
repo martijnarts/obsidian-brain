@@ -49,3 +49,7 @@ pretty_assertions = "1"
 [[test]]
 name = "tools_find"
 path = "tests/tools/find/main.rs"
+
+[[test]]
+name = "tools_write"
+path = "tests/tools/write/main.rs"
