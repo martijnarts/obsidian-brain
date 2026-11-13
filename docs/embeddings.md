@@ -1,99 +1,97 @@
----
-title: Embedding model
-description: Pick a preset, pick a provider, or bring your own model — obsidian-brain handles the reindex automatically.
----
+# Embedding models
 
-# Embedding model
+Semantic search turns each chunk of a note into a vector and finds the chunks closest to the query. The model that makes the vectors is set by environment variables. [Configuration](configuration.md) lists them all.
 
-> **Looking for the preset table or BYOM?** See [Models](models.md).
+## Presets
 
-Embeddings are what make semantic search work — obsidian-brain converts each chunk of your notes into a vector and finds the closest matches when you search. The embedder is pluggable; you pick the trade-off between size, speed, and quality via one env var.
+`EMBEDDING_PRESET` picks a model by name. The default is `english`.
 
-The easiest way to pick a model is `EMBEDDING_PRESET` — set it to a preset name instead of memorising Hugging Face model paths. `EMBEDDING_MODEL` still works for any custom checkpoint (power-user path; takes precedence when set). The server records the active model (and its output dim) in the index. If you switch models the next startup detects the change, drops the old vectors, and rebuilds per-chunk embeddings against the new model — no manual `--drop` required.
+| Preset | Model | Provider | Dimension | Download | Languages |
+|---|---|---|---|---|---|
+| `english` | `Xenova/bge-small-en-v1.5` | transformers | 384 | about 34 MB | English |
+| `english-fast` | `MongoDB/mdbr-leaf-ir` | transformers | 768 | about 22 MB | English |
+| `english-quality` | `Xenova/bge-base-en-v1.5` | transformers | 768 | about 110 MB | English |
+| `multilingual` | `Xenova/multilingual-e5-small` | transformers | 384 | about 135 MB | 94 languages |
+| `multilingual-quality` | `Xenova/multilingual-e5-base` | transformers | 768 | about 279 MB | 94 languages |
+| `multilingual-ollama` | `qwen3-embedding:0.6b` | ollama | 1024 | about 600 MB | over 100 languages |
 
-## Chunk-level embeddings
+All six models are asymmetric: queries and documents get different prefixes. The server applies the prefixes from the bundled seed, so you do not set them.
 
-Embeddings are chunk-level — each note is split at markdown headings (H1–H4) and oversized sections are further split on paragraph / sentence boundaries, preserving code fences and `$$…$$` LaTeX blocks. SHA-256 content-hash dedup means unchanged chunks don't get re-embedded on incremental reindex.
+The server logs a warning for `multilingual-quality`: the model has a known problem with `token_type_ids` on inputs over about 400 words. Chunks that fail are recorded in `failed_chunks`, and `index_status` reports them.
 
-The default `hybrid` search mode fuses chunk-level semantic rank and full-text BM25 rank via Reciprocal Rank Fusion (RRF), so you get both literal-token hits and concept matches out of the box.
-
-**Empty / frontmatter-only notes.** Daily notes (`# 2026-04-25` only), frontmatter-only metadata notes, embeds-only collector notes, and any note shorter than `minChunkChars` after stripping frontmatter would otherwise produce zero chunks. The indexer synthesises a fallback chunk from `title + tags + scalar frontmatter values + first 5 wikilink/embed targets` so these notes stay searchable by name. Notes with literally nothing to embed (no title, no frontmatter, no body) are recorded once in `failed_chunks` with reason `no-embeddable-content` and skipped permanently — surfaced as a distinct bucket in `index_status` so the count of "missing embeddings" reflects only genuine failures, not the daily-note tail.
-
-## Adaptive chunk-size budget
-
-Chunk size is bounded by the active embedder's max input length (`model_max_length` from the loaded tokenizer / `/api/show` for Ollama / the bundled seed for canonical presets). The chunker aims for `floor(0.9 × min(advertised, discovered))` tokens per chunk so a tail of long sentences won't push individual chunks over the model's hard cap.
-
-If a chunk does fail to embed with a "too long" error, the fault-tolerant loop records it in `failed_chunks` and ratchets `discovered_max_tokens` down by half so subsequent chunks aim smaller. Two safeguards on top:
-
-- **Floor at `MIN_DISCOVERED_TOKENS=256`** (clamped to advertised for tinier models) so a single freak chunk failure can no longer halve the budget down into single-sentence territory. Below 256 tokens, chunks are too small to carry meaningful semantic context — the floor preserves search quality.
-- **Reset on every full reindex.** `discovered_max_tokens` is wiped back to advertised at the top of `IndexPipeline.index()` so cross-boot drift can't accumulate. Each full reindex starts from the model's full advertised limit.
-
-## Multilingual / non-English vaults
-
-Set one env var and restart. The multilingual path Just Works via transformers.js — no extra server, no Ollama:
+Example client config with a preset:
 
 ```json
 {
   "mcpServers": {
     "obsidian-brain": {
-      "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
-      "env": {
-        "EMBEDDING_PRESET": "multilingual"
-      }
+      "command": "/home/you/.nix-profile/bin/obsidian-brain",
+      "args": ["server", "--vault", "notes=/absolute/path/to/your/vault"],
+      "env": { "EMBEDDING_PRESET": "multilingual" }
     }
   }
 }
 ```
 
-This pulls `Xenova/multilingual-e5-small` (384-dim, 94 languages, ~135 MB one-time download = 118 MB ONNX + 17 MB tokenizer). The mandatory `query: ` / `passage: ` E5 prefixes are applied automatically per task type — you don't need to think about them. The auto-reindex triggers on next boot; incremental reindexes after that are imperceptibly different from the English presets thanks to SHA-256 content-hash dedup.
+## Other models
 
-For preset quality comparisons and the Ollama-based multilingual option, see [Models](models.md#presets).
+`EMBEDDING_MODEL` sets a model id directly, and it overrides the preset.
 
-## Changing your embedding model
+With the `transformers` provider, the id is a Hugging Face repository. The repository must have `onnx/model_quantized.onnx` and `tokenizer.json`. The `Xenova/` and `onnx-community/` repositories usually have them. A repository without ONNX weights fails to load with an error that names the `Xenova/` port to try.
 
-You can change `EMBEDDING_PRESET` or `EMBEDDING_MODEL` at any time. On the next server start, obsidian-brain detects the change, wipes the old embedding vectors, and re-embeds your vault against the new model in the background.
+With the `ollama` provider, the id is an Ollama model name, such as `nomic-embed-text` or `mxbai-embed-large`.
 
-**What happens:**
-1. The MCP handshake and tool listing complete immediately — the server is responsive from the first second.
-2. Semantic search returns `{status: "preparing"}` during the re-embed.
-3. Fulltext search and every non-semantic tool (list_notes, read_note, find_connections, rank_notes, graph tools, write tools) work throughout — only semantic `search` is affected.
-4. Typical 3000-note vault re-embeds in 5–15 minutes depending on the new model's size.
+## Ollama
 
-**No manual cleanup needed.** The old vectors are dropped automatically. Index is eventually consistent.
-
-**Check progress**: the `index_status` tool reports `notesWithEmbeddings` / `notesNoEmbeddableContent` / `notesMissingEmbeddings` (three buckets so you can tell intentional empty-note skips from real failures), plus `chunksTotal`, `chunksSkippedInLastRun`, `lastReindexReasons`, and a one-line `summary`. Call it from your MCP client to see "what's the current state of my index."
-
-**Rolling back**: just change the env var back and restart. The previous model's vectors will be re-generated on next boot — same flow, reverse direction.
-
-## Alternative provider: Ollama
-
-Set `EMBEDDING_PROVIDER=ollama` to route every embed through a local [Ollama](https://ollama.com) server instead of transformers.js. Useful if you already run Ollama for LLMs and want to reuse its (usually higher-quality) embedding models.
-
-| Provider | Best for | Quality | Setup |
-|---|---|---|---|
-| `transformers` (default) | Any machine, offline, zero setup | Good → Very Good | None |
-| `ollama` | Users already running Ollama | Excellent (`nomic-embed-text`, `bge-large`, `mxbai-embed-large`) | Install Ollama + `ollama pull <model>` |
-
-Minimal Ollama setup:
+Set `EMBEDDING_PRESET=multilingual-ollama`, or set `EMBEDDING_PROVIDER=ollama` with an `EMBEDDING_MODEL`. Without a model, the Ollama provider uses `nomic-embed-text`.
 
 ```bash
-ollama pull nomic-embed-text         # or mxbai-embed-large, bge-large, etc.
-export EMBEDDING_PROVIDER=ollama
-export EMBEDDING_MODEL=nomic-embed-text
-# Optional — skip the startup probe by declaring the dim up front:
-export OLLAMA_EMBEDDING_DIM=768
+EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text \
+  obsidian-brain server --vault notes=/path/to/vault
 ```
 
-!!! note "Auto-pull on first boot"
-    Bare model ids like `nomic-embed-text` and `qwen3-embedding:0.6b` (Ollama's official `library/` namespace) auto-pull when the server first boots, so the `ollama pull` step above is technically optional for those. **Third-party namespaces** (`user/custom-fork`, `myregistry.com/team/model`) require `OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL=1` to opt in — this is a security default, since Ollama has no built-in trust gate for crafted manifests (CVE-2024-37032). Full allowlist table + escape hatches in [Models → BYOM Ollama auto-pull](models.md#byom-ollama-auto-pull-allowlist-opt-in).
+The server talks to `OLLAMA_BASE_URL`, by default `http://localhost:11434`. It reads the model's context length and dimension from `/api/show`. `OLLAMA_EMBEDDING_DIM` sets the dimension and skips the probe embed. `OLLAMA_NUM_CTX` sets the context length of each request; leave it unset unless the model reports a wrong one.
 
-Well-known dims: `nomic-embed-text` = 768, `mxbai-embed-large` = 1024, `bge-large` = 1024, `qwen3-embedding-8b` = 4096. If `OLLAMA_EMBEDDING_DIM` is unset the server probes the model on first startup.
+When the model is not in Ollama, the server pulls it:
 
-The resolver chain (override → cache → seed → HF → embedder probe → fallback) supplies authoritative query/document prefixes — the canonical `multilingual-ollama` preset (`qwen3-embedding:0.6b`) ships its instruction-aware query prompt from the seed, and BYOM Ollama models inherit prefixes via the same chain. As a fallback (init-time probe before the resolver runs, plus tests), `OllamaEmbedder.getPrefix` applies family heuristics: `nomic-embed-text` gets `search_query: ` / `search_document: `; `e5-` gets `query: ` / `passage: `; `qwen` gets `Query: `; `mxbai-embed-large` / `mixedbread*` get `Represent this sentence for searching relevant passages: ` on queries. No user action needed.
+| Model | Pulled? |
+|---|---|
+| The model of a preset | yes |
+| A name in Ollama's official library, such as `nomic-embed-text` or `library/bge-m3` | yes |
+| A name in another namespace, such as `user/custom-model` | only with `OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL=1` |
 
-Switching provider (or model) triggers an auto-reindex on next boot — the server stores `ollama:<model>` in the index and rebuilds per-chunk embeddings against the new identifier. No `--drop` required.
+`OBSIDIAN_BRAIN_OLLAMA_AUTO_PULL=0` turns pulling off for every model. The server then fails to start the embedder and names the `ollama pull` command to run.
 
-For specific Ollama model recommendations and BYOM recipes, see [Models](models.md#bring-your-own-model-byom).
+## Changing the model
 
-**Next:** the [Models](models.md) reference page for the full preset table, MTEB rankings, license catalogue, and BYOM recipes.
+Change the variable and restart the server. At startup the server sees that the model, dimension or provider differs from the one the index was built with. It deletes the old vectors and embeds the vault again in the background. The MCP handshake and the other tools do not wait for this. Semantic search reports that it is preparing until the new vectors are ready. `index_status` shows the progress.
+
+The same happens when an Ollama model's weights change under the same tag, and when the prefixes of the model change.
+
+## Model overrides
+
+`model-overrides.json` in the config directory (`~/.config/obsidian-brain/` by default, or `OBSIDIAN_BRAIN_CONFIG_DIR`) patches the metadata of a model. Each field is optional:
+
+```json
+{
+  "$version": 1,
+  "models": {
+    "MongoDB/mdbr-leaf-ir": { "maxTokens": 1024 },
+    "my-org/my-embedder": {
+      "maxTokens": 4096,
+      "queryPrefix": "Query: ",
+      "documentPrefix": "Document: "
+    }
+  }
+}
+```
+
+An entry with all three fields is used as it is. A partial entry patches the metadata the server resolved from its cache, the bundled seed or the loaded model. `null` for a prefix clears it. A change of prefix embeds the vault again on the next start; a change of `maxTokens` applies on the next index pass. A bad file or field is skipped with a warning.
+
+## Chunk sizes
+
+The chunk size limit is 90% of the model's token limit. The local embedder reads the limit from the tokenizer; Ollama reports it in `/api/show`. When a chunk is still too long, the indexer halves the limit for that model, down to 256 tokens, and records the chunk in `failed_chunks`. `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS` sets the limit by hand.
+
+## Memory
+
+The local model stays loaded by default. `OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS` unloads it after that many idle milliseconds. The next embed loads it again, so the first search after an idle period waits for the load.

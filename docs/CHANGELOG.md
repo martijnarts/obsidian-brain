@@ -1,11 +1,19 @@
----
-title: Changelog
-description: User-facing release notes. For full commit detail, see GitHub Releases.
----
-
 # Changelog
 
-User-facing release notes. For full commit-level detail see [GitHub Releases](https://github.com/sweir1/obsidian-brain/releases).
+Release notes. Versions before 2.0.0 are releases of [sweir1/obsidian-brain](https://github.com/sweir1/obsidian-brain).
+
+## v2.0.0: 2026-11-13
+
+The server is now one Rust binary, so it runs with less memory and no Node runtime.
+
+- The server is rewritten in Rust and built with Nix.
+- It ships as one binary. It needs no Node and no native modules.
+- It uses less memory. On a vault of 1228 notes, idle use drops from about 200 MB to about 65 MB.
+- Peak memory while indexing that vault drops from about 275 MB to about 127 MB.
+- The tool names, descriptions and input schemas stay the same.
+- Frontmatter edits change only the lines of the keys they touch. Comments, quoting and key order stay as written.
+- Indexes now live in `index.db`. Existing indexes and model caches are rebuilt on the first start.
+- The npm package is gone. The `models` command and the Hugging Face metadata lookup are gone too.
 
 ## v1.7.24 — 2026-05-16 — embeddings.md BYOM callout + 5 devDep bumps
 

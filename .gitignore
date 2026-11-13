@@ -1,5 +1,3 @@
-node_modules/
-dist/
 reference/
 feedback/
 *.log
@@ -7,17 +5,6 @@ feedback/
 .env
 .env.*
 !.env.example
-coverage/
-.vitest/
-*.tsbuildinfo
-
-# Local data — never commit (per-vault SQLite indexes etc.).
-# Glob form (`data/*` rather than `data/`) keeps git recursing into the
-# directory so the negation below actually fires.
-data/*
-# v1.7.5: bundled model-metadata seed JSON IS committed (anchor for offline /
-# non-CI builds; refreshed at release time via release.yml + scripts/build-seed.py).
-!data/seed-models.json
 *.sqlite
 *.sqlite-journal
 *.db
@@ -29,10 +16,6 @@ data/*
 # OS
 Thumbs.db
 
-# Docs site build output + local Python venv for building docs
-website/site/
-website/.venv/
-.venv/
-.venv-build-seed/
-__pycache__/
-*.pyc
+# Rust and Nix
+/target
+/result

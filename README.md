@@ -1,146 +1,163 @@
 # obsidian-brain
 
-[![npm version](https://img.shields.io/npm/v/obsidian-brain.svg)](https://www.npmjs.com/package/obsidian-brain)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Node ≥ 22.12](https://img.shields.io/node/v/obsidian-brain.svg)](package.json)
-[![GitHub stars](https://img.shields.io/github/stars/sweir1/obsidian-brain.svg?style=social)](https://github.com/sweir1/obsidian-brain)
+obsidian-brain is an MCP server for Obsidian vaults. It gives Claude and other MCP clients semantic search, a link graph and note editing. One process serves one or more vaults, over stdio for a local client or over HTTP for a remote one. It reads the Markdown files on disk, so Obsidian does not need to run. Embeddings run on your machine, so note content stays local.
 
-A standalone Node MCP server that gives Claude (and any other MCP client) **semantic search + knowledge graph + vault editing** over your Obsidian vaults. One process serves one or more vaults, over stdio for a local client or over HTTP for a remote one. No plugin, no API key, nothing hosted. Your vault content never leaves your machine.
+This is [Marts's fork](https://github.com/martijnarts/obsidian-brain) of [sweir1/obsidian-brain](https://github.com/sweir1/obsidian-brain) by sweir1. Version 2 is a rewrite in Rust. It is not the `obsidian-brain` package on npm: that package is the upstream TypeScript server and does not have the changes of this fork.
 
-> [!NOTE]
-> This is [Marts's fork](https://github.com/martijnarts/obsidian-brain) of [sweir1/obsidian-brain](https://github.com/sweir1/obsidian-brain). It adds several vaults per server, an HTTP transport, idle model unloading and 26 more tools. The fork is not published on npm: `npx obsidian-brain` installs the upstream release without these changes. Build the fork from source instead, as [Development](docs/development.md) describes.
+## Build and run
 
-> 📖 **Full docs → [sweir1.github.io/obsidian-brain](https://sweir1.github.io/obsidian-brain/)**
+The flake builds one binary. It links SQLite and ONNX Runtime from nixpkgs, so it needs no Node and no native modules.
 
-**Contents** — [Why](#why-obsidian-brain) · [Quick start](#quick-start) · [What you get](#what-you-get) · [How it works](#how-it-works) · [Troubleshooting](#troubleshooting) · [Recent releases](#recent-releases)
-
-## Why obsidian-brain?
-
-- **Works without Obsidian running** — unlike Local REST API-based servers, obsidian-brain reads `.md` files directly from disk. Obsidian can be closed; your vault is just a folder.
-- **No Local REST API plugin required** — nothing to install inside Obsidian.
-- **Several vaults, one server** — `--vault personal=… --vault work=…`; every tool takes a `vault` argument, and each vault keeps its own index and graph.
-- **Local or remote** — stdio for a client that spawns the server, or `--transport http` for a long-running server behind an authenticating proxy.
-- **Light when idle** — one embedding model shared by every vault, unloaded after an idle period and loaded again on the next search.
-- **Chunk-level semantic search with RRF hybrid retrieval** — embeddings at markdown-heading granularity, fused with FTS5 BM25 via Reciprocal Rank Fusion. Finds the exact chunk, ranks on meaning.
-- **PageRank and graph analytics** — ask for your vault's most influential notes, bridging notes, and the link paths between notes.
-- **Ollama provider for high-quality local embeddings** — switch to `qwen3-embedding:0.6b`, `nomic-embed-text`, `bge-m3`, etc. with one env var.
-- **All in one `npx` install** — no clone, no build, no API key, no hosted endpoint. Vault content never leaves your machine.
-
-## Quick start
-
-### One-line install (macOS + Claude Desktop)
+Run it straight from GitHub:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sweir1/obsidian-brain/main/scripts/install.sh)"
+nix run github:martijnarts/obsidian-brain -- server --vault notes=/path/to/vault
 ```
 
-Installs Homebrew + Node 22.12+ if you don't already have them, adds the `/usr/local/bin` symlinks that Claude Desktop needs, merges obsidian-brain into your `claude_desktop_config.json`, opens the Full Disk Access pane for you to toggle Claude on, and relaunches Claude. You'll be asked for your macOS password once (for Homebrew + the symlinks) and your vault path once. Everything else is automatic. Audit what it does: [`scripts/install.sh`](scripts/install.sh).
+Install it in your profile:
 
-### Manual install
-
-Requires Node 22.12+ and an Obsidian vault (or any folder of `.md` files — Obsidian itself is optional).
-
-Wire obsidian-brain into your MCP client. Example for **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "obsidian-brain": {
-      "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-    }
-  }
-}
+```bash
+nix profile add github:martijnarts/obsidian-brain
+obsidian-brain server --vault notes=/path/to/vault
 ```
 
-Quit Claude Desktop (⌘Q on macOS) and relaunch. That's it.
+Build it from a clone:
 
-> [!NOTE]
-> On first boot the server auto-indexes your vault and downloads a ~34 MB embedding model. Tools may take 30–60 s to appear in the client. Subsequent boots are instant.
-
-> [!TIP]
-> **Not a developer?** The [macOS walkthrough](docs/install-mac-nontechnical.md) covers Homebrew, Node, the GUI-app PATH fix, and Full Disk Access step-by-step.
-
-**For every other MCP client** (Claude Code, Cursor, VS Code, Jan, Windsurf, Cline, Zed, LM Studio, JetBrains AI, Opencode, Codex CLI, Gemini CLI, Warp): see [Install in your MCP client](docs/install-clients.md).
-
-→ Full env-var reference: [Configuration](docs/configuration.md)
-→ Model / preset / Ollama details: [Embedding model](docs/embeddings.md)
-→ Migrating from aaronsb's plugin: [Migration guide](docs/migration-aaronsb.md)
-
-## What you get
-
-41 MCP tools grouped by intent. Every tool except `list_vaults` takes a `vault` argument naming one of the vaults you configured:
-
-- **Vaults** — `list_vaults`
-- **Find** — `search`, `list_notes`, `read_note`, `find_notes_by_name`, `grep_vault`, `query_notes`
-- **Files** — `read_notes`, `read_note_part`, `file_info`, `create_folder`, `delete_folder`, `list_attachments`, `create_attachment`
-- **Write** — `create_note`, `create_note_from_template`, `edit_note`, `apply_edit_preview`, `link_notes`, `move_note`, `delete_note`
-- **Properties** — `list_property_values`, `update_properties`
-- **Structure** — `vault_overview`, `list_tags`, `list_bookmarks`
-- **Tasks and blocks** — `list_tasks`, `set_task_status`, `ensure_block_id`
-- **Canvas** — `read_canvas`, `edit_canvas`
-- **Map the graph** — `find_connections`, `find_path_between`, `rank_notes`
-- **Maintenance** — `reindex`, `index_status`, `find_broken_links`, `find_orphaned_notes`, `search_and_replace`, `rename_tag`, `rename_heading`
-
-→ Arguments, examples, and response shapes: [Tool reference](docs/tools.md)
-
-## How it works
-
-```mermaid
-flowchart LR
-    Client["<b>MCP Client</b><br/>Claude Desktop · Claude Code<br/>Cursor · Jan · Windsurf · ..."]
-
-    subgraph OB ["obsidian-brain (one Node process, every vault)"]
-        direction TB
-        SQL["<b>SQLite index</b><br/>nodes · edges<br/>FTS5 · vec0 embeddings"]
-        Vault["<b>Vault on disk</b><br/>your .md files"]
-        Vault -->|"parse + embed"| SQL
-        SQL -.->|"writes"| Vault
-    end
-
-    Client <-->|"stdio or HTTP JSON-RPC"| OB
+```bash
+nix build .#obsidian-brain
+./result/bin/obsidian-brain --help
 ```
 
-Each vault has its own SQLite index, graph and file watcher; the embedding model is shared. Retrieval and writes both go through the index: reads are microsecond-cheap, writes land on disk immediately and incrementally re-index the affected file. Embeddings are chunk-level (heading-aware recursive chunker preserving code + LaTeX blocks), and `search`'s default `hybrid` mode fuses chunk-level semantic rank with FTS5 BM25 via Reciprocal Rank Fusion.
+The flake builds for `aarch64-linux`, `x86_64-linux` and `aarch64-darwin`. [Development](docs/development.md) covers the dev shell and the tests.
 
-→ Deeper write-up — why stdio, several vaults in one server, why SQLite, why local embeddings: [Architecture](docs/architecture.md)
-→ Flags for vaults, transport and listen address: [CLI](docs/cli.md#obsidian-brain-server-options)
-→ Live watcher behaviour + debounces: [Live updates](docs/watching.md)
-→ Scheduled reindex (macOS launchd / Linux systemd): [Scheduled indexing (macOS)](docs/launchd.md) · [(Linux)](docs/systemd.md)
+To connect a client, give it the binary as the command and `server --vault name=path` as the arguments. [Install in your MCP client](docs/install-clients.md) has the config for each client.
 
-## Troubleshooting
+On the first start the server downloads the embedding model (about 34 MB for the default preset) and indexes each vault in the background. Tools answer during that time. Semantic search reports that it is preparing until the model is ready.
 
-Four most common:
+## Commands
 
-- **"Connector has no tools available"** in Claude Desktop — usually the server crashed at startup. Check `~/Library/Logs/Claude/mcp-server-obsidian-brain.log`. Fix: `npm install -g obsidian-brain@latest`, quit Claude (⌘Q), relaunch.
-- **`ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` mismatch** — `better-sqlite3` built against a different Node ABI. Fix: `PATH=/opt/homebrew/bin:$PATH npm rebuild -g better-sqlite3`.
-- **`Give at least one vault with --vault <name=path>.`** — the server got no `--vault` flag. Add `"--vault", "notes=/absolute/path/to/your/vault"` to the `args` of your client config.
-- **Old version loading via `npx`** (your client still shows the previous release after a publish) — stale npx cache. Fix: `rm -rf ~/.npm/_npx`, then restart your client. Keeping `@latest` in your config prevents this.
+`obsidian-brain` has four subcommands. Each takes its vaults as `--vault <name>=<path>`. A name has letters, digits, `-` and `_`.
 
-→ Full troubleshooting guide (watcher not firing, stale index, running multiple clients, timeouts, embedding-dim mismatch, log locations): [docs/troubleshooting.md](docs/troubleshooting.md)
+### `server`
 
-## Recent releases
+Starts the MCP server.
 
-<!-- GENERATED:recent-releases — auto-pulled from docs/CHANGELOG.md by scripts/gen-readme-recent.mjs. Edit CHANGELOG.md, then run `npm run gen-readme-recent`. -->
-- **v1.7.24** (2026-05-16) — embeddings.md BYOM callout + 5 devDep bumps
-- **v1.7.23** (2026-05-16) — BYOM Ollama auto-pull gate + logger sweep + SIGTERM unit test
-- **v1.7.22** (2026-05-15) — structured stderr (NDJSON) + Ollama preparing-state + dependabot security bumps + SIGTERM drain integration test
-- **v1.7.21** (2026-04-27) — install.sh vault-picker fix + auto `ollama pull` + docs/test polish
-- **v1.7.20** (2026-04-27) — Ollama prefix-lookup bug + 13 audit polish items
-<!-- /GENERATED:recent-releases -->
+| Flag | Default | Effect |
+|---|---|---|
+| `--vault <name=path>` | required | A vault to serve. Repeat it for more vaults. |
+| `--transport <stdio\|http>` | `stdio` | `stdio` for a client that starts the server. `http` for a long-running server. |
+| `--listen <addr:port>` | `127.0.0.1:8080` | The address to listen on. Only valid with `--transport http`. Port `0` picks a free port. |
+| `--allowed-host <host>` | none | A `Host` header to accept with `--transport http`, in addition to `localhost`, `127.0.0.1` and `::1`. Repeat it for more hosts. |
 
-→ Full changelog: [docs/CHANGELOG.md](docs/CHANGELOG.md) · Forward plan: [docs/roadmap.md](docs/roadmap.md) · Build from source: [docs/development.md](docs/development.md)
+Every tool except `list_vaults` takes a required `vault` argument. Its value is one of the `--vault` names. There is no default vault. Each vault has its own index, link graph and file watcher. All vaults share one embedding model. To give a client only some vaults, run a second server with only those vaults.
+
+With `--transport stdio`, the server stops when the client closes the connection, on SIGINT or SIGTERM, and when the process that started it exits.
+
+With `--transport http`, the server answers MCP requests at `/mcp`. It is stateless: each POST gets its own answer. It has no authentication. Bind it to loopback and put an authenticating proxy in front of it. The server refuses a request whose `Host` header is not loopback or an `--allowed-host`. A proxy that rewrites `Host` to the backend address needs no `--allowed-host`. A proxy that passes the public host name through needs that name as an `--allowed-host`.
+
+```bash
+DATA_DIR=/var/lib/obsidian-brain obsidian-brain server \
+  --transport http --listen 127.0.0.1:8091 \
+  --vault personal=/srv/vaults/personal \
+  --vault dnd=/srv/vaults/dnd
+```
+
+### `index`
+
+Scans each vault and updates its index, one vault at a time. It prints the statistics as JSON, keyed by vault name. The index is incremental: it only parses and embeds files whose modification time changed.
+
+| Flag | Effect |
+|---|---|
+| `--vault <name=path>` | A vault to index. Repeat it for more vaults. |
+| `--drop` | Deletes all embeddings and sync state before indexing. A model change does this on its own. |
+
+### `watch`
+
+Keeps each vault index current: it reindexes a note after it changes. It stops on SIGINT, SIGTERM and when its standard input closes.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--vault <name=path>` | required | A vault to watch. Repeat it for more vaults. |
+| `--debounce <ms>` | `3000` | The per-file reindex debounce. |
+
+### `search`
+
+Searches one vault and prints the results as JSON.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `<query>` | required | The search text. |
+| `--vault <name=path>` | required | The vault to search. Give exactly one. |
+| `-l, --limit <n>` | `10` | The maximum number of results. |
+| `-m, --mode <mode>` | `hybrid` | `hybrid`, `semantic` or `fulltext`. |
+
+## Tools
+
+The server has 41 tools.
+
+- Vaults: `list_vaults`
+- Find: `search`, `list_notes`, `read_note`, `find_notes_by_name`, `grep_vault`, `query_notes`
+- Files: `read_notes`, `read_note_part`, `file_info`, `create_folder`, `delete_folder`, `list_attachments`, `create_attachment`
+- Write: `create_note`, `create_note_from_template`, `edit_note`, `apply_edit_preview`, `link_notes`, `move_note`, `delete_note`
+- Properties: `list_property_values`, `update_properties`
+- Structure: `vault_overview`, `list_tags`, `list_bookmarks`
+- Tasks and blocks: `list_tasks`, `set_task_status`, `ensure_block_id`
+- Canvas: `read_canvas`, `edit_canvas`
+- Graph: `find_connections`, `find_path_between`, `rank_notes`
+- Maintenance: `reindex`, `index_status`, `find_broken_links`, `find_orphaned_notes`, `search_and_replace`, `rename_tag`, `rename_heading`
+
+[Tool reference](docs/tools.md) lists the arguments of each tool.
+
+## Configuration
+
+The vaults come from `--vault` flags. Everything else comes from environment variables, and each one has a default. [Configuration](docs/configuration.md) lists them all. The ones you are most likely to set:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DATA_DIR` | `$XDG_DATA_HOME/obsidian-brain`, else `~/.local/share/obsidian-brain` | Where the indexes and the model cache live. |
+| `EMBEDDING_PRESET` | `english` | The embedding model preset. |
+| `EMBEDDING_PROVIDER` | `transformers` | `transformers` runs the model in the server. `ollama` uses an Ollama server. |
+| `EMBEDDING_MODEL` | none | A model id. It overrides the preset. |
+| `OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS` | `0` | Unloads the model after this many idle milliseconds. `0` keeps it loaded. |
+| `OBSIDIAN_BRAIN_LOG` | `info` | The log filter, in `tracing` `EnvFilter` syntax. Logs go to stderr. |
+
+## Embedding models
+
+`EMBEDDING_PRESET` picks a model by name:
+
+| Preset | Model | Provider |
+|---|---|---|
+| `english` (default) | `Xenova/bge-small-en-v1.5` | transformers |
+| `english-fast` | `MongoDB/mdbr-leaf-ir` | transformers |
+| `english-quality` | `Xenova/bge-base-en-v1.5` | transformers |
+| `multilingual` | `Xenova/multilingual-e5-small` | transformers |
+| `multilingual-quality` | `Xenova/multilingual-e5-base` | transformers |
+| `multilingual-ollama` | `qwen3-embedding:0.6b` | ollama |
+
+The `transformers` provider downloads the model from Hugging Face and runs it with ONNX Runtime. To use Ollama, set `EMBEDDING_PRESET=multilingual-ollama`, or set `EMBEDDING_PROVIDER=ollama` and `EMBEDDING_MODEL` to an Ollama model. The server pulls a missing model from Ollama's official library on its own. [Embedding models](docs/embeddings.md) has the details.
+
+When the model changes, the server deletes the old vectors and embeds the vaults again on the next start.
+
+## Where data lives
+
+- Index: `<DATA_DIR>/<name>/index.db`, one SQLite file per vault name. It holds the notes, links, full-text index, vectors and sync state. You can delete it at any time; the server builds it again from the vault.
+- Models: `<DATA_DIR>/models`, in the Hugging Face cache layout. `TRANSFORMERS_CACHE` moves it.
+- Model overrides: `~/.config/obsidian-brain/model-overrides.json`. [Embedding models](docs/embeddings.md#model-overrides) describes the file.
+
+A server and a `watch` process share an index when they use the same `DATA_DIR` and the same vault name.
+
+## More
+
+- [Architecture](docs/architecture.md): how indexing, search and the vault set work.
+- [Live updates](docs/watching.md): the file watcher and its debounce.
+- [Running as a service](docs/systemd.md) on Linux, and [on macOS](docs/launchd.md).
+- [Troubleshooting](docs/troubleshooting.md)
+- [Changelog](docs/CHANGELOG.md)
 
 ## Credits
 
-Thanks to [`obra/knowledge-graph`](https://github.com/obra/knowledge-graph) and [`aaronsb/obsidian-mcp-plugin`](https://github.com/aaronsb/obsidian-mcp-plugin) for the ideas and code this project draws on. Also [Xenova/transformers.js](https://github.com/xenova/transformers.js) (local embeddings), [graphology](https://graphology.github.io/) (graph analytics), and [sqlite-vec](https://github.com/asg017/sqlite-vec) (vector search in SQLite).
-
-## Related projects
-
-- [`apple-notes-brain`](https://github.com/sweir1/apple-notes-brain) — sibling
-  MCP server for Apple Notes on macOS: read, write, and search with full
-  Markdown round-trip in both directions.
+sweir1 wrote [obsidian-brain](https://github.com/sweir1/obsidian-brain), the TypeScript server this rewrite follows. That project drew on [obra/knowledge-graph](https://github.com/obra/knowledge-graph) and [aaronsb/obsidian-mcp-plugin](https://github.com/aaronsb/obsidian-mcp-plugin). This version uses [sqlite-vec](https://github.com/asg017/sqlite-vec) for vector search, [ONNX Runtime](https://onnxruntime.ai) for local embeddings and [rmcp](https://github.com/modelcontextprotocol/rust-sdk) for MCP.
 
 ## License
 
-[Apache License 2.0](./LICENSE) — Copyright 2026 sweir1.
+[Apache License 2.0](./LICENSE). Copyright 2026 sweir1.

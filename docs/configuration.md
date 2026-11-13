@@ -1,51 +1,64 @@
----
-title: Configuration
-description: Every environment variable obsidian-brain reads, with defaults and the common use-cases for each.
----
-
 # Configuration
 
-`obsidian-brain server` takes its vaults from `--vault <name>=<path>` flags. Everything else is configured through environment variables, and all of them have sensible defaults.
+The vaults come from `--vault <name>=<path>` flags on each command. The README lists the flags. Everything else comes from environment variables. The server reads them at startup; a change takes effect on the next start.
 
-The `index`, `watch` and `search` subcommands take the vault the same way, with `--vault <name>=<path>`. `search` takes exactly one. `models recommend` takes the vault folder as a positional argument. No command reads the vault from an environment variable.
+## Storage
 
-## Environment variables
+| Variable | Default | Effect |
+|---|---|---|
+| `DATA_DIR` | `$XDG_DATA_HOME/obsidian-brain`, else `~/.local/share/obsidian-brain` | The data directory. Each vault keeps its index in `<DATA_DIR>/<name>/index.db`. |
+| `KG_DATA_DIR` | none | Used as `DATA_DIR` when `DATA_DIR` is not set. |
+| `TRANSFORMERS_CACHE` | `<DATA_DIR>/models` | Where downloaded models live, in the Hugging Face cache layout. |
+| `OBSIDIAN_BRAIN_CONFIG_DIR` | `$XDG_CONFIG_HOME/obsidian-brain`, else `~/.config/obsidian-brain` | The directory of `model-overrides.json`. |
 
-<!-- GENERATED:env-vars -->
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DATA_DIR` | no | — | Where to store the SQLite indexes (one per vault, at <DATA_DIR>/<name>/kg.db) + embedding cache. Defaults to $XDG_DATA_HOME/obsidian-brain or ~/.local/share/obsidian-brain. |
-| `EMBEDDING_PRESET` | no | english | Preset name: english (default, bge-small-en-v1.5), english-fast, english-quality, multilingual, multilingual-quality, multilingual-ollama. Ignored when EMBEDDING_MODEL is set. *Choices: english, english-fast, english-quality, multilingual, multilingual-quality, multilingual-ollama* |
-| `EMBEDDING_MODEL` | no | — | Power-user override: any transformers.js checkpoint or Ollama model id. Takes precedence over EMBEDDING_PRESET. Switching auto-reindexes. |
-| `EMBEDDING_PROVIDER` | no | transformers | Embedding backend. 'transformers' (local, default) or 'ollama' (requires a running Ollama server). *Choices: transformers, ollama* |
-| `OLLAMA_BASE_URL` | no | http://localhost:11434 | Base URL of a local Ollama server. Only used when EMBEDDING_PROVIDER=ollama. |
-| `OLLAMA_EMBEDDING_DIM` | no | — | Override the embedding dimensionality when EMBEDDING_PROVIDER=ollama. If unset, the server probes the model on startup. |
-| `OLLAMA_NUM_CTX` | no | — | Override Ollama's num_ctx for embed requests. Leave UNSET to let obsidian-brain auto-detect via `/api/show`'s `context_length` (e.g. nomic-embed-text=2048, bge-m3=8192, qwen3-embedding:0.6b=32 768). Setting this manually imposes a hard cap and may silently truncate longer inputs — see https://github.com/ollama/ollama/issues/14259. Ollama's own default is 2048 which truncates for any model trained on a larger context. See also https://github.com/ollama/ollama/issues/7008. Fallback when both env is unset AND /api/show is unreachable: 8192. |
-| `OBSIDIAN_BRAIN_OLLAMA_AUTO_PULL` | no | — | Auto-pull the configured Ollama model when /api/show returns 404 (model not present). Default ON — choosing an Ollama-backed preset is implicit consent to download its model. Streams /api/pull progress to stderr. Set to '0' to disable auto-pull entirely (master kill-switch) and fall back to the actionable error path (`HTTP 404 — try: ollama pull <model>`). *Choices: , 0, 1* |
-| `OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL` | no | — | Opt-in to auto-pull for BYOM (custom EMBEDDING_MODEL) Ollama models OUTSIDE Ollama's official `library/` namespace. Default OFF — third-party models (e.g. `user/custom-fork`, `myregistry.com/team/model`) require this env var to be set to `1` before they will auto-pull, to prevent silent downloads of arbitrary user-named artifacts. Preset-known models (via EMBEDDING_PRESET) and bare model ids in the official library (e.g. `qwen3-embedding:0.6b`, `library/llama3:8b`) continue to auto-pull by default per the existing OBSIDIAN_BRAIN_OLLAMA_AUTO_PULL behavior. *Choices: , 0, 1* |
-| `OBSIDIAN_BRAIN_NO_WATCH` | no | — | Set to '1' to disable the live chokidar file watcher. Useful on SMB/NFS vaults where FSEvents/inotify don't fire reliably — fall back to running `obsidian-brain index` on a schedule (launchd/systemd). |
-| `OBSIDIAN_BRAIN_NO_CATCHUP` | no | — | Set to '1' to skip the startup catchup reindex pass that picks up edits made while the server was down. The live file watcher still starts (via OBSIDIAN_BRAIN_NO_WATCH=1 to disable that separately), and first-time indexing on an empty DB is unaffected — this knob only governs the post-restart `enqueueBackgroundReindex` walk. |
-| `OBSIDIAN_BRAIN_WATCH_DEBOUNCE_MS` | no | 3000 | Per-file reindex debounce for the live watcher, in milliseconds. |
-| `OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS` | no | 0 | Unload the local transformers.js embedding model after this many milliseconds without an embed, and load it again on the next one. Frees the ONNX session memory of an idle server; the first search after an idle period waits for the reload. Unset or 0 keeps the model loaded. |
-| `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS` | no | 30000 | Per-tool-call timeout in milliseconds. Tools exceeding this return an MCP error instead of hanging. |
-| `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS` | no | — | Override the adaptive chunk-size budget (in tokens). When set, this beats the capacity probed from the model's tokenizer or Ollama /api/show. Use for debugging or for models with stale tokenizer configs. |
-| `OBSIDIAN_BRAIN_CONFIG_DIR` | no | — | Override the per-user config directory where obsidian-brain stores model overrides (`model-overrides.json`) and the user-fetched seed (`seed-models.json`). Default is `$XDG_CONFIG_HOME/obsidian-brain` on macOS/Linux (or `~/.config/obsidian-brain`) and `%APPDATA%/obsidian-brain` on Windows. Both files survive `npm update obsidian-brain` because they live outside the package. |
-| `OBSIDIAN_BRAIN_DEBUG` | no |  | Set to "1" to print a verbose synchronous startup trace to stderr — every preflight, createContext, server.connect, and shutdown step is logged with a monotonic timestamp. The LAST line before any silent failure tells you exactly which step the server reached. No-op when unset (no overhead). Use to diagnose silent-crash failure modes. *Choices: , 1* |
-| `OBSIDIAN_BRAIN_LOG_FORMAT` | no |  | Set to 'ndjson' for one-JSON-object-per-line stderr output (timestamp + level + message + structured fields). Default is human-readable plain text (`obsidian-brain: <message>`). Useful for piping logs into aggregators (Datadog, Loki, Vector, journald) that index structured fields. *Choices: , ndjson* |
-<!-- /GENERATED:env-vars -->
+## Embedding model
 
-## Notes on specific variables
+| Variable | Default | Effect |
+|---|---|---|
+| `EMBEDDING_PRESET` | `english` | A preset name: `english`, `english-fast`, `english-quality`, `multilingual`, `multilingual-quality` or `multilingual-ollama`. `fastest` and `balanced` still resolve, to `english-fast` and `english`, with a warning. |
+| `EMBEDDING_MODEL` | none | A model id. It overrides `EMBEDDING_PRESET`. For `transformers` it is a Hugging Face repository with ONNX weights; for `ollama` it is an Ollama model name. |
+| `EMBEDDING_PROVIDER` | the preset's provider, else `transformers` | `transformers` or `ollama`. With a preset of the other provider, the provider wins and the server logs a warning. |
+| `OBSIDIAN_BRAIN_EMBEDDER_IDLE_MS` | `0` | Unloads the local model after this many milliseconds without an embed. The next embed loads it again. `0` keeps it loaded. |
+| `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS` | none | Sets the chunk size limit in tokens, in place of the limit the server reads from the model. |
+| `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS_<HASH>` | none | The same for one model. `<HASH>` is the first 32 hex digits of the SHA-256 of the model identifier, such as `Xenova/bge-small-en-v1.5` or `ollama:nomic-embed-text`. It beats the global variable. |
+| `ORT_DYLIB_PATH` | set by the Nix wrapper | The ONNX Runtime library to load. The Nix package sets it to the nixpkgs build. |
+| `HF_ENDPOINT` | `https://huggingface.co` | The Hugging Face endpoint for model downloads. |
 
-### `EMBEDDING_PRESET` / `EMBEDDING_MODEL` / `EMBEDDING_PROVIDER`
+## Ollama
 
-These three variables control the embedding pipeline. The simplest path is `EMBEDDING_PRESET` — pick one of the named presets and the server resolves the right model, dimensionality, and task prefix automatically.
+These apply when the provider is `ollama`.
 
-`EMBEDDING_MODEL` is a power-user escape hatch: set it to any [transformers.js](https://huggingface.co/docs/transformers.js) checkpoint (when `EMBEDDING_PROVIDER=transformers`) or any Ollama model name (when `EMBEDDING_PROVIDER=ollama`). When set, `EMBEDDING_PRESET` is ignored.
+| Variable | Default | Effect |
+|---|---|---|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | The Ollama server. |
+| `OLLAMA_EMBEDDING_DIM` | none | The vector dimension of the model. When it is set, the server skips the probe embed at startup. It must be a positive number. |
+| `OLLAMA_NUM_CTX` | the model's `context_length` from `/api/show`, else 8192 | The `num_ctx` of each embed request. A value below the model's context truncates long chunks. |
+| `OBSIDIAN_BRAIN_OLLAMA_AUTO_PULL` | on | `0` never pulls a missing model. |
+| `OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL` | off | `1` also pulls models outside Ollama's official library. |
 
-**Auto-reindex on model change:** switching models is safe — the server stores the active model identifier and dimension in the DB and rebuilds per-chunk vectors on next boot. No `--drop` flag required.
+## Indexing and the watcher
 
-See [Models](models.md) for the preset table, performance benchmarks, and the Ollama integration guide.
+| Variable | Default | Effect |
+|---|---|---|
+| `OBSIDIAN_BRAIN_NO_WATCH` | unset | `1` starts no file watcher in `server`. |
+| `OBSIDIAN_BRAIN_NO_CATCHUP` | unset | `1` skips the catch-up index at `server` startup. The first index of an empty index still runs. |
+| `OBSIDIAN_BRAIN_WATCH_DEBOUNCE_MS` | `3000` | The per-file debounce of the watcher in `server`. The `watch` command takes `--debounce` instead. |
 
-## Legacy aliases
+## Tool calls and logs
 
-`KG_DATA_DIR` is accepted as an alias for `DATA_DIR`.
+| Variable | Default | Effect |
+|---|---|---|
+| `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS` | `30000`, and `600000` for `reindex` | The time limit of one tool call, in milliseconds. A call that runs longer returns an error. |
+| `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS_<TOOL>` | none | The same for one tool. `<TOOL>` is the tool name in capitals, such as `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS_REINDEX`. It beats the global variable. |
+| `OBSIDIAN_BRAIN_LOG` | `info` | The log filter, in the `EnvFilter` syntax of `tracing`, such as `debug` or `obsidian_brain::pipeline=debug`. Logs go to stderr, because stdout carries the stdio transport. |
+
+## Common combinations
+
+| Setup | Variables |
+|---|---|
+| English, local model | none |
+| Multilingual, local model | `EMBEDDING_PRESET=multilingual` |
+| Multilingual through Ollama | `EMBEDDING_PRESET=multilingual-ollama` |
+| Any Ollama model | `EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text` |
+| Ollama on another host | `EMBEDDING_PROVIDER=ollama OLLAMA_BASE_URL=http://other-host:11434` |
+| Any Hugging Face model with ONNX weights | `EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` |

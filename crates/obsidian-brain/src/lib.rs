@@ -1,0 +1,15 @@
+pub mod cli;
+pub mod config;
+pub mod context;
+pub mod embeddings;
+pub mod graph;
+pub mod mcp;
+pub mod pipeline;
+pub mod resolve;
+pub mod search;
+pub mod store;
+pub mod tools;
+pub mod types;
+pub mod util;
+pub mod vault;
+pub mod vaults;

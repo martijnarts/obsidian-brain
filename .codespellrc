@@ -1,9 +1,0 @@
-[codespell]
-# Identifiers that codespell's default dictionary treats as typos but are
-# actually legitimate terms in this repo. Keep the list small — if you
-# find yourself adding a real typo here, fix the typo instead.
-#
-# - afterall / afterAll: Vitest lifecycle hook (`afterAll`, same family as
-#   beforeAll / beforeEach / afterEach). Referenced in docs and CHANGELOG
-#   when explaining the v4-equivalence drift-floor telemetry (v1.7.1).
-ignore-words-list = afterall

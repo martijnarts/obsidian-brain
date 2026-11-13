@@ -1,54 +1,22 @@
 version: 2
 
 updates:
-  # Node.js server dependencies
-  - package-ecosystem: npm
+  - package-ecosystem: cargo
     directory: /
-    target-branch: dev
     schedule:
       interval: weekly
-      day: monday
-      time: "09:00"
-      timezone: UTC
     open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(deps):"
     groups:
       minor-and-patch:
         update-types:
           - minor
           - patch
 
-  # Python / mkdocs toolchain
-  - package-ecosystem: pip
-    directory: /website
-    target-branch: dev
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:00"
-      timezone: UTC
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(deps-pip):"
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
-
-  # GitHub Actions
   - package-ecosystem: github-actions
     directory: /
-    target-branch: dev
     schedule:
       interval: weekly
-      day: monday
-      time: "09:00"
-      timezone: UTC
     open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(deps-actions):"
     groups:
       minor-and-patch:
         update-types:
