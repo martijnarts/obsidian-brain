@@ -8,7 +8,6 @@ mod delete_note;
 mod edit_note;
 mod link_notes;
 mod move_note;
-mod patch;
 
 use crate::mcp::tool::ToolSpec;
 

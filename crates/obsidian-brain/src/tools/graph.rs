@@ -9,7 +9,6 @@ mod find_connections;
 mod find_path_between;
 mod index_status;
 mod list_tasks;
-mod patch;
 mod rank_notes;
 mod read_canvas;
 mod reindex;

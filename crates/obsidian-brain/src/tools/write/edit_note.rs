@@ -7,9 +7,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::patch::create_patch;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::resolve_single_note;
+use crate::tools::support::patch::create_patch;
 use crate::tools::support::{
     BufferEntry, EDIT_BUFFER, PREVIEW_STORE, PendingEdit, run_background_reindex,
 };

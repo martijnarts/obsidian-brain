@@ -6,11 +6,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::patch::create_patch;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
 use crate::store::nodes::all_node_ids;
 use crate::tools::support::background_reindex::run_background_reindex;
+use crate::tools::support::patch::create_patch;
 use crate::vault::block_id::{
     BLOCK_ID, all_block_ids, attach_block_id, existing_block_id, find_heading_lines,
     generate_block_id, locate_block,

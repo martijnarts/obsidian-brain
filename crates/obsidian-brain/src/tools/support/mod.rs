@@ -1,10 +1,11 @@
 //! What the tool handlers share: the `next_actions` hints, the
-//! embedder-preparing response, the background reindex, and the
-//! process-wide edit preview and failed-edit stores.
+//! embedder-preparing response, the background reindex, the unified diff
+//! of a preview, and the process-wide edit preview and failed-edit stores.
 
 pub mod background_reindex;
 pub mod edit_buffer;
 pub mod hints;
+pub mod patch;
 pub mod preparing;
 pub mod preview_store;
 
