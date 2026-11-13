@@ -1,6 +1,6 @@
-//! Embeds the 50 files in `test/fixtures/embedder-v3-reference/` and checks
-//! each vector against the transformers.js baseline in
-//! `test/fixtures/embedder-v4-baseline.json` at cosine >= 0.99.
+//! Embeds the 50 files in `tests/fixtures/embedder-v3-reference/` and checks
+//! each vector against the recorded baseline in
+//! `tests/fixtures/embedder-v4-baseline.json` at cosine >= 0.99.
 //!
 //! 0.99, not 0.9999: q8 inference drifts across SIMD backends by about
 //! 0.001 cosine. Real regressions (tokenizer, pooling, weights, wrong
@@ -17,8 +17,8 @@ use serde_json::Value;
 
 const COSINE_THRESHOLD: f64 = 0.99;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+fn fixtures() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
 fn cache_dir() -> PathBuf {
@@ -43,15 +43,15 @@ fn cosine(a: &[f32], b: &[f64]) -> f64 {
 #[tokio::test]
 #[ignore = "downloads Xenova/bge-small-en-v1.5 from Hugging Face"]
 async fn embedder_v4_equivalence() {
-    let root = repo_root();
+    let root = fixtures();
     let baseline: Value = serde_json::from_str(
-        &std::fs::read_to_string(root.join("test/fixtures/embedder-v4-baseline.json")).unwrap(),
+        &std::fs::read_to_string(root.join("embedder-v4-baseline.json")).unwrap(),
     )
     .unwrap();
     assert_eq!(baseline["model"], "Xenova/bge-small-en-v1.5");
     assert_eq!(baseline["dtype"], "q8");
 
-    let fixture_dir = root.join("test/fixtures/embedder-v3-reference");
+    let fixture_dir = root.join("embedder-v3-reference");
     let mut files: Vec<String> = std::fs::read_dir(&fixture_dir)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())

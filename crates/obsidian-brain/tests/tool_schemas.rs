@@ -1,7 +1,7 @@
-//! Every tool's name, description and input schema must match what the
-//! TypeScript server listed, in `conformance/tools-list.golden.json`. The
-//! comparison ignores what zod and schemars spell differently but mean the
-//! same.
+//! `tests/fixtures/tools-list.golden.json` freezes the tool interface that
+//! clients rely on: each tool's name, description and input schema. Every
+//! tool must match it. The comparison ignores spellings of a schema that
+//! mean the same, such as a sorted `required` list or a safe-integer bound.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -13,8 +13,7 @@ use serde_json::{Map, Value};
 const SAFE_INTEGER: f64 = 9007199254740991.0;
 
 fn golden() -> Vec<Value> {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../conformance/tools-list.golden.json");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tools-list.golden.json");
     let text = std::fs::read_to_string(path).unwrap();
     let doc: Value = serde_json::from_str(&text).unwrap();
     doc["tools"].as_array().unwrap().clone()
@@ -68,8 +67,6 @@ fn normalize(value: &Value) -> Value {
                     }
                 }
             }
-            // An integer field that only says `minimum: 0` came from an
-            // unsigned Rust type; zod said `minimum: 0` too.
             Value::Object(out)
         }
         Value::Array(items) => Value::Array(items.iter().map(normalize).collect()),
@@ -78,30 +75,30 @@ fn normalize(value: &Value) -> Value {
 }
 
 #[tokio::test]
-async fn ported_tools_match_the_typescript_schemas() {
+async fn every_tool_matches_the_frozen_schema() {
     let (server, _dir) = server().await;
     let golden = golden();
     let mut mismatches = Vec::new();
     for tool in server.tool_list() {
-        let ours = serde_json::to_value(&tool).unwrap();
-        let name = ours["name"].as_str().unwrap();
-        let Some(theirs) = golden.iter().find(|t| t["name"] == name) else {
-            mismatches.push(format!("{name}: not a TypeScript tool"));
+        let served = serde_json::to_value(&tool).unwrap();
+        let name = served["name"].as_str().unwrap();
+        let Some(frozen) = golden.iter().find(|t| t["name"] == name) else {
+            mismatches.push(format!("{name}: not in the frozen interface"));
             continue;
         };
-        if ours["description"] != theirs["description"] {
+        if served["description"] != frozen["description"] {
             mismatches.push(format!(
-                "{name}: description differs\n  ours:   {}\n  theirs: {}",
-                ours["description"], theirs["description"]
+                "{name}: description differs\n  served: {}\n  frozen: {}",
+                served["description"], frozen["description"]
             ));
         }
         let (a, b) = (
-            normalize(&ours["inputSchema"]),
-            normalize(&theirs["inputSchema"]),
+            normalize(&served["inputSchema"]),
+            normalize(&frozen["inputSchema"]),
         );
         if a != b {
             mismatches.push(format!(
-                "{name}: inputSchema differs\n  ours:   {}\n  theirs: {}",
+                "{name}: inputSchema differs\n  served: {}\n  frozen: {}",
                 serde_json::to_string(&a).unwrap(),
                 serde_json::to_string(&b).unwrap()
             ));
@@ -110,16 +107,14 @@ async fn ported_tools_match_the_typescript_schemas() {
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n\n"));
 }
 
-/// Fails until every tool is ported. Run with `--ignored` to see the gap.
 #[tokio::test]
-#[ignore = "the port is not finished"]
-async fn every_typescript_tool_is_ported() {
+async fn every_frozen_tool_is_served() {
     let (server, _dir) = server().await;
-    let ours = server.names();
+    let served = server.names();
     let missing: Vec<String> = golden()
         .iter()
         .map(|t| t["name"].as_str().unwrap().to_string())
-        .filter(|n| !ours.contains(&n.as_str()))
+        .filter(|n| !served.contains(&n.as_str()))
         .collect();
-    assert!(missing.is_empty(), "not ported: {}", missing.join(", "));
+    assert!(missing.is_empty(), "not served: {}", missing.join(", "));
 }

@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 
-const BUNDLED_SEED: &str = include_str!("../../../../data/seed-models.json");
+const BUNDLED_SEED: &str = include_str!("../../data/seed-models.json");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SeedEntry {

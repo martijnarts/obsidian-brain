@@ -285,7 +285,7 @@ mod tests {
     use serde_json::json;
 
     fn fixture_vault() -> std::path::PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures/vault")
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/vault")
     }
 
     #[test]

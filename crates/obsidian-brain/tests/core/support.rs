@@ -208,7 +208,7 @@ impl Embedder for FakeEmbedder {
 }
 
 pub fn fixture_vault() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures/vault")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/vault")
 }
 
 pub fn copy_dir(from: &Path, to: &Path) {
