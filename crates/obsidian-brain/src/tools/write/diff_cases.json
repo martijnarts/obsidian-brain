@@ -1,0 +1,80 @@
+[
+ {
+  "file": "draft.md",
+  "old": "# Draft\n\nSome content.\n",
+  "new": "# Draft\n\nSome content.\nX",
+  "patch": "Index: draft.md\n===================================================================\n--- draft.md\toriginal\n+++ draft.md\tproposed\n@@ -1,3 +1,4 @@\n # Draft\n \n Some content.\n+X\n\\ No newline at end of file\n"
+ },
+ {
+  "file": "a.md",
+  "old": "",
+  "new": "new\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -0,0 +1,1 @@\n+new\n"
+ },
+ {
+  "file": "a.md",
+  "old": "old\n",
+  "new": "",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,1 +0,0 @@\n-old\n"
+ },
+ {
+  "file": "a.md",
+  "old": "same\n",
+  "new": "same\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n"
+ },
+ {
+  "file": "a.md",
+  "old": "no newline",
+  "new": "no newline either",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,1 +1,1 @@\n-no newline\n\\ No newline at end of file\n+no newline either\n\\ No newline at end of file\n"
+ },
+ {
+  "file": "a.md",
+  "old": "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\nm\nn\no\np\n",
+  "new": "a\nB\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\nm\nN\no\np\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,6 +1,6 @@\n a\n-b\n+B\n c\n d\n e\n f\n@@ -10,7 +10,7 @@\n j\n k\n l\n m\n-n\n+N\n o\n p\n"
+ },
+ {
+  "file": "a.md",
+  "old": "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n",
+  "new": "a\nB\nc\nd\ne\nf\ng\nh\nI\nj\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,10 +1,10 @@\n a\n-b\n+B\n c\n d\n e\n f\n g\n h\n-i\n+I\n j\n"
+ },
+ {
+  "file": "sub dir/ünï \"q\".md",
+  "old": "x\r\ny\r\n",
+  "new": "x\r\nz\r\n",
+  "patch": "Index: sub dir/ünï \"q\".md\n===================================================================\n--- \"sub dir/\\303\\274n\\303\\257 \\\"q\\\".md\"\toriginal\n+++ \"sub dir/\\303\\274n\\303\\257 \\\"q\\\".md\"\tproposed\n@@ -1,2 +1,2 @@\n x\r\n-y\r\n+z\r\n"
+ },
+ {
+  "file": "a.md",
+  "old": "one\ntwo\nthree\n",
+  "new": "three\ntwo\none\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,3 +1,3 @@\n-one\n-two\n three\n+two\n+one\n"
+ },
+ {
+  "file": "a.md",
+  "old": "a\nb\na\nb\na\n",
+  "new": "b\na\nb\na\nb\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,5 +1,5 @@\n-a\n b\n a\n b\n a\n+b\n"
+ },
+ {
+  "file": "a.md",
+  "old": "---\ntitle: T\n---\n# H\n\nbody line\nmore\n",
+  "new": "---\ntitle: T\nstatus: done\n---\n# H\n\nbody line changed\nmore\nextra\n",
+  "patch": "Index: a.md\n===================================================================\n--- a.md\toriginal\n+++ a.md\tproposed\n@@ -1,7 +1,9 @@\n ---\n title: T\n+status: done\n ---\n # H\n \n-body line\n+body line changed\n more\n+extra\n"
+ },
+ {
+  "file": "tab\tname.md",
+  "old": "\n\n\n",
+  "new": "\n\nx\n\n",
+  "patch": "Index: tab\tname.md\n===================================================================\n--- \"tab\\tname.md\"\toriginal\n+++ \"tab\\tname.md\"\tproposed\n@@ -1,3 +1,4 @@\n \n \n+x\n \n"
+ },
+ {
+  "file": "emoji😀.md",
+  "old": "a\n",
+  "new": "a\nb",
+  "patch": "Index: emoji😀.md\n===================================================================\n--- \"emoji\\360\\237\\230\\200.md\"\toriginal\n+++ \"emoji\\360\\237\\230\\200.md\"\tproposed\n@@ -1,1 +1,2 @@\n a\n+b\n\\ No newline at end of file\n"
+ }
+]
