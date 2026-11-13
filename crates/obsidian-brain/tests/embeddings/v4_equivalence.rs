@@ -7,7 +7,7 @@
 //! model) land far below 0.99.
 //!
 //! Downloads the model (~34 MB), so it is ignored by default:
-//! `cargo test --test embeddings_v4_equivalence -- --ignored`.
+//! `cargo test --test embeddings v4_equivalence -- --ignored`.
 
 use std::path::PathBuf;
 

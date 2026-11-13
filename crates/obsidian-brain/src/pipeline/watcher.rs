@@ -1,11 +1,10 @@
 //! Watch a vault and keep its index live.
 //!
 //! A change is indexed once the file has been quiet for a while: writes
-//! must settle for `stability_ms` (2 s, as chokidar's `awaitWriteFinish`),
-//! then a per-file debounce of `debounce_ms` (3 s) collapses bursts such as
-//! Obsidian's autosave into one reindex per editing pause. A delete waits
-//! for the debounce only. Events that existed before the watcher started
-//! are not replayed.
+//! must settle for `stability_ms` (2 s), then a per-file debounce of
+//! `debounce_ms` (3 s) collapses bursts such as Obsidian's autosave into
+//! one reindex per editing pause. A delete waits for the debounce only.
+//! Events that existed before the watcher started are not replayed.
 //!
 //! Ignored directories (`.obsidian`, `.trash`, `.git`, `node_modules`,
 //! `attachments`) are never watched, and only `.md` files are indexed.

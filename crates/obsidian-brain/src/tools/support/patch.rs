@@ -1,4 +1,4 @@
-//! jsdiff 9's `createPatch` (the npm `diff` package): a unified diff of two
+//! jsdiff 9's `createPatch` (the `diff` package): a unified diff of two
 //! texts, line by line, with four lines of context. The edit script
 //! follows jsdiff's Myers variant, so the hunks match jsdiff's byte for
 //! byte.
@@ -353,7 +353,7 @@ mod tests {
     use super::create_patch;
     use serde_json::Value;
 
-    /// Cases captured from `createPatch` of the npm `diff` package 9.0.0.
+    /// Cases captured from `createPatch` of the `diff` package 9.0.0.
     #[test]
     fn matches_the_npm_diff_package() {
         let cases: Vec<Value> = serde_json::from_str(include_str!("diff_cases.json")).unwrap();
