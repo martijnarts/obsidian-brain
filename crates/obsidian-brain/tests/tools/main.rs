@@ -6,3 +6,4 @@
 mod support;
 
 mod files;
+mod graph;
