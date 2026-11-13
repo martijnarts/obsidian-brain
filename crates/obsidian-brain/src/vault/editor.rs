@@ -51,7 +51,11 @@ pub enum LineOp {
 
 /// One edit, shaped like the TypeScript `EditMode` (`{kind: 'append', ...}`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum EditMode {
     Append {
         content: String,
@@ -127,8 +131,17 @@ pub struct MultipleMatchesError {
 impl fmt::Display for MultipleMatchesError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let n = self.matches.len();
-        let preview = self.matches.iter().map(|m| format!("  [{}] {}", m.line, m.heading)).collect::<Vec<_>>().join("\n");
-        write!(f, "[patch_heading] MultipleMatches: {n} headings match — pass headingIndex (0..{}) to disambiguate:\n{preview}", n - 1)
+        let preview = self
+            .matches
+            .iter()
+            .map(|m| format!("  [{}] {}", m.line, m.heading))
+            .collect::<Vec<_>>()
+            .join("\n");
+        write!(
+            f,
+            "[patch_heading] MultipleMatches: {n} headings match — pass headingIndex (0..{}) to disambiguate:\n{preview}",
+            n - 1
+        )
     }
 }
 
@@ -218,7 +231,12 @@ fn read_note(abs: &Path) -> Result<String> {
 
 /// Apply one edit to the note at `vault_path/file_rel_path` and write it
 /// atomically. The path is joined as given; callers guard it first.
-pub fn edit_note(vault_path: &Path, file_rel_path: &str, mode: &EditMode, expected_content: Option<&str>) -> Result<EditResult> {
+pub fn edit_note(
+    vault_path: &Path,
+    file_rel_path: &str,
+    mode: &EditMode,
+    expected_content: Option<&str>,
+) -> Result<EditResult> {
     let abs = vault_path.join(file_rel_path);
     let original = read_note(&abs)?;
     let res = apply_edit(&original, mode)?;
@@ -229,7 +247,10 @@ pub fn edit_note(vault_path: &Path, file_rel_path: &str, mode: &EditMode, expect
     Ok(EditResult {
         bytes_written: res.next.len(),
         removed_len: res.removed_len,
-        diff: Diff { before: ctx(&original, res.at, res.len), after: ctx(&res.next, res.at, res.len) },
+        diff: Diff {
+            before: ctx(&original, res.at, res.len),
+            after: ctx(&res.next, res.at, res.len),
+        },
         path: abs,
     })
 }
@@ -246,21 +267,40 @@ pub struct BulkEditResult {
 
 /// Apply every edit in order and write once; when one fails, nothing is
 /// written.
-pub fn bulk_edit_note(vault_path: &Path, file_rel_path: &str, modes: &[EditMode]) -> Result<BulkEditResult> {
+pub fn bulk_edit_note(
+    vault_path: &Path,
+    file_rel_path: &str,
+    modes: &[EditMode],
+) -> Result<BulkEditResult> {
     let abs = vault_path.join(file_rel_path);
     let original = read_note(&abs)?;
     let mut current = original.clone();
     for (i, mode) in modes.iter().enumerate() {
         match apply_edit(&current, mode) {
             Ok(res) => current = res.next,
-            Err(err) => bail!("[bulk edit] edits[{i}] ({}) failed: {err}. No edits were applied.", mode.kind()),
+            Err(err) => bail!(
+                "[bulk edit] edits[{i}] ({}) failed: {err}. No edits were applied.",
+                mode.kind()
+            ),
         }
     }
     if current == original {
-        return Ok(BulkEditResult { path: abs, edits_applied: modes.len(), bytes_written: 0, before: original, after: current });
+        return Ok(BulkEditResult {
+            path: abs,
+            edits_applied: modes.len(),
+            bytes_written: 0,
+            before: original,
+            after: current,
+        });
     }
     write_file_atomic(&abs, &current)?;
-    Ok(BulkEditResult { path: abs, edits_applied: modes.len(), bytes_written: current.len(), before: original, after: current })
+    Ok(BulkEditResult {
+        path: abs,
+        edits_applied: modes.len(),
+        bytes_written: current.len(),
+        before: original,
+        after: current,
+    })
 }
 
 pub fn apply_edit(s: &str, mode: &EditMode) -> Result<Apply> {
@@ -268,7 +308,11 @@ pub fn apply_edit(s: &str, mode: &EditMode) -> Result<Apply> {
         EditMode::Append { content } => {
             // Start the content on a new line so the last byte of the file does
             // not run into it.
-            let prefix = if !s.is_empty() && !s.ends_with('\n') { "\n" } else { "" };
+            let prefix = if !s.is_empty() && !s.ends_with('\n') {
+                "\n"
+            } else {
+                ""
+            };
             Ok(Apply {
                 next: format!("{s}{prefix}{content}"),
                 at: js::utf16_len(s) + prefix.len(),
@@ -286,12 +330,19 @@ pub fn apply_edit(s: &str, mode: &EditMode) -> Result<Apply> {
                 removed_len: 0,
             })
         }
-        EditMode::ReplaceWindow { search, content, fuzzy, fuzzy_threshold } => {
-            replace_window(s, search, content, *fuzzy, *fuzzy_threshold)
-        }
-        EditMode::PatchHeading { heading, content, op, scope, heading_index } => {
-            patch_heading(s, heading, content, *op, *scope, *heading_index)
-        }
+        EditMode::ReplaceWindow {
+            search,
+            content,
+            fuzzy,
+            fuzzy_threshold,
+        } => replace_window(s, search, content, *fuzzy, *fuzzy_threshold),
+        EditMode::PatchHeading {
+            heading,
+            content,
+            op,
+            scope,
+            heading_index,
+        } => patch_heading(s, heading, content, *op, *scope, *heading_index),
         EditMode::PatchFrontmatter { key, value } => patch_frontmatter(s, key, value.as_ref()),
         EditMode::AtLine { line, content, op } => at_line(s, *line, content, *op),
     }
@@ -320,7 +371,13 @@ fn prepend_offset(s: &str) -> usize {
     0
 }
 
-fn replace_window(s: &str, search: &str, content: &str, fuzzy: bool, fuzzy_threshold: Option<f64>) -> Result<Apply> {
+fn replace_window(
+    s: &str,
+    search: &str,
+    content: &str,
+    fuzzy: bool,
+    fuzzy_threshold: Option<f64>,
+) -> Result<Apply> {
     if !fuzzy {
         let Some(first) = s.find(search) else {
             bail!("[replace_window] NoMatch: search text not found");
@@ -338,7 +395,10 @@ fn replace_window(s: &str, search: &str, content: &str, fuzzy: bool, fuzzy_thres
     let threshold = fuzzy_threshold.unwrap_or(0.7);
     let matches = fuzzy_find(s, search, threshold);
     if matches.is_empty() {
-        bail!("[replace_window] NoMatch: needle not found (fuzzy, threshold={})", js::number_to_string(threshold));
+        bail!(
+            "[replace_window] NoMatch: needle not found (fuzzy, threshold={})",
+            js::number_to_string(threshold)
+        );
     }
     if matches.len() > 1 {
         let preview = matches
@@ -351,7 +411,10 @@ fn replace_window(s: &str, search: &str, content: &str, fuzzy: bool, fuzzy_thres
             })
             .collect::<Vec<_>>()
             .join(", ");
-        bail!("[replace_window] MultipleMatches: {} candidates near {preview}", matches.len());
+        bail!(
+            "[replace_window] MultipleMatches: {} candidates near {preview}",
+            matches.len()
+        );
     }
     let h = &matches[0];
     // When the query has no trailing sentence terminator but the match ends
@@ -371,7 +434,8 @@ fn replace_window(s: &str, search: &str, content: &str, fuzzy: bool, fuzzy_thres
     })
 }
 
-static HEADING_HASHES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(#+)\s+").expect("valid pattern"));
+static HEADING_HASHES: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(#+)\s+").expect("valid pattern"));
 
 fn patch_heading(
     s: &str,
@@ -382,10 +446,17 @@ fn patch_heading(
     heading_index: Option<i64>,
 ) -> Result<Apply> {
     let mut lines: Vec<String> = s.split('\n').map(str::to_string).collect();
-    let re = Regex::new(&format!(r"^(#+)\s+{}\s*$", regex::escape(js::trim(heading)))).expect("escaped pattern");
+    let re = Regex::new(&format!(
+        r"^(#+)\s+{}\s*$",
+        regex::escape(js::trim(heading))
+    ))
+    .expect("escaped pattern");
 
-    let hits: Vec<(usize, usize)> =
-        lines.iter().enumerate().filter_map(|(i, l)| re.captures(l).map(|m| (i, m[1].len()))).collect();
+    let hits: Vec<(usize, usize)> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(i, l)| re.captures(l).map(|m| (i, m[1].len())))
+        .collect();
     if hits.is_empty() {
         bail!("[patch_heading] Heading not found: {heading}");
     }
@@ -394,7 +465,13 @@ fn patch_heading(
     } else {
         match heading_index {
             None => {
-                let matches = hits.iter().map(|&(i, _)| HeadingMatch { heading: lines[i].clone(), line: i + 1 }).collect();
+                let matches = hits
+                    .iter()
+                    .map(|&(i, _)| HeadingMatch {
+                        heading: lines[i].clone(),
+                        line: i + 1,
+                    })
+                    .collect();
                 return Err(MultipleMatchesError { matches }.into());
             }
             Some(n) if n < 0 || n as usize >= hits.len() => {
@@ -412,11 +489,21 @@ fn patch_heading(
     match op {
         HeadingOp::Before => {
             lines.insert(hit_idx, content.to_string());
-            return Ok(Apply { at: line_offset(&lines, hit_idx), next: lines.join("\n"), len: content_len, removed_len: 0 });
+            return Ok(Apply {
+                at: line_offset(&lines, hit_idx),
+                next: lines.join("\n"),
+                len: content_len,
+                removed_len: 0,
+            });
         }
         HeadingOp::After => {
             lines.insert(hit_idx + 1, content.to_string());
-            return Ok(Apply { at: line_offset(&lines, hit_idx + 1), next: lines.join("\n"), len: content_len, removed_len: 0 });
+            return Ok(Apply {
+                at: line_offset(&lines, hit_idx + 1),
+                next: lines.join("\n"),
+                len: content_len,
+                removed_len: 0,
+            });
         }
         HeadingOp::Replace => {}
     }
@@ -428,7 +515,11 @@ fn patch_heading(
     // - `body`: up to the first blank line after content, or the next
     //   same-or-higher heading, whichever comes first. The boundary blank is
     //   swallowed too, so the content's own trailing `\n` is the separator.
-    let same_or_higher = |l: &str| HEADING_HASHES.captures(l).is_some_and(|m| m[1].len() <= hit_level);
+    let same_or_higher = |l: &str| {
+        HEADING_HASHES
+            .captures(l)
+            .is_some_and(|m| m[1].len() <= hit_level)
+    };
     let mut end_idx = lines.len();
     if scope == HeadingScope::Body {
         let mut seen_content = false;
@@ -449,20 +540,34 @@ fn patch_heading(
         if end_idx < lines.len() && js::trim(&lines[end_idx]).is_empty() {
             end_idx += 1;
         }
-    } else if let Some(j) = lines.iter().enumerate().skip(hit_idx + 1).find(|(_, l)| same_or_higher(l)).map(|(j, _)| j) {
+    } else if let Some(j) = lines
+        .iter()
+        .enumerate()
+        .skip(hit_idx + 1)
+        .find(|(_, l)| same_or_higher(l))
+        .map(|(j, _)| j)
+    {
         end_idx = j;
     }
 
     // Keep the blank line right after the heading when there is one:
     // `# H\n\nold\n` becomes `# H\n\nnew\n`. Without one, none is added.
     let mut content_start = hit_idx + 1;
-    if content_start < lines.len() && js::trim(&lines[content_start]).is_empty() && content_start < end_idx {
+    if content_start < lines.len()
+        && js::trim(&lines[content_start]).is_empty()
+        && content_start < end_idx
+    {
         content_start += 1;
     }
 
     let removed_len = lines[content_start..end_idx].join("\n").len();
     lines.splice(content_start..end_idx, [content.to_string()]);
-    Ok(Apply { at: line_offset(&lines, content_start), next: lines.join("\n"), len: content_len, removed_len })
+    Ok(Apply {
+        at: line_offset(&lines, content_start),
+        next: lines.join("\n"),
+        len: content_len,
+        removed_len,
+    })
 }
 
 fn patch_frontmatter(s: &str, key: &str, value: Option<&Value>) -> Result<Apply> {
@@ -471,12 +576,19 @@ fn patch_frontmatter(s: &str, key: &str, value: Option<&Value>) -> Result<Apply>
         Some(v) => FrontmatterOp::Set(key.to_string(), v.clone()),
     };
     let next = frontmatter::edit_frontmatter(s, &[op])?.text;
-    let at = next.find(&format!("{key}:")).map_or(0, |b| js::byte_to_utf16(&next, b));
+    let at = next
+        .find(&format!("{key}:"))
+        .map_or(0, |b| js::byte_to_utf16(&next, b));
     let len = match value {
         None | Some(Value::Null) => 0,
         Some(v) => js::utf16_len(&js::to_js_string(v)),
     };
-    Ok(Apply { next, at, len, removed_len: 0 })
+    Ok(Apply {
+        next,
+        at,
+        len,
+        removed_len: 0,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -493,7 +605,11 @@ pub struct FrontmatterUpdate {
 /// first, so `set` wins for a key named in both. A null value in `set`
 /// removes the key, as in `patch_frontmatter`. An empty result drops the
 /// frontmatter block. Only the lines of the keys that change are touched.
-pub fn update_frontmatter(s: &str, set: &Map<String, Value>, remove: &[String]) -> Result<FrontmatterUpdate> {
+pub fn update_frontmatter(
+    s: &str,
+    set: &Map<String, Value>,
+    remove: &[String],
+) -> Result<FrontmatterUpdate> {
     let parsed = frontmatter::parse(s)?;
     let mut data = parsed.data.clone();
     let mut ops = Vec::new();
@@ -532,13 +648,22 @@ pub fn update_frontmatter(s: &str, set: &Map<String, Value>, remove: &[String]) 
     } else {
         frontmatter::edit_frontmatter(s, &ops)?.text
     };
-    Ok(FrontmatterUpdate { next, frontmatter: data, set: written, removed, not_present })
+    Ok(FrontmatterUpdate {
+        next,
+        frontmatter: data,
+        set: written,
+        removed,
+        not_present,
+    })
 }
 
 fn at_line(s: &str, line: i64, content: &str, op: LineOp) -> Result<Apply> {
     let mut lines: Vec<String> = s.split('\n').map(str::to_string).collect();
     if line < 1 || line as usize > lines.len() + 1 {
-        bail!("[at_line] Invalid line {line}; file has {} lines", lines.len());
+        bail!(
+            "[at_line] Invalid line {line}; file has {} lines",
+            lines.len()
+        );
     }
     let idx = line as usize - 1;
     let len = js::utf16_len(content);
@@ -550,17 +675,32 @@ fn at_line(s: &str, line: i64, content: &str, op: LineOp) -> Result<Apply> {
             } else {
                 lines.push(content.to_string());
             }
-            Ok(Apply { at: line_offset(&lines, idx), next: lines.join("\n"), len, removed_len })
+            Ok(Apply {
+                at: line_offset(&lines, idx),
+                next: lines.join("\n"),
+                len,
+                removed_len,
+            })
         }
         LineOp::Before => {
             lines.insert(idx, content.to_string());
-            Ok(Apply { at: line_offset(&lines, idx), next: lines.join("\n"), len, removed_len: 0 })
+            Ok(Apply {
+                at: line_offset(&lines, idx),
+                next: lines.join("\n"),
+                len,
+                removed_len: 0,
+            })
         }
         LineOp::After => {
             // Line `len + 1` inserts past the end, as `splice` clamps.
             let at_idx = (idx + 1).min(lines.len());
             lines.insert(at_idx, content.to_string());
-            Ok(Apply { at: line_offset(&lines, (idx + 1).min(lines.len())), next: lines.join("\n"), len, removed_len: 0 })
+            Ok(Apply {
+                at: line_offset(&lines, (idx + 1).min(lines.len())),
+                next: lines.join("\n"),
+                len,
+                removed_len: 0,
+            })
         }
     }
 }

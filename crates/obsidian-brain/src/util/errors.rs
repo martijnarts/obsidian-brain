@@ -37,12 +37,21 @@ fn node_code(err: &io::Error) -> Option<(&'static str, &'static str)> {
 /// The message Node.js gives a failed `fs` call, such as
 /// `ENOENT: no such file or directory, open '/v/a.md'`. `dest` is the
 /// second path of a `rename` or `copyfile`.
-pub fn node_fs_error_message(err: &io::Error, syscall: &str, path: &Path, dest: Option<&Path>) -> String {
+pub fn node_fs_error_message(
+    err: &io::Error,
+    syscall: &str,
+    path: &Path,
+    dest: Option<&Path>,
+) -> String {
     let Some((code, desc)) = node_code(err) else {
         return err.to_string();
     };
     match dest {
-        Some(d) => format!("{code}: {desc}, {syscall} '{}' -> '{}'", path.display(), d.display()),
+        Some(d) => format!(
+            "{code}: {desc}, {syscall} '{}' -> '{}'",
+            path.display(),
+            d.display()
+        ),
         None => format!("{code}: {desc}, {syscall} '{}'", path.display()),
     }
 }

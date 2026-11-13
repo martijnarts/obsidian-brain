@@ -34,20 +34,22 @@ pub const BUILTIN_VARIABLES: [&str; 3] = ["title", "date", "time"];
 static PLACEHOLDER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\{\{\s*([^{}:]+?)\s*(?::([^{}]*))?\}\}").expect("valid pattern"));
 static TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\[([^\]]*)]|YYYY|YY|MMMM|MMM|MM|M|Do|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|A|a").expect("valid pattern")
+    Regex::new(r"\[([^\]]*)]|YYYY|YY|MMMM|MMM|MM|M|Do|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|A|a")
+        .expect("valid pattern")
 });
 
 /// Settings from `.obsidian/templates.json`, with Obsidian's defaults for anything unset.
 pub fn read_templates_config(vault_path: &Path) -> TemplatesConfig {
     // Missing or unreadable settings: the plugin's defaults apply.
-    let raw: serde_json::Map<String, Value> = std::fs::read_to_string(vault_path.join(".obsidian").join("templates.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| match v {
-            Value::Object(m) => Some(m),
-            _ => None,
-        })
-        .unwrap_or_default();
+    let raw: serde_json::Map<String, Value> =
+        std::fs::read_to_string(vault_path.join(".obsidian").join("templates.json"))
+            .ok()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .and_then(|v| match v {
+                Value::Object(m) => Some(m),
+                _ => None,
+            })
+            .unwrap_or_default();
     let str_of = |key: &str| -> Option<String> {
         match raw.get(key) {
             Some(Value::String(s)) if !js::trim(s).is_empty() => Some(s.clone()),
@@ -64,10 +66,23 @@ pub fn read_templates_config(vault_path: &Path) -> TemplatesConfig {
 
 /// Find a template by vault-relative path or by name inside the templates
 /// folder, with or without `.md`. Returns the vault-relative path.
-pub fn find_template(vault_path: &Path, template: &str, config: &TemplatesConfig) -> Result<String> {
-    let names: Vec<String> =
-        if template.ends_with(".md") { vec![template.into()] } else { vec![template.into(), format!("{template}.md")] };
-    let in_folder = names.iter().map(|n| if config.folder.is_empty() { n.clone() } else { format!("{}/{n}", config.folder) });
+pub fn find_template(
+    vault_path: &Path,
+    template: &str,
+    config: &TemplatesConfig,
+) -> Result<String> {
+    let names: Vec<String> = if template.ends_with(".md") {
+        vec![template.into()]
+    } else {
+        vec![template.into(), format!("{template}.md")]
+    };
+    let in_folder = names.iter().map(|n| {
+        if config.folder.is_empty() {
+            n.clone()
+        } else {
+            format!("{}/{n}", config.folder)
+        }
+    });
     let candidates: Vec<String> = in_folder.chain(names.iter().cloned()).collect();
     for candidate in candidates {
         let resolved = resolve_vault_path(vault_path, &candidate)?;
@@ -75,7 +90,11 @@ pub fn find_template(vault_path: &Path, template: &str, config: &TemplatesConfig
             return Ok(to_vault_relative(vault_path, &resolved.abs));
         }
     }
-    let folder = if config.folder.is_empty() { "/" } else { &config.folder };
+    let folder = if config.folder.is_empty() {
+        "/"
+    } else {
+        &config.folder
+    };
     bail!("Template not found: \"{template}\" (looked in \"{folder}\" and the vault root)")
 }
 
@@ -127,13 +146,35 @@ pub fn render_template(template: &str, opts: &RenderOptions) -> RenderResult {
         }
         whole
     });
-    RenderResult { content: content.into_owned(), unresolved }
+    RenderResult {
+        content: content.into_owned(),
+        unresolved,
+    }
 }
 
 const MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
-const WEEKDAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEKDAYS: [&str; 7] = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
 
 /// A small subset of moment.js formatting, in English: years, months, days
 /// of month and week, 12/24-hour clock, minutes, seconds, AM/PM, and
@@ -141,7 +182,11 @@ const WEEKDAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursd
 pub fn format_date(date: &NaiveDateTime, format: &str) -> String {
     let pad = |n: u32| format!("{n:02}");
     let hours = date.hour();
-    let hours12 = if hours % 12 == 0 { 12 } else { hours % 12 };
+    let hours12 = if hours.is_multiple_of(12) {
+        12
+    } else {
+        hours % 12
+    };
     let month = date.month0() as usize;
     let weekday = date.weekday().num_days_from_sunday() as usize;
     TOKEN
@@ -183,7 +228,9 @@ fn ordinal(n: u32) -> String {
     if (11..=13).contains(&tens) {
         return format!("{n}th");
     }
-    let suffix = ["th", "st", "nd", "rd"].get((n % 10) as usize).unwrap_or(&"th");
+    let suffix = ["th", "st", "nd", "rd"]
+        .get((n % 10) as usize)
+        .unwrap_or(&"th");
     format!("{n}{suffix}")
 }
 
@@ -193,7 +240,10 @@ mod tests {
     use chrono::NaiveDate;
 
     fn at(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, mo, d).unwrap().and_hms_opt(h, mi, s).unwrap()
+        NaiveDate::from_ymd_opt(y, mo, d)
+            .unwrap()
+            .and_hms_opt(h, mi, s)
+            .unwrap()
     }
 
     fn fixed() -> NaiveDateTime {
@@ -222,14 +272,21 @@ mod tests {
     #[test]
     fn handles_afternoon_midnight_and_ordinal_edge_cases() {
         assert_eq!(format_date(&at(2026, 1, 1, 0, 0, 0), "h A Do"), "12 AM 1st");
-        assert_eq!(format_date(&at(2026, 1, 12, 15, 0, 0), "h:mm a Do"), "3:00 pm 12th");
+        assert_eq!(
+            format_date(&at(2026, 1, 12, 15, 0, 0), "h:mm a Do"),
+            "3:00 pm 12th"
+        );
         assert_eq!(format_date(&at(2026, 1, 22, 0, 0, 0), "Do"), "22nd");
         assert_eq!(format_date(&at(2026, 1, 23, 0, 0, 0), "Do"), "23rd");
         assert_eq!(format_date(&at(2026, 1, 13, 0, 0, 0), "Do"), "13th");
     }
 
     fn config() -> TemplatesConfig {
-        TemplatesConfig { folder: "Templates".into(), date_format: "YYYY-MM-DD".into(), time_format: "HH:mm".into() }
+        TemplatesConfig {
+            folder: "Templates".into(),
+            date_format: "YYYY-MM-DD".into(),
+            time_format: "HH:mm".into(),
+        }
     }
 
     #[test]
@@ -238,7 +295,12 @@ mod tests {
         let cfg = config();
         let out = render_template(
             "{{Title}} {{ date }} {{TIME}} {{date:YYYY}} {{time:HH}} {{who}} {{title:x}}",
-            &RenderOptions { title: "T", now: fixed(), config: &cfg, variables: Some(&vars) },
+            &RenderOptions {
+                title: "T",
+                now: fixed(),
+                config: &cfg,
+                variables: Some(&vars),
+            },
         );
         assert_eq!(out.content, "T 2026-03-05 09:07 2026 09 me {{title:x}}");
         assert_eq!(out.unresolved, ["{{title:x}}"]);
@@ -248,7 +310,15 @@ mod tests {
     fn matches_variables_case_sensitively() {
         let vars = HashMap::from([("who".to_string(), "me".to_string())]);
         let cfg = config();
-        let out = render_template("{{Who}}", &RenderOptions { title: "T", now: fixed(), config: &cfg, variables: Some(&vars) });
+        let out = render_template(
+            "{{Who}}",
+            &RenderOptions {
+                title: "T",
+                now: fixed(),
+                config: &cfg,
+                variables: Some(&vars),
+            },
+        );
         assert_eq!(out.content, "{{Who}}");
         assert_eq!(out.unresolved, ["{{Who}}"]);
     }
@@ -258,14 +328,26 @@ mod tests {
         let vault = tempfile::tempdir().unwrap();
         assert_eq!(
             read_templates_config(vault.path()),
-            TemplatesConfig { folder: "Templates".into(), date_format: "YYYY-MM-DD".into(), time_format: "HH:mm".into() }
+            TemplatesConfig {
+                folder: "Templates".into(),
+                date_format: "YYYY-MM-DD".into(),
+                time_format: "HH:mm".into()
+            }
         );
         std::fs::create_dir(vault.path().join(".obsidian")).unwrap();
         let settings = vault.path().join(".obsidian").join("templates.json");
-        std::fs::write(&settings, r#"{"folder":"/Meta/Tpl/","dateFormat":"DD.MM.YYYY","timeFormat":""}"#).unwrap();
+        std::fs::write(
+            &settings,
+            r#"{"folder":"/Meta/Tpl/","dateFormat":"DD.MM.YYYY","timeFormat":""}"#,
+        )
+        .unwrap();
         assert_eq!(
             read_templates_config(vault.path()),
-            TemplatesConfig { folder: "Meta/Tpl".into(), date_format: "DD.MM.YYYY".into(), time_format: "HH:mm".into() }
+            TemplatesConfig {
+                folder: "Meta/Tpl".into(),
+                date_format: "DD.MM.YYYY".into(),
+                time_format: "HH:mm".into()
+            }
         );
         std::fs::write(&settings, "{").unwrap();
         assert_eq!(read_templates_config(vault.path()).folder, "Templates");
@@ -278,12 +360,25 @@ mod tests {
         std::fs::write(vault.path().join("Templates").join("Daily.md"), "x").unwrap();
         std::fs::write(vault.path().join("Root.md"), "x").unwrap();
         let cfg = config();
-        assert_eq!(find_template(vault.path(), "Daily", &cfg).unwrap(), "Templates/Daily.md");
-        assert_eq!(find_template(vault.path(), "Root.md", &cfg).unwrap(), "Root.md");
         assert_eq!(
-            find_template(vault.path(), "Gone", &cfg).unwrap_err().to_string(),
+            find_template(vault.path(), "Daily", &cfg).unwrap(),
+            "Templates/Daily.md"
+        );
+        assert_eq!(
+            find_template(vault.path(), "Root.md", &cfg).unwrap(),
+            "Root.md"
+        );
+        assert_eq!(
+            find_template(vault.path(), "Gone", &cfg)
+                .unwrap_err()
+                .to_string(),
             "Template not found: \"Gone\" (looked in \"Templates\" and the vault root)"
         );
-        assert!(find_template(vault.path(), "../x", &cfg).unwrap_err().to_string().contains("outside the vault"));
+        assert!(
+            find_template(vault.path(), "../x", &cfg)
+                .unwrap_err()
+                .to_string()
+                .contains("outside the vault")
+        );
     }
 }

@@ -42,7 +42,11 @@ const PLACEMENT_GAP: f64 = 40.0;
 
 /// `path` with `.canvas` appended when the caller left it off.
 pub fn canvas_path(path: &str) -> String {
-    if path.ends_with(".canvas") { path.to_string() } else { format!("{path}.canvas") }
+    if path.ends_with(".canvas") {
+        path.to_string()
+    } else {
+        format!("{path}.canvas")
+    }
 }
 
 /// Parse canvas JSON. An empty file is an empty canvas: Obsidian creates new
@@ -51,8 +55,8 @@ pub fn parse_canvas(raw: &str, rel_path: &str) -> Result<CanvasDocument> {
     if crate::util::js::trim(raw).is_empty() {
         return Ok(CanvasDocument::default());
     }
-    let data: Value =
-        serde_json::from_str(raw).map_err(|e| anyhow!("Canvas {rel_path} is not valid JSON: {e}"))?;
+    let data: Value = serde_json::from_str(raw)
+        .map_err(|e| anyhow!("Canvas {rel_path} is not valid JSON: {e}"))?;
     let Value::Object(mut doc) = data else {
         bail!("Canvas {rel_path} is not a JSON object");
     };
@@ -73,16 +77,27 @@ pub fn parse_canvas(raw: &str, rel_path: &str) -> Result<CanvasDocument> {
     };
     let nodes = take("nodes")?;
     let edges = take("edges")?;
-    Ok(CanvasDocument { nodes, edges, rest: doc })
+    Ok(CanvasDocument {
+        nodes,
+        edges,
+        rest: doc,
+    })
 }
 
 /// Serialize the way Obsidian does: tab-indented top level, one compact JSON
 /// object per node and edge. Keeps diffs of synced vaults to one line per
 /// changed element.
 pub fn serialize_canvas(doc: &CanvasDocument) -> String {
-    let mut entries = vec![format!("\t\"nodes\":{}", serialize_array(&doc.nodes)), format!("\t\"edges\":{}", serialize_array(&doc.edges))];
+    let mut entries = vec![
+        format!("\t\"nodes\":{}", serialize_array(&doc.nodes)),
+        format!("\t\"edges\":{}", serialize_array(&doc.edges)),
+    ];
     for (key, value) in &doc.rest {
-        entries.push(format!("\t{}:{}", json_stringify(&Value::String(key.clone())), json_stringify(value)));
+        entries.push(format!(
+            "\t{}:{}",
+            json_stringify(&Value::String(key.clone())),
+            json_stringify(value)
+        ));
     }
     format!("{{\n{}\n}}", entries.join(",\n"))
 }
@@ -91,7 +106,10 @@ fn serialize_array(items: &[CanvasItem]) -> String {
     if items.is_empty() {
         return "[]".into();
     }
-    let lines: Vec<String> = items.iter().map(|item| format!("\t\t{}", json_stringify(&Value::Object(item.clone())))).collect();
+    let lines: Vec<String> = items
+        .iter()
+        .map(|item| format!("\t\t{}", json_stringify(&Value::Object(item.clone()))))
+        .collect();
     format!("[\n{}\n\t]", lines.join(",\n"))
 }
 
@@ -101,7 +119,11 @@ pub fn read_canvas(vault_path: &Path, rel_path: &str) -> Result<Option<CanvasDoc
     let raw = match read_utf8(&abs) {
         Ok(raw) => raw,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(anyhow!(crate::util::errors::node_fs_error_message(&e, "open", &abs, None))),
+        Err(e) => {
+            return Err(anyhow!(crate::util::errors::node_fs_error_message(
+                &e, "open", &abs, None
+            )));
+        }
     };
     parse_canvas(&raw, rel_path).map(Some)
 }
@@ -126,7 +148,12 @@ pub fn generate_canvas_id(doc: &CanvasDocument) -> String {
         let mut bytes = [0u8; 8];
         getrandom::fill(&mut bytes).expect("the OS random source works");
         let id = hex::encode(bytes);
-        if !doc.nodes.iter().chain(&doc.edges).any(|item| id_of(item) == Some(&id)) {
+        if !doc
+            .nodes
+            .iter()
+            .chain(&doc.edges)
+            .any(|item| id_of(item) == Some(&id))
+        {
             return id;
         }
     }
@@ -148,7 +175,10 @@ pub fn place_right_of(nodes: &[CanvasItem]) -> (f64, f64) {
 }
 
 fn num(value: Option<&Value>) -> f64 {
-    value.and_then(Value::as_f64).filter(|x| x.is_finite()).unwrap_or(0.0)
+    value
+        .and_then(Value::as_f64)
+        .filter(|x| x.is_finite())
+        .unwrap_or(0.0)
 }
 
 #[cfg(test)]
@@ -158,7 +188,10 @@ mod tests {
 
     #[test]
     fn parses_empty_and_partial_canvases() {
-        assert_eq!(parse_canvas("  \n", "a.canvas").unwrap(), CanvasDocument::default());
+        assert_eq!(
+            parse_canvas("  \n", "a.canvas").unwrap(),
+            CanvasDocument::default()
+        );
         let doc = parse_canvas(r#"{"nodes":[{"id":"a"}],"extra":1}"#, "a.canvas").unwrap();
         assert_eq!(doc.nodes.len(), 1);
         assert!(doc.edges.is_empty());
@@ -167,10 +200,20 @@ mod tests {
 
     #[test]
     fn refuses_bad_canvases() {
-        assert!(parse_canvas("{", "a.canvas").unwrap_err().to_string().starts_with("Canvas a.canvas is not valid JSON: "));
-        assert_eq!(parse_canvas("[]", "a.canvas").unwrap_err().to_string(), "Canvas a.canvas is not a JSON object");
+        assert!(
+            parse_canvas("{", "a.canvas")
+                .unwrap_err()
+                .to_string()
+                .starts_with("Canvas a.canvas is not valid JSON: ")
+        );
         assert_eq!(
-            parse_canvas(r#"{"edges":{}}"#, "a.canvas").unwrap_err().to_string(),
+            parse_canvas("[]", "a.canvas").unwrap_err().to_string(),
+            "Canvas a.canvas is not a JSON object"
+        );
+        assert_eq!(
+            parse_canvas(r#"{"edges":{}}"#, "a.canvas")
+                .unwrap_err()
+                .to_string(),
             "Canvas a.canvas has a non-array \"edges\" field"
         );
     }
@@ -191,10 +234,14 @@ mod tests {
     #[test]
     fn places_new_nodes_to_the_right() {
         assert_eq!(place_right_of(&[]), (0.0, 0.0));
-        let nodes: Vec<CanvasItem> = [json!({"x": 0, "y": 5, "width": 100}), json!({"x": 300, "y": -20, "width": 50}), json!({"x": "bad"})]
-            .into_iter()
-            .map(|v| v.as_object().unwrap().clone())
-            .collect();
+        let nodes: Vec<CanvasItem> = [
+            json!({"x": 0, "y": 5, "width": 100}),
+            json!({"x": 300, "y": -20, "width": 50}),
+            json!({"x": "bad"}),
+        ]
+        .into_iter()
+        .map(|v| v.as_object().unwrap().clone())
+        .collect();
         assert_eq!(place_right_of(&nodes), (390.0, -20.0));
     }
 
@@ -205,9 +252,13 @@ mod tests {
         let mut doc = CanvasDocument::default();
         let id = generate_canvas_id(&doc);
         assert_eq!(id.len(), 16);
-        doc.nodes.push(json!({"id": id}).as_object().unwrap().clone());
+        doc.nodes
+            .push(json!({"id": id}).as_object().unwrap().clone());
         write_canvas(vault.path(), "sub/x.canvas", &doc).unwrap();
-        assert_eq!(read_canvas(vault.path(), "sub/x.canvas").unwrap(), Some(doc));
+        assert_eq!(
+            read_canvas(vault.path(), "sub/x.canvas").unwrap(),
+            Some(doc)
+        );
         assert_eq!(canvas_path("a"), "a.canvas");
         assert_eq!(canvas_path("a.canvas"), "a.canvas");
         assert_eq!(content_fields("file"), Some(&["file", "subpath"][..]));

@@ -10,18 +10,23 @@ use serde_json::Value;
 
 use super::frontmatter;
 use super::vault_path::read_utf8;
-use super::wiki_links::{StemLookup, build_stem_lookup, extract_wiki_links, resolve_link, strip_code};
+use super::wiki_links::{
+    StemLookup, build_stem_lookup, extract_wiki_links, resolve_link, strip_code,
+};
 use crate::types::{Frontmatter, ParsedEdge, ParsedNode};
 use crate::util::errors::node_fs_error_message;
 use crate::util::js;
 
 const EXCLUDED_DIRS: [&str; 3] = [".obsidian", "_FileOrganizer2000", "attachments"];
 
-static PARAGRAPH_BREAK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n\n+").expect("valid pattern"));
+static PARAGRAPH_BREAK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\n\n+").expect("valid pattern"));
 static SPACES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[ \t]+").expect("valid pattern"));
-static INLINE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"#([a-zA-Z][A-Za-z0-9_\-/]*)").expect("valid pattern"));
-static INLINE_FIELD: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?mR)^([A-Za-z_][A-Za-z0-9_-]*)::[ \t]*(.+?)[ \t]*$").expect("valid pattern"));
+static INLINE_TAG: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"#([a-zA-Z][A-Za-z0-9_\-/]*)").expect("valid pattern"));
+static INLINE_FIELD: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?mR)^([A-Za-z_][A-Za-z0-9_-]*)::[ \t]*(.+?)[ \t]*$").expect("valid pattern")
+});
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ParseResult {
@@ -73,7 +78,10 @@ pub fn parse_file_from_content(
     let (fm, content) = match frontmatter::parse(raw) {
         Ok(p) => (p.data, p.content.to_string()),
         Err(_) => {
-            tracing::warn!(path = rel_path, "Malformed frontmatter in {rel_path}, treating as plain markdown");
+            tracing::warn!(
+                path = rel_path,
+                "Malformed frontmatter in {rel_path}, treating as plain markdown"
+            );
             (Frontmatter::new(), raw.to_string())
         }
     };
@@ -103,8 +111,16 @@ pub fn parse_file_from_content(
             None => (link.raw.as_str(), None),
         };
 
-        let target_id = resolve_link(bare_raw, stem_lookup, Some(all_paths), Some(rel_path), warned_ambiguous.as_deref_mut());
-        let resolved = target_id.clone().unwrap_or_else(|| format!("_stub/{bare_raw}.md"));
+        let target_id = resolve_link(
+            bare_raw,
+            stem_lookup,
+            Some(all_paths),
+            Some(rel_path),
+            warned_ambiguous.as_deref_mut(),
+        );
+        let resolved = target_id
+            .clone()
+            .unwrap_or_else(|| format!("_stub/{bare_raw}.md"));
         if target_id.is_none() && !stub_ids.contains(&resolved) {
             stub_ids.push(resolved.clone());
         }
@@ -122,10 +138,15 @@ pub fn parse_file_from_content(
         // a trailing `[[Target]]` (what link_notes appends) is dropped, and an
         // inline one is replaced by its display text or raw link text.
         let esc = regex::escape(&link.raw);
-        let trailing = Regex::new(&format!(r"\s*!?\[\[{esc}(?:\|[^\]]+)?\]\]\s*$")).expect("escaped pattern");
-        let inline = Regex::new(&format!(r"!?\[\[{esc}(?:\|([^\]]+))?\]\]")).expect("escaped pattern");
+        let trailing =
+            Regex::new(&format!(r"\s*!?\[\[{esc}(?:\|[^\]]+)?\]\]\s*$")).expect("escaped pattern");
+        let inline =
+            Regex::new(&format!(r"!?\[\[{esc}(?:\|([^\]]+))?\]\]")).expect("escaped pattern");
         let context = trailing.replace(paragraph, "");
-        let context = inline.replace_all(&context, |c: &Captures| c.get(1).map_or(link.raw.clone(), |d| d.as_str().to_string()));
+        let context = inline.replace_all(&context, |c: &Captures| {
+            c.get(1)
+                .map_or(link.raw.clone(), |d| d.as_str().to_string())
+        });
         let context = SPACES.replace_all(&context, " ");
 
         edges.push(ParsedEdge {
@@ -136,17 +157,37 @@ pub fn parse_file_from_content(
         });
     }
 
-    ParsedFile { node: ParsedNode { id: rel_path.to_string(), title, content, frontmatter }, edges, stub_ids }
+    ParsedFile {
+        node: ParsedNode {
+            id: rel_path.to_string(),
+            title,
+            content,
+            frontmatter,
+        },
+        edges,
+        stub_ids,
+    }
 }
 
 /// Read and parse a single file on disk, resolving links against
 /// `all_paths` (typically the sync table).
-pub fn parse_single_file(vault_path: &Path, rel_path: &str, all_paths: &[String]) -> Result<ParsedFile> {
+pub fn parse_single_file(
+    vault_path: &Path,
+    rel_path: &str,
+    all_paths: &[String],
+) -> Result<ParsedFile> {
     let abs = vault_path.join(rel_path);
-    let raw = read_utf8(&abs).map_err(|e| anyhow!(node_fs_error_message(&e, "open", &abs, None)))?;
+    let raw =
+        read_utf8(&abs).map_err(|e| anyhow!(node_fs_error_message(&e, "open", &abs, None)))?;
     let stem_lookup = build_stem_lookup(all_paths);
     let set: HashSet<String> = all_paths.iter().cloned().collect();
-    Ok(parse_file_from_content(rel_path, &raw, &stem_lookup, &set, None))
+    Ok(parse_file_from_content(
+        rel_path,
+        &raw,
+        &stem_lookup,
+        &set,
+        None,
+    ))
 }
 
 pub fn parse_vault(vault_path: &Path) -> Result<ParseResult> {
@@ -159,7 +200,8 @@ pub fn parse_vault(vault_path: &Path) -> Result<ParseResult> {
     let mut stubs = HashSet::new();
     for rel in &md_paths {
         let abs = vault_path.join(rel);
-        let raw = read_utf8(&abs).map_err(|e| anyhow!(node_fs_error_message(&e, "open", &abs, None)))?;
+        let raw =
+            read_utf8(&abs).map_err(|e| anyhow!(node_fs_error_message(&e, "open", &abs, None)))?;
         let parsed = parse_file_from_content(rel, &raw, &stem_lookup, &set, Some(&mut warned));
         result.nodes.push(parsed.node);
         result.edges.extend(parsed.edges);
@@ -178,7 +220,11 @@ pub fn extract_inline_tags(content: &str) -> Vec<String> {
     let mut tags: Vec<String> = Vec::new();
     for m in INLINE_TAG.captures_iter(content) {
         let at = m.get(0).expect("whole match").start();
-        if content[..at].chars().next_back().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_') {
+        if content[..at]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
             continue;
         }
         if !tags.iter().any(|t| t == &m[1]) {
@@ -208,7 +254,11 @@ fn extract_inline_fields(content: &str) -> Frontmatter {
 /// `readdir` lists them). Hidden entries and the excluded folders are
 /// skipped; symlinks are not followed into.
 pub fn collect_markdown_files(vault_path: &Path, subdir: &str) -> Result<Vec<String>> {
-    let dir = if subdir.is_empty() { vault_path.to_path_buf() } else { vault_path.join(subdir) };
+    let dir = if subdir.is_empty() {
+        vault_path.to_path_buf()
+    } else {
+        vault_path.join(subdir)
+    };
     let mut entries: Vec<(String, std::fs::FileType)> = std::fs::read_dir(&dir)
         .map_err(|e| anyhow!(node_fs_error_message(&e, "scandir", &dir, None)))?
         .map(|e| {
@@ -223,7 +273,11 @@ pub fn collect_markdown_files(vault_path: &Path, subdir: &str) -> Result<Vec<Str
         if name.starts_with('.') || (kind.is_dir() && EXCLUDED_DIRS.contains(&name.as_str())) {
             continue;
         }
-        let rel = if subdir.is_empty() { name.clone() } else { format!("{subdir}/{name}") };
+        let rel = if subdir.is_empty() {
+            name.clone()
+        } else {
+            format!("{subdir}/{name}")
+        };
         if kind.is_dir() {
             results.extend(collect_markdown_files(vault_path, &rel)?);
         } else if name.ends_with(".md") {
@@ -244,21 +298,45 @@ mod tests {
 
     #[test]
     fn finds_all_md_files_and_skips_excluded_directories() {
-        let ids: Vec<String> = parse_vault(&fixture_vault()).unwrap().nodes.into_iter().map(|n| n.id).collect();
-        for want in ["People/Alice Smith.md", "People/Bob Jones.md", "Concepts/Widget Theory.md", "orphan.md"] {
+        let ids: Vec<String> = parse_vault(&fixture_vault())
+            .unwrap()
+            .nodes
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
+        for want in [
+            "People/Alice Smith.md",
+            "People/Bob Jones.md",
+            "Concepts/Widget Theory.md",
+            "orphan.md",
+        ] {
             assert!(ids.contains(&want.to_string()), "{want}");
         }
-        assert!(ids.iter().all(|id| !id.starts_with(".obsidian/") && !id.starts_with("attachments/")));
+        assert!(
+            ids.iter()
+                .all(|id| !id.starts_with(".obsidian/") && !id.starts_with("attachments/"))
+        );
     }
 
     #[test]
     fn parses_frontmatter_and_titles() {
         let nodes = parse_vault(&fixture_vault()).unwrap().nodes;
-        let alice = nodes.iter().find(|n| n.id == "People/Alice Smith.md").unwrap();
+        let alice = nodes
+            .iter()
+            .find(|n| n.id == "People/Alice Smith.md")
+            .unwrap();
         assert_eq!(alice.title, "Alice Smith");
         assert_eq!(alice.frontmatter["type"], "person");
-        assert!(alice.frontmatter["aliases"].as_array().unwrap().contains(&json!("A. Smith")));
-        assert_eq!(nodes.iter().find(|n| n.id == "no-title.md").unwrap().title, "no-title");
+        assert!(
+            alice.frontmatter["aliases"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("A. Smith"))
+        );
+        assert_eq!(
+            nodes.iter().find(|n| n.id == "no-title.md").unwrap().title,
+            "no-title"
+        );
     }
 
     #[test]
@@ -267,12 +345,22 @@ mod tests {
         let e = r
             .edges
             .iter()
-            .find(|e| e.source_id == "People/Alice Smith.md" && e.target_id == "Concepts/Widget Theory.md")
+            .find(|e| {
+                e.source_id == "People/Alice Smith.md" && e.target_id == "Concepts/Widget Theory.md"
+            })
             .unwrap();
         assert!(e.context.contains("Widget Theory"));
-        assert!(r.edges.iter().any(|e| e.target_id.contains("Nonexistent Page")));
+        assert!(
+            r.edges
+                .iter()
+                .any(|e| e.target_id.contains("Nonexistent Page"))
+        );
         assert!(!r.stub_ids.is_empty());
-        let bob = r.nodes.iter().find(|n| n.id == "People/Bob Jones.md").unwrap();
+        let bob = r
+            .nodes
+            .iter()
+            .find(|n| n.id == "People/Bob Jones.md")
+            .unwrap();
         let tags = bob.frontmatter["inline_tags"].as_array().unwrap();
         assert!(tags.contains(&json!("research")) && tags.contains(&json!("published")));
     }
@@ -283,14 +371,25 @@ mod tests {
 
     #[test]
     fn parses_inline_dataview_fields() {
-        let node = parse("---\ntitle: Example\n---\n\nstatus:: reading\npriority:: high\n\nSome body text.").node;
+        let node = parse(
+            "---\ntitle: Example\n---\n\nstatus:: reading\npriority:: high\n\nSome body text.",
+        )
+        .node;
         assert_eq!(node.frontmatter["status"], "reading");
         assert_eq!(node.frontmatter["priority"], "high");
         let node = parse("# Title\n\n```ts\nconst x:: number = 1;\n```\n\nreal:: field").node;
         assert_eq!(node.frontmatter["real"], "field");
         assert!(!node.frontmatter.contains_key("x"));
-        assert_eq!(parse("---\nstatus: done\n---\n\nstatus:: reading").node.frontmatter["status"], "done");
-        assert_eq!(parse("a:: b \r\nc:: d\r\n").node.frontmatter, json!({"a": "b", "c": "d"}).as_object().unwrap().clone());
+        assert_eq!(
+            parse("---\nstatus: done\n---\n\nstatus:: reading")
+                .node
+                .frontmatter["status"],
+            "done"
+        );
+        assert_eq!(
+            parse("a:: b \r\nc:: d\r\n").node.frontmatter,
+            json!({"a": "b", "c": "d"}).as_object().unwrap().clone()
+        );
     }
 
     #[test]

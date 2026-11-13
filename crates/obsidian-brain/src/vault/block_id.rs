@@ -12,17 +12,27 @@ use regex::Regex;
 use super::markdown_lines::{fence_ranges, frontmatter_end, strip_cr};
 use crate::util::js;
 
-pub static BLOCK_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9-]+$").expect("valid pattern"));
-static TRAILING_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)\^([A-Za-z0-9-]+)$").expect("valid pattern"));
-static OWN_LINE_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\^([A-Za-z0-9-]+)$").expect("valid pattern"));
-static HEADING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#{1,6}(?:[ \t]|$)").expect("valid pattern"));
-static LIST_ITEM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[ \t]*(?:[-*+]|[0-9]+[.)])(?:[ \t]|$)").expect("valid pattern"));
-static TABLE_ROW: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[ \t]*\|").expect("valid pattern"));
+pub static BLOCK_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9-]+$").expect("valid pattern"));
+static TRAILING_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?:^|\s)\^([A-Za-z0-9-]+)$").expect("valid pattern"));
+static OWN_LINE_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\^([A-Za-z0-9-]+)$").expect("valid pattern"));
+static HEADING: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^#{1,6}(?:[ \t]|$)").expect("valid pattern"));
+static LIST_ITEM: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[ \t]*(?:[-*+]|[0-9]+[.)])(?:[ \t]|$)").expect("valid pattern"));
+static TABLE_ROW: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[ \t]*\|").expect("valid pattern"));
 static QUOTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[ \t]*>").expect("valid pattern"));
-static FENCE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[ \t]*(`{3,}|~{3,})").expect("valid pattern"));
-static HEADING_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#{1,6}(?:[ \t]+|$)").expect("valid pattern"));
-static HEADING_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)\^[A-Za-z0-9-]+$").expect("valid pattern"));
-static CLOSING_HASHES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[ \t]+#+$").expect("valid pattern"));
+static FENCE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[ \t]*(`{3,}|~{3,})").expect("valid pattern"));
+static HEADING_PREFIX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^#{1,6}(?:[ \t]+|$)").expect("valid pattern"));
+static HEADING_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?:^|\s)\^[A-Za-z0-9-]+$").expect("valid pattern"));
+static CLOSING_HASHES: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[ \t]+#+$").expect("valid pattern"));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockKind {
@@ -67,20 +77,37 @@ fn clean(l: &str) -> &str {
 pub fn locate_block<S: AsRef<str>>(lines: &[S], idx: usize) -> Result<Block> {
     let fm_end = frontmatter_end(lines);
     if fm_end.is_some_and(|end| idx <= end) {
-        bail!("Line {} is in the frontmatter; a block id needs a body line", idx + 1);
+        bail!(
+            "Line {} is in the frontmatter; a block id needs a body line",
+            idx + 1
+        );
     }
     if is_blank(lines[idx].as_ref()) {
-        bail!("Line {} is blank; a block id needs a line with content", idx + 1);
+        bail!(
+            "Line {} is blank; a block id needs a line with content",
+            idx + 1
+        );
     }
 
     let body_start = fm_end.map_or(0, |e| e + 1);
-    if let Some(&(a, b)) = fence_ranges(lines, body_start).iter().find(|(a, b)| idx >= *a && idx <= *b) {
-        return Ok(Block { kind: BlockKind::OwnLine, start: a, end: b });
+    if let Some(&(a, b)) = fence_ranges(lines, body_start)
+        .iter()
+        .find(|(a, b)| idx >= *a && idx <= *b)
+    {
+        return Ok(Block {
+            kind: BlockKind::OwnLine,
+            start: a,
+            end: b,
+        });
     }
 
     let text = clean(lines[idx].as_ref());
     if HEADING.is_match(text) || LIST_ITEM.is_match(text) {
-        return Ok(Block { kind: BlockKind::Inline, start: idx, end: idx });
+        return Ok(Block {
+            kind: BlockKind::Inline,
+            start: idx,
+            end: idx,
+        });
     }
 
     let extent = |test: &dyn Fn(&str) -> bool| -> (usize, usize) {
@@ -97,30 +124,46 @@ pub fn locate_block<S: AsRef<str>>(lines: &[S], idx: usize) -> Result<Block> {
     for re in [&*TABLE_ROW, &*QUOTE] {
         if re.is_match(text) {
             let (a, b) = extent(&|l| re.is_match(l));
-            return Ok(Block { kind: BlockKind::OwnLine, start: a, end: b });
+            return Ok(Block {
+                kind: BlockKind::OwnLine,
+                start: a,
+                end: b,
+            });
         }
     }
     let plain = |l: &str| -> bool {
         !js::trim(l).is_empty()
-            && ![&*HEADING, &*LIST_ITEM, &*TABLE_ROW, &*QUOTE, &*OWN_LINE_ID].iter().any(|re| re.is_match(l))
+            && ![&*HEADING, &*LIST_ITEM, &*TABLE_ROW, &*QUOTE, &*OWN_LINE_ID]
+                .iter()
+                .any(|re| re.is_match(l))
             && !FENCE.is_match(l)
     };
     let (a, b) = extent(&plain);
-    Ok(Block { kind: BlockKind::Inline, start: a, end: b })
+    Ok(Block {
+        kind: BlockKind::Inline,
+        start: a,
+        end: b,
+    })
 }
 
 /// The id the block already carries, with its 0-based line.
 pub fn existing_block_id<S: AsRef<str>>(lines: &[S], block: Block) -> Option<ExistingId> {
     if block.kind == BlockKind::Inline {
         let m = TRAILING_ID.captures(clean(lines[block.end].as_ref()))?;
-        return Some(ExistingId { id: m[1].to_string(), line: block.end });
+        return Some(ExistingId {
+            id: m[1].to_string(),
+            line: block.end,
+        });
     }
     let mut i = block.end + 1;
     if i < lines.len() && is_blank(lines[i].as_ref()) {
         i += 1;
     }
     let m = OWN_LINE_ID.captures(clean(lines.get(i)?.as_ref()))?;
-    Some(ExistingId { id: m[1].to_string(), line: i })
+    Some(ExistingId {
+        id: m[1].to_string(),
+        line: i,
+    })
 }
 
 /// Every block id written in the note, in first-seen order.
@@ -144,10 +187,17 @@ pub fn attach_block_id<S: AsRef<str>>(lines: &[S], block: Block, id: &str) -> At
         let l = &out[block.end];
         let cr = if l.ends_with('\r') { "\r" } else { "" };
         out[block.end] = format!("{} ^{id}{cr}", clean(l));
-        return Attached { lines: out, line: block.end };
+        return Attached {
+            lines: out,
+            line: block.end,
+        };
     }
 
-    let eol = if out.iter().any(|l| l.ends_with('\r')) { "\r" } else { "" };
+    let eol = if out.iter().any(|l| l.ends_with('\r')) {
+        "\r"
+    } else {
+        ""
+    };
     let after = block.end + 1;
     let has_next = after < out.len();
     // The block may be the last line of a file with no final newline; it now
@@ -155,12 +205,18 @@ pub fn attach_block_id<S: AsRef<str>>(lines: &[S], block: Block, id: &str) -> At
     if !eol.is_empty() && !out[block.end].ends_with('\r') {
         out[block.end].push_str(eol);
     }
-    let mut insert = vec![eol.to_string(), format!("^{id}{}", if has_next { eol } else { "" })];
+    let mut insert = vec![
+        eol.to_string(),
+        format!("^{id}{}", if has_next { eol } else { "" }),
+    ];
     if has_next && !is_blank(&out[after]) {
         insert.push(eol.to_string());
     }
     out.splice(after..after, insert);
-    Attached { lines: out, line: after + 1 }
+    Attached {
+        lines: out,
+        line: after + 1,
+    }
 }
 
 /// A 6-character lowercase id not in `taken`.
@@ -169,7 +225,10 @@ pub fn generate_block_id(taken: &[String]) -> String {
     loop {
         let mut bytes = [0u8; 6];
         getrandom::fill(&mut bytes).expect("the OS random source works");
-        let id: String = bytes.iter().map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char).collect();
+        let id: String = bytes
+            .iter()
+            .map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char)
+            .collect();
         if !taken.contains(&id) {
             return id;
         }
@@ -184,7 +243,9 @@ pub fn find_heading_lines<S: AsRef<str>>(lines: &[S], heading: &str) -> Vec<usiz
     (body_start..lines.len())
         .filter(|&i| {
             let l = clean(lines[i].as_ref());
-            HEADING.is_match(l) && !fenced.iter().any(|(a, b)| i >= *a && i <= *b) && heading_text(l) == want
+            HEADING.is_match(l)
+                && !fenced.iter().any(|(a, b)| i >= *a && i <= *b)
+                && heading_text(l) == want
         })
         .collect()
 }
@@ -202,21 +263,47 @@ mod tests {
     use super::*;
 
     fn own(start: usize, end: usize) -> Block {
-        Block { kind: BlockKind::OwnLine, start, end }
+        Block {
+            kind: BlockKind::OwnLine,
+            start,
+            end,
+        }
     }
 
     #[test]
     fn bounds_a_paragraph_by_blank_lines_and_other_blocks() {
         let lines = ["# H", "one", "two", "- item", "three"];
-        assert_eq!(locate_block(&lines, 1).unwrap(), Block { kind: BlockKind::Inline, start: 1, end: 2 });
-        assert_eq!(locate_block(&lines, 4).unwrap(), Block { kind: BlockKind::Inline, start: 4, end: 4 });
+        assert_eq!(
+            locate_block(&lines, 1).unwrap(),
+            Block {
+                kind: BlockKind::Inline,
+                start: 1,
+                end: 2
+            }
+        );
+        assert_eq!(
+            locate_block(&lines, 4).unwrap(),
+            Block {
+                kind: BlockKind::Inline,
+                start: 4,
+                end: 4
+            }
+        );
     }
 
     #[test]
     fn refuses_frontmatter_and_blank_lines_and_spans_fences_and_tables() {
-        let lines = ["---", "a: 1", "---", "", "```", "x", "```", "| a |", "| b |"];
-        assert_eq!(locate_block(&lines, 1).unwrap_err().to_string(), "Line 2 is in the frontmatter; a block id needs a body line");
-        assert_eq!(locate_block(&lines, 3).unwrap_err().to_string(), "Line 4 is blank; a block id needs a line with content");
+        let lines = [
+            "---", "a: 1", "---", "", "```", "x", "```", "| a |", "| b |",
+        ];
+        assert_eq!(
+            locate_block(&lines, 1).unwrap_err().to_string(),
+            "Line 2 is in the frontmatter; a block id needs a body line"
+        );
+        assert_eq!(
+            locate_block(&lines, 3).unwrap_err().to_string(),
+            "Line 4 is blank; a block id needs a line with content"
+        );
         assert_eq!(locate_block(&lines, 5).unwrap(), own(4, 6));
         assert_eq!(locate_block(&lines, 8).unwrap(), own(7, 8));
     }
@@ -224,23 +311,52 @@ mod tests {
     #[test]
     fn reads_an_own_line_id_directly_after_the_block_or_after_one_blank_line() {
         let block = own(0, 0);
-        assert_eq!(existing_block_id(&["> q", "^a"], block), Some(ExistingId { id: "a".into(), line: 1 }));
-        assert_eq!(existing_block_id(&["> q", "", "^b"], block), Some(ExistingId { id: "b".into(), line: 2 }));
+        assert_eq!(
+            existing_block_id(&["> q", "^a"], block),
+            Some(ExistingId {
+                id: "a".into(),
+                line: 1
+            })
+        );
+        assert_eq!(
+            existing_block_id(&["> q", "", "^b"], block),
+            Some(ExistingId {
+                id: "b".into(),
+                line: 2
+            })
+        );
         assert_eq!(existing_block_id(&["> q", "", "text"], block), None);
         assert_eq!(existing_block_id(&["> q"], block), None);
     }
 
     #[test]
     fn does_not_add_a_blank_line_when_one_already_follows() {
-        assert_eq!(attach_block_id(&["| a |", "", "next"], own(0, 0), "z").lines, ["| a |", "", "^z", "", "next"]);
+        assert_eq!(
+            attach_block_id(&["| a |", "", "next"], own(0, 0), "z").lines,
+            ["| a |", "", "^z", "", "next"]
+        );
     }
 
     #[test]
     fn attaches_inline_and_keeps_crlf() {
-        let a = attach_block_id(&["para  \r", "x\r"], Block { kind: BlockKind::Inline, start: 0, end: 0 }, "id");
+        let a = attach_block_id(
+            &["para  \r", "x\r"],
+            Block {
+                kind: BlockKind::Inline,
+                start: 0,
+                end: 0,
+            },
+            "id",
+        );
         assert_eq!(a.lines, ["para ^id\r", "x\r"]);
         let b = attach_block_id(&["x\r", "> q"], own(1, 1), "q");
-        assert_eq!((b.lines, b.line), (vec!["x\r".to_string(), "> q\r".into(), "\r".into(), "^q".into()], 3));
+        assert_eq!(
+            (b.lines, b.line),
+            (
+                vec!["x\r".to_string(), "> q\r".into(), "\r".into(), "^q".into()],
+                3
+            )
+        );
     }
 
     #[test]
@@ -254,7 +370,14 @@ mod tests {
 
     #[test]
     fn matches_headings_outside_fences_ignoring_closing_hashes_and_ids() {
-        let lines = ["## Plan ##", "```", "## Plan", "```", "### Plan ^p", "#Plan"];
+        let lines = [
+            "## Plan ##",
+            "```",
+            "## Plan",
+            "```",
+            "### Plan ^p",
+            "#Plan",
+        ];
         assert_eq!(find_heading_lines(&lines, "Plan"), vec![0, 4]);
     }
 }

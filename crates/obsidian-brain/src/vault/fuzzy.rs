@@ -82,11 +82,18 @@ pub fn fuzzy_find(haystack: &str, needle: &str, threshold: f64) -> Vec<FuzzyMatc
     let needle_len = js::utf16_len(needle);
     let mut cursor = 0;
     while lower_needle.len() <= lower_hay.len() && cursor <= lower_hay.len() - lower_needle.len() {
-        let Some(idx) = find_u16(&lower_hay, &lower_needle, cursor) else { break };
+        let Some(idx) = find_u16(&lower_hay, &lower_needle, cursor) else {
+            break;
+        };
         let end = (idx + needle_len).min(hay16.len());
         let start_b = js::utf16_to_byte(haystack, idx);
         let end_b = js::utf16_to_byte(haystack, end);
-        matches.push(FuzzyMatch { start: start_b, end: end_b, text: haystack[start_b..end_b].to_string(), score: 1.0 });
+        matches.push(FuzzyMatch {
+            start: start_b,
+            end: end_b,
+            text: haystack[start_b..end_b].to_string(),
+            score: 1.0,
+        });
         cursor = idx + needle_len;
     }
     if !matches.is_empty() {
@@ -94,7 +101,10 @@ pub fn fuzzy_find(haystack: &str, needle: &str, threshold: f64) -> Vec<FuzzyMatc
     }
 
     // Stage 2: sliding window Levenshtein over word groups, line by line.
-    let needle_words = js::trim(needle).split(is_js_whitespace).filter(|w| !w.is_empty()).count();
+    let needle_words = js::trim(needle)
+        .split(is_js_whitespace)
+        .filter(|w| !w.is_empty())
+        .count();
     let needle_len = needle_words.max(1);
     let mut line_start = 0;
     for line in haystack.split('\n') {
@@ -103,7 +113,11 @@ pub fn fuzzy_find(haystack: &str, needle: &str, threshold: f64) -> Vec<FuzzyMatc
         let mut best: Option<(usize, usize, f64)> = None;
         for start in 0..words.len() {
             for end in start + 1..=words.len().min(start + max_window) {
-                let phrase = words[start..end].iter().map(|w| w.1).collect::<Vec<_>>().join(" ");
+                let phrase = words[start..end]
+                    .iter()
+                    .map(|w| w.1)
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 let score = similarity(&phrase, needle);
                 if best.is_none_or(|b| score > b.2) {
                     let last = words[end - 1];
@@ -115,13 +129,22 @@ pub fn fuzzy_find(haystack: &str, needle: &str, threshold: f64) -> Vec<FuzzyMatc
             && score >= threshold
         {
             let (abs_start, abs_end) = (line_start + s, line_start + e);
-            matches.push(FuzzyMatch { start: abs_start, end: abs_end, text: haystack[abs_start..abs_end].to_string(), score });
+            matches.push(FuzzyMatch {
+                start: abs_start,
+                end: abs_end,
+                text: haystack[abs_start..abs_end].to_string(),
+                score,
+            });
         }
         line_start += line.len() + 1;
     }
 
     // A stable sort, as `Array.prototype.sort` is.
-    matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    matches.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     matches
 }
 
@@ -149,7 +172,10 @@ fn find_u16(hay: &[u16], needle: &[u16], from: usize) -> Option<usize> {
     if needle.is_empty() {
         return Some(from);
     }
-    hay.get(from..)?.windows(needle.len()).position(|w| w == needle).map(|p| p + from)
+    hay.get(from..)?
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|p| p + from)
 }
 
 #[cfg(test)]
@@ -162,7 +188,9 @@ mod tests {
         let s = similarity("hello", "hallo");
         assert!(s > 0.0 && s < 1.0);
         assert_eq!(similarity("", ""), 1.0);
-        assert!((similarity("foo bar", "foo baz") - similarity("foo baz", "foo bar")).abs() < 1e-10);
+        assert!(
+            (similarity("foo bar", "foo baz") - similarity("foo baz", "foo bar")).abs() < 1e-10
+        );
     }
 
     #[test]
@@ -172,7 +200,10 @@ mod tests {
         assert!(!hits.is_empty());
         assert_eq!(hits[0].score, 1.0);
         assert_eq!(hits[0].text.to_lowercase(), "quick brown");
-        assert_eq!(hay[hits[0].start..hits[0].end].to_lowercase(), "quick brown");
+        assert_eq!(
+            hay[hits[0].start..hits[0].end].to_lowercase(),
+            "quick brown"
+        );
     }
 
     #[test]
@@ -189,14 +220,25 @@ mod tests {
 
     #[test]
     fn finds_a_near_match_with_a_single_typo_above_threshold() {
-        let hits = fuzzy_find("The quick brown fox jumps over the lazy dog.", "quikc brown", 0.7);
+        let hits = fuzzy_find(
+            "The quick brown fox jumps over the lazy dog.",
+            "quikc brown",
+            0.7,
+        );
         assert!(!hits.is_empty());
         assert!(hits[0].score >= 0.7 && hits[0].score < 1.0);
     }
 
     #[test]
     fn threshold_cutoff_and_zero_threshold() {
-        assert!(fuzzy_find("The quick brown fox jumps over the lazy dog.", "zzzzzz qqqqqq", 0.9).is_empty());
+        assert!(
+            fuzzy_find(
+                "The quick brown fox jumps over the lazy dog.",
+                "zzzzzz qqqqqq",
+                0.9
+            )
+            .is_empty()
+        );
         assert!(!fuzzy_find("Alpha beta gamma delta.", "zzz", 0.0).is_empty());
     }
 

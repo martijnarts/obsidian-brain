@@ -151,11 +151,14 @@ pub fn compile_user_regex(pattern: &str, flags: &str, literal: bool) -> Result<U
     if literal {
         let flags = JsFlags::parse(flags)?;
         let translated = translate(&escape_regex(pattern), flags)?;
-        let regex = fancy_regex::Regex::new(&translated).map_err(|e| anyhow!("Invalid regex: {e}"))?;
+        let regex =
+            fancy_regex::Regex::new(&translated).map_err(|e| anyhow!("Invalid regex: {e}"))?;
         return Ok(UserRegex { regex, flags });
     }
     if NESTED_QUANTIFIER.is_match(pattern) {
-        bail!("Pattern has a quantified group that contains a quantifier, like `(a+)+`. Rewrite it without the nesting.");
+        bail!(
+            "Pattern has a quantified group that contains a quantifier, like `(a+)+`. Rewrite it without the nesting."
+        );
     }
     let flags = JsFlags::parse(flags).map_err(|e| anyhow!("Invalid regex: {e}"))?;
     let translated = translate(pattern, flags).map_err(|e| anyhow!("Invalid regex: {e}"))?;
@@ -219,7 +222,11 @@ fn translate(pattern: &str, flags: JsFlags) -> Result<String> {
                     'u' => {
                         let hex4 = |at: usize| -> Option<u32> {
                             let s: String = chars.get(at..at + 4)?.iter().collect();
-                            if s.chars().all(|h| h.is_ascii_hexdigit()) { u32::from_str_radix(&s, 16).ok() } else { None }
+                            if s.chars().all(|h| h.is_ascii_hexdigit()) {
+                                u32::from_str_radix(&s, 16).ok()
+                            } else {
+                                None
+                            }
                         };
                         if chars.get(i) == Some(&'{') && (flags.unicode || flags.unicode_sets) {
                             // `\u{...}` passes through.
@@ -230,7 +237,8 @@ fn translate(pattern: &str, flags: JsFlags) -> Result<String> {
                             if (0xD800..0xDC00).contains(&hi)
                                 && chars.get(i) == Some(&'\\')
                                 && chars.get(i + 1) == Some(&'u')
-                                && let Some(lo) = hex4(i + 2).filter(|lo| (0xDC00..0xE000).contains(lo))
+                                && let Some(lo) =
+                                    hex4(i + 2).filter(|lo| (0xDC00..0xE000).contains(lo))
                             {
                                 cp = 0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00);
                                 i += 6;
@@ -243,7 +251,10 @@ fn translate(pattern: &str, flags: JsFlags) -> Result<String> {
                             out.push('u');
                         }
                     }
-                    'x' if chars.get(i..i + 2).is_some_and(|h| h.iter().all(char::is_ascii_hexdigit)) => {
+                    'x' if chars
+                        .get(i..i + 2)
+                        .is_some_and(|h| h.iter().all(char::is_ascii_hexdigit)) =>
+                    {
                         out.push_str("\\x");
                     }
                     'D' | 'W' | 's' | 'S' | 'n' | 'r' | 't' | 'f' | 'v' | 'k' => {
@@ -306,7 +317,10 @@ fn translate(pattern: &str, flags: JsFlags) -> Result<String> {
             '{' if !in_class => {
                 if starts_quantifier(&chars[i..]) {
                     // Copy the quantifier and its closing brace verbatim.
-                    let close = chars[i..].iter().position(|&ch| ch == '}').expect("checked by starts_quantifier");
+                    let close = chars[i..]
+                        .iter()
+                        .position(|&ch| ch == '}')
+                        .expect("checked by starts_quantifier");
                     out.extend(&chars[i..=i + close]);
                     i += close + 1;
                     continue;
@@ -354,27 +368,47 @@ mod tests {
         let re = compile_user_regex("a.b (c)", "", true).unwrap();
         assert!(test(&re, "xa.b (c)y"));
         assert!(!test(&re, "aXb (c)"));
-        assert!(test(&compile_user_regex("(a+)+", "g", true).unwrap(), "x(a+)+y"));
+        assert!(test(
+            &compile_user_regex("(a+)+", "g", true).unwrap(),
+            "x(a+)+y"
+        ));
     }
 
     #[test]
     fn passes_the_flags_through() {
         assert!(test(&compile_user_regex("Foo", "i", true).unwrap(), "foo"));
         assert!(!test(&compile_user_regex("Foo", "", true).unwrap(), "foo"));
-        assert_eq!(compile_user_regex("a", "gm", false).unwrap().flags.as_js(), "gm");
+        assert_eq!(
+            compile_user_regex("a", "gm", false).unwrap().flags.as_js(),
+            "gm"
+        );
     }
 
     #[test]
     fn refuses_patterns_over_500_characters() {
-        let err = compile_user_regex(&"a".repeat(501), "g", false).unwrap_err().to_string();
+        let err = compile_user_regex(&"a".repeat(501), "g", false)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("too long (501 chars, max 500)"), "{err}");
-        assert!(compile_user_regex(&"a".repeat(501), "g", true).unwrap_err().to_string().contains("too long"));
+        assert!(
+            compile_user_regex(&"a".repeat(501), "g", true)
+                .unwrap_err()
+                .to_string()
+                .contains("too long")
+        );
         assert!(compile_user_regex(&"a".repeat(500), "", false).is_ok());
     }
 
     #[test]
     fn refuses_quantified_groups_that_contain_a_quantifier() {
-        for p in ["(a+)+", "(a+)+$", "(\\w*x)*", "(a{1,})+", "(a|b*){2,}", "(a+){3}"] {
+        for p in [
+            "(a+)+",
+            "(a+)+$",
+            "(\\w*x)*",
+            "(a{1,})+",
+            "(a|b*){2,}",
+            "(a+){3}",
+        ] {
             let err = compile_user_regex(p, "g", false).unwrap_err().to_string();
             assert!(err.contains("quantified group"), "{p}: {err}");
         }
@@ -391,8 +425,14 @@ mod tests {
     #[test]
     fn accepts_ordinary_groups_and_escaped_parentheses() {
         assert!(test(&compile_user_regex("(a+)", "g", false).unwrap(), "aa"));
-        assert!(test(&compile_user_regex("(foo|bar)+", "", false).unwrap(), "barfoo"));
-        assert!(test(&compile_user_regex("\\(a+\\)+", "", false).unwrap(), "(aa))"));
+        assert!(test(
+            &compile_user_regex("(foo|bar)+", "", false).unwrap(),
+            "barfoo"
+        ));
+        assert!(test(
+            &compile_user_regex("\\(a+\\)+", "", false).unwrap(),
+            "(aa))"
+        ));
     }
 
     #[test]

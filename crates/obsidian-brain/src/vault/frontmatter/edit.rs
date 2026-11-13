@@ -57,17 +57,29 @@ pub fn edit_frontmatter(raw: &str, ops: &[FrontmatterOp]) -> Result<Edited, Fron
     js::js_object_order(&mut data);
 
     if data == parsed.data {
-        return Ok(Edited { text: raw.to_string(), data, in_place: true });
+        return Ok(Edited {
+            text: raw.to_string(),
+            data,
+            in_place: true,
+        });
     }
     if let Some(text) = in_place(raw, &parsed, &data)
         && let Ok(check) = parse(&text)
         && check.data == data
         && check.content == parsed.content
     {
-        return Ok(Edited { text, data, in_place: true });
+        return Ok(Edited {
+            text,
+            data,
+            in_place: true,
+        });
     }
     let text = stringify(parsed.content, &data);
-    Ok(Edited { text, data, in_place: false })
+    Ok(Edited {
+        text,
+        data,
+        in_place: false,
+    })
 }
 
 fn line_ending(s: &str) -> &'static str {
@@ -121,7 +133,9 @@ fn key_text(line: &str, col: usize) -> Option<&str> {
         _ => {
             let mut i = 0;
             loop {
-                if bytes.get(i)? == &b':' && matches!(bytes.get(i + 1), None | Some(b' ' | b'\t' | b'\r' | b'\n')) {
+                if bytes.get(i)? == &b':'
+                    && matches!(bytes.get(i + 1), None | Some(b' ' | b'\t' | b'\r' | b'\n'))
+                {
                     break i;
                 }
                 i += 1;
@@ -202,7 +216,10 @@ fn in_place(raw: &str, parsed: &Parsed, data: &Frontmatter) -> Option<String> {
     let render = |key_text: Option<&str>, key: &str, value: &Value| -> String {
         let pad = " ".repeat(base);
         let text = render_entry(key_text, key, value);
-        text.split_inclusive('\n').map(|l| format!("{pad}{l}")).collect::<String>().replace('\n', eol)
+        text.split_inclusive('\n')
+            .map(|l| format!("{pad}{l}"))
+            .collect::<String>()
+            .replace('\n', eol)
     };
 
     // Keys that are new, or that only came from a `<<` merge and changed.

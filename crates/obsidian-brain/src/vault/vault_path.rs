@@ -28,7 +28,9 @@ fn resolve(base: &Path, rel: &str) -> PathBuf {
     let mut joined = if base.is_absolute() {
         base.to_path_buf()
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")).join(base)
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("/"))
+            .join(base)
     };
     if !rel.is_empty() {
         joined.push(rel);
@@ -88,16 +90,27 @@ fn posix_normalize_rel(p: &str) -> String {
             s => parts.push(s),
         }
     }
-    if parts.is_empty() { ".".into() } else { parts.join("/") }
+    if parts.is_empty() {
+        ".".into()
+    } else {
+        parts.join("/")
+    }
 }
 
 /// The checks that need no disk: NUL, absolute paths and `..` escapes.
 fn lexical_rel(input: &str) -> Result<String> {
     if input.contains('\0') {
-        bail!("Path {} contains a NUL byte", serde_json::to_string(input).expect("strings serialize"));
+        bail!(
+            "Path {} contains a NUL byte",
+            serde_json::to_string(input).expect("strings serialize")
+        );
     }
     let cleaned = js::trim(input).replace('\\', "/");
-    let drive = cleaned.as_bytes().first().is_some_and(u8::is_ascii_alphabetic) && cleaned.as_bytes().get(1) == Some(&b':');
+    let drive = cleaned
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_alphabetic)
+        && cleaned.as_bytes().get(1) == Some(&b':');
     if cleaned.starts_with('/') || drive {
         bail!("Path \"{input}\" is outside the vault: use a vault-relative path");
     }
@@ -114,9 +127,17 @@ pub fn to_vault_relative(vault_path: &Path, abs: &Path) -> String {
     let target = normalize_abs(abs);
     let base_parts: Vec<_> = base.components().collect();
     let target_parts: Vec<_> = target.components().collect();
-    let common = base_parts.iter().zip(&target_parts).take_while(|(a, b)| a == b).count();
+    let common = base_parts
+        .iter()
+        .zip(&target_parts)
+        .take_while(|(a, b)| a == b)
+        .count();
     let mut out: Vec<String> = vec!["..".into(); base_parts.len() - common];
-    out.extend(target_parts[common..].iter().map(|c| c.as_os_str().to_string_lossy().into_owned()));
+    out.extend(
+        target_parts[common..]
+            .iter()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+    );
     out.join("/")
 }
 
@@ -125,7 +146,9 @@ pub fn to_vault_relative(vault_path: &Path, abs: &Path) -> String {
 /// at the vault, so leading slashes are dropped: `/a/` is `a`, and an
 /// absent folder, `""` or `/` is the root (`""`).
 pub fn normalize_folder(folder: Option<&str>) -> Result<String> {
-    let Some(folder) = folder else { return Ok(String::new()) };
+    let Some(folder) = folder else {
+        return Ok(String::new());
+    };
     let cleaned = js::trim(folder).replace('\\', "/");
     lexical_rel(cleaned.trim_start_matches('/'))
 }
@@ -158,7 +181,10 @@ pub fn read_note_file(vault_path: &Path, input: &str) -> Result<NoteFile> {
     let VaultPath { rel, abs } = resolve_vault_path(vault_path, input)?;
     match read_utf8(&abs) {
         Ok(content) => Ok(NoteFile { rel, abs, content }),
-        Err(e) => bail!("Could not read \"{rel}\": {}", node_fs_error_message(&e, "open", &abs, None)),
+        Err(e) => bail!(
+            "Could not read \"{rel}\": {}",
+            node_fs_error_message(&e, "open", &abs, None)
+        ),
     }
 }
 
@@ -215,17 +241,49 @@ mod tests {
     fn accepts_paths_inside_the_vault_existing_or_not() {
         let d = setup();
         let v = d.vault.path();
-        assert_eq!(resolve_vault_path(v, "A/Note.md").unwrap(), VaultPath { rel: "A/Note.md".into(), abs: v.join("A/Note.md") });
-        assert_eq!(resolve_vault_path(v, "A/../A/New.md").unwrap(), VaultPath { rel: "A/New.md".into(), abs: v.join("A/New.md") });
-        assert_eq!(resolve_vault_path(v, "New/Deep/x.md").unwrap().rel, "New/Deep/x.md");
-        assert_eq!(resolve_vault_path(v, "").unwrap(), VaultPath { rel: String::new(), abs: v.to_path_buf() });
-        assert_eq!(resolve_vault_path(v, ".").unwrap(), VaultPath { rel: String::new(), abs: v.to_path_buf() });
+        assert_eq!(
+            resolve_vault_path(v, "A/Note.md").unwrap(),
+            VaultPath {
+                rel: "A/Note.md".into(),
+                abs: v.join("A/Note.md")
+            }
+        );
+        assert_eq!(
+            resolve_vault_path(v, "A/../A/New.md").unwrap(),
+            VaultPath {
+                rel: "A/New.md".into(),
+                abs: v.join("A/New.md")
+            }
+        );
+        assert_eq!(
+            resolve_vault_path(v, "New/Deep/x.md").unwrap().rel,
+            "New/Deep/x.md"
+        );
+        assert_eq!(
+            resolve_vault_path(v, "").unwrap(),
+            VaultPath {
+                rel: String::new(),
+                abs: v.to_path_buf()
+            }
+        );
+        assert_eq!(
+            resolve_vault_path(v, ".").unwrap(),
+            VaultPath {
+                rel: String::new(),
+                abs: v.to_path_buf()
+            }
+        );
     }
 
     #[test]
     fn uses_slash_separators_and_drops_trailing_slashes() {
         let d = setup();
-        assert_eq!(resolve_vault_path(d.vault.path(), "A\\Note.md").unwrap().rel, "A/Note.md");
+        assert_eq!(
+            resolve_vault_path(d.vault.path(), "A\\Note.md")
+                .unwrap()
+                .rel,
+            "A/Note.md"
+        );
         assert_eq!(resolve_vault_path(d.vault.path(), "A/").unwrap().rel, "A");
     }
 
@@ -233,8 +291,18 @@ mod tests {
     fn refuses_absolute_paths() {
         let d = setup();
         let inside = d.vault.path().join("A/Note.md");
-        for p in [inside.to_str().unwrap(), "/etc/passwd", "\\etc", "C:/temp", "c:\\temp"] {
-            assert!(err(resolve_vault_path(d.vault.path(), p)).contains("outside the vault: use a vault-relative path"), "{p}");
+        for p in [
+            inside.to_str().unwrap(),
+            "/etc/passwd",
+            "\\etc",
+            "C:/temp",
+            "c:\\temp",
+        ] {
+            assert!(
+                err(resolve_vault_path(d.vault.path(), p))
+                    .contains("outside the vault: use a vault-relative path"),
+                "{p}"
+            );
         }
     }
 
@@ -242,14 +310,20 @@ mod tests {
     fn refuses_dotdot_escapes() {
         let d = setup();
         for p in ["..", "../x.md", "A/../../x.md", "..\\x.md"] {
-            assert_eq!(err(resolve_vault_path(d.vault.path(), p)), format!("Path \"{p}\" is outside the vault"));
+            assert_eq!(
+                err(resolve_vault_path(d.vault.path(), p)),
+                format!("Path \"{p}\" is outside the vault")
+            );
         }
     }
 
     #[test]
     fn refuses_nul_bytes() {
         let d = setup();
-        assert_eq!(err(resolve_vault_path(d.vault.path(), "A/x\0.md")), "Path \"A/x\\u0000.md\" contains a NUL byte");
+        assert_eq!(
+            err(resolve_vault_path(d.vault.path(), "A/x\0.md")),
+            "Path \"A/x\\u0000.md\" contains a NUL byte"
+        );
     }
 
     #[test]
@@ -259,16 +333,25 @@ mod tests {
         symlink(d.outside.path().join("Secret.md"), v.join("Linked.md")).unwrap();
         symlink(d.outside.path(), v.join("Out")).unwrap();
         for p in ["Linked.md", "Out", "Out/Secret.md", "Out/new/deeper/x.md"] {
-            assert!(err(resolve_vault_path(v, p)).contains("outside the vault through a symlink"), "{p}");
+            assert!(
+                err(resolve_vault_path(v, p)).contains("outside the vault through a symlink"),
+                "{p}"
+            );
         }
     }
 
     #[test]
     fn refuses_a_dangling_symlink_and_paths_under_it() {
         let d = setup();
-        symlink(d.outside.path().join("missing"), d.vault.path().join("dangling")).unwrap();
+        symlink(
+            d.outside.path().join("missing"),
+            d.vault.path().join("dangling"),
+        )
+        .unwrap();
         assert!(err(resolve_vault_path(d.vault.path(), "dangling")).contains("through a symlink"));
-        assert!(err(resolve_vault_path(d.vault.path(), "dangling/x.md")).contains("through a symlink"));
+        assert!(
+            err(resolve_vault_path(d.vault.path(), "dangling/x.md")).contains("through a symlink")
+        );
     }
 
     #[test]
@@ -276,15 +359,24 @@ mod tests {
         let d = setup();
         let v = d.vault.path();
         symlink(v.join("A"), v.join("Alias")).unwrap();
-        assert_eq!(resolve_vault_path(v, "Alias/Note.md").unwrap().abs, v.join("Alias/Note.md"));
-        assert_eq!(resolve_vault_path(v, "Alias/New.md").unwrap().rel, "Alias/New.md");
+        assert_eq!(
+            resolve_vault_path(v, "Alias/Note.md").unwrap().abs,
+            v.join("Alias/Note.md")
+        );
+        assert_eq!(
+            resolve_vault_path(v, "Alias/New.md").unwrap().rel,
+            "Alias/New.md"
+        );
     }
 
     #[test]
     fn to_vault_relative_uses_slashes() {
         let d = setup();
         let v = d.vault.path();
-        assert_eq!(to_vault_relative(v, &v.join("A").join("Note.md")), "A/Note.md");
+        assert_eq!(
+            to_vault_relative(v, &v.join("A").join("Note.md")),
+            "A/Note.md"
+        );
         assert_eq!(to_vault_relative(v, v), "");
     }
 
@@ -311,10 +403,28 @@ mod tests {
     fn resolve_folder_checks_for_a_directory() {
         let d = setup();
         let v = d.vault.path();
-        assert_eq!(resolve_folder(v, Some("/A/")).unwrap(), VaultPath { rel: "A".into(), abs: v.join("A") });
-        assert_eq!(resolve_folder(v, None).unwrap(), VaultPath { rel: String::new(), abs: v.to_path_buf() });
-        assert_eq!(err(resolve_folder(v, Some("Nope"))), "Folder not found: \"Nope\"");
-        assert_eq!(err(resolve_folder(v, Some("A/Note.md"))), "Folder not found: \"A/Note.md\"");
+        assert_eq!(
+            resolve_folder(v, Some("/A/")).unwrap(),
+            VaultPath {
+                rel: "A".into(),
+                abs: v.join("A")
+            }
+        );
+        assert_eq!(
+            resolve_folder(v, None).unwrap(),
+            VaultPath {
+                rel: String::new(),
+                abs: v.to_path_buf()
+            }
+        );
+        assert_eq!(
+            err(resolve_folder(v, Some("Nope"))),
+            "Folder not found: \"Nope\""
+        );
+        assert_eq!(
+            err(resolve_folder(v, Some("A/Note.md"))),
+            "Folder not found: \"A/Note.md\""
+        );
         symlink(d.outside.path(), v.join("Out")).unwrap();
         assert!(err(resolve_folder(v, Some("Out"))).contains("through a symlink"));
         assert!(err(resolve_folder(v, Some("../x"))).contains("outside the vault"));
@@ -326,16 +436,24 @@ mod tests {
         let v = d.vault.path();
         assert_eq!(
             read_note_file(v, "A/Note.md").unwrap(),
-            NoteFile { rel: "A/Note.md".into(), abs: v.join("A/Note.md"), content: "x".into() }
+            NoteFile {
+                rel: "A/Note.md".into(),
+                abs: v.join("A/Note.md"),
+                content: "x".into()
+            }
         );
-        assert!(err(read_note_file(v, "A/Gone.md")).starts_with("Could not read \"A/Gone.md\": ENOENT"));
+        assert!(
+            err(read_note_file(v, "A/Gone.md")).starts_with("Could not read \"A/Gone.md\": ENOENT")
+        );
         symlink(d.outside.path().join("Secret.md"), v.join("Linked.md")).unwrap();
         assert!(err(read_note_file(v, "Linked.md")).contains("outside the vault"));
     }
 
     fn listing(dir: &Path) -> Vec<String> {
-        let mut names: Vec<String> =
-            std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
         names.sort();
         names
     }
@@ -363,7 +481,9 @@ mod tests {
                 s.spawn(move || write_file_atomic(t, c).unwrap());
             }
         });
-        assert!(["one", "two", "three"].contains(&std::fs::read_to_string(&target).unwrap().as_str()));
+        assert!(
+            ["one", "two", "three"].contains(&std::fs::read_to_string(&target).unwrap().as_str())
+        );
         assert_eq!(listing(&d.vault.path().join("A")), ["Note.md"]);
     }
 

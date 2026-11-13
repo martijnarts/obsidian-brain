@@ -15,8 +15,10 @@ use crate::util::js;
 const INDENT: usize = 2;
 const LINE_WIDTH: usize = 80;
 
-const DEPRECATED_BOOLEANS_SYNTAX: [&str; 16] =
-    ["y", "Y", "yes", "Yes", "YES", "on", "On", "ON", "n", "N", "no", "No", "NO", "off", "Off", "OFF"];
+const DEPRECATED_BOOLEANS_SYNTAX: [&str; 16] = [
+    "y", "Y", "yes", "Yes", "YES", "on", "On", "ON", "n", "N", "no", "No", "NO", "off", "Off",
+    "OFF",
+];
 
 /// `yaml.safeDump(value)`: the YAML text, ending in a newline.
 pub fn dump_yaml(value: &Value) -> String {
@@ -87,7 +89,10 @@ fn represent_number(n: &serde_json::Number) -> String {
 }
 
 fn write_flow_sequence(level: usize, items: &[Value]) -> String {
-    let parts: Vec<String> = items.iter().map(|v| write_node(level, v, false, false, false)).collect();
+    let parts: Vec<String> = items
+        .iter()
+        .map(|v| write_node(level, v, false, false, false))
+        .collect();
     format!("[{}]", parts.join(", "))
 }
 
@@ -138,14 +143,22 @@ pub(super) fn write_pair(level: usize, key: &str, value: &Value, newline_first: 
     let key_dump = write_scalar(key, level + 1, true);
     let explicit = key_dump.chars().count() > 1024;
     if explicit {
-        pair.push_str(if key_dump.starts_with('\n') { "?" } else { "? " });
+        pair.push_str(if key_dump.starts_with('\n') {
+            "?"
+        } else {
+            "? "
+        });
     }
     pair.push_str(&key_dump);
     if explicit {
         pair.push_str(&next_line(level));
     }
     let value_dump = write_node(level + 1, value, true, explicit, false);
-    pair.push_str(if value_dump.starts_with('\n') { ":" } else { ": " });
+    pair.push_str(if value_dump.starts_with('\n') {
+        ":"
+    } else {
+        ": "
+    });
     pair.push_str(&value_dump);
     pair
 }
@@ -197,7 +210,8 @@ fn choose_scalar_style(s: &[char], single_line_only: bool, line_width: usize) ->
     let mut previous_line_break: isize = -1;
     let mut plain = is_plain_safe_first(s[0]) && !is_whitespace(s[s.len() - 1]);
     let foldable = |i: usize, prev_lb: isize| -> bool {
-        (i as isize - prev_lb - 1) as usize > line_width && s.get((prev_lb + 1) as usize) != Some(&' ')
+        (i as isize - prev_lb - 1) as usize > line_width
+            && s.get((prev_lb + 1) as usize) != Some(&' ')
     };
 
     for (i, &c) in s.iter().enumerate() {
@@ -216,9 +230,17 @@ fn choose_scalar_style(s: &[char], single_line_only: bool, line_width: usize) ->
     }
     if !has_line_break && !has_foldable_line {
         let text: String = s.iter().collect();
-        return if plain && !resolves_implicitly(&text) { Style::Plain } else { Style::Single };
+        return if plain && !resolves_implicitly(&text) {
+            Style::Plain
+        } else {
+            Style::Single
+        };
     }
-    if has_foldable_line { Style::Folded } else { Style::Literal }
+    if has_foldable_line {
+        Style::Folded
+    } else {
+        Style::Literal
+    }
 }
 
 fn write_scalar(string: &str, level: usize, iskey: bool) -> String {
@@ -234,10 +256,18 @@ fn write_scalar(string: &str, level: usize, iskey: bool) -> String {
     match choose_scalar_style(&chars, iskey, line_width) {
         Style::Plain => string.to_string(),
         Style::Single => format!("'{}'", string.replace('\'', "''")),
-        Style::Literal => format!("|{}{}", block_header(&chars), drop_ending_newline(&indent_string(string, indent))),
+        Style::Literal => format!(
+            "|{}{}",
+            block_header(&chars),
+            drop_ending_newline(&indent_string(string, indent))
+        ),
         Style::Folded => {
             let folded = fold_string(&chars, line_width);
-            format!(">{}{}", block_header(&chars), drop_ending_newline(&indent_string(&folded, indent)))
+            format!(
+                ">{}{}",
+                block_header(&chars),
+                drop_ending_newline(&indent_string(&folded, indent))
+            )
         }
         Style::Double => format!("\"{}\"", escape_string(string)),
     }
@@ -257,11 +287,21 @@ fn indent_string(s: &str, spaces: usize) -> String {
 }
 
 fn block_header(s: &[char]) -> String {
-    let indicator = if need_indent_indicator(s) { INDENT.to_string() } else { String::new() };
+    let indicator = if need_indent_indicator(s) {
+        INDENT.to_string()
+    } else {
+        String::new()
+    };
     // The string "\n" counts as a trailing empty line.
     let clip = s.last() == Some(&'\n');
     let keep = clip && (s.len() >= 2 && s[s.len() - 2] == '\n' || s.len() == 1);
-    let chomp = if keep { "+" } else if clip { "" } else { "-" };
+    let chomp = if keep {
+        "+"
+    } else if clip {
+        ""
+    } else {
+        "-"
+    };
     format!("{indicator}{chomp}\n")
 }
 
@@ -383,7 +423,10 @@ mod tests {
 
     #[test]
     fn keeps_emoji_plain() {
-        assert_eq!(dump_yaml(&json!({"emoji": "🎉 party"})), "emoji: 🎉 party\n");
+        assert_eq!(
+            dump_yaml(&json!({"emoji": "🎉 party"})),
+            "emoji: 🎉 party\n"
+        );
     }
 
     #[test]

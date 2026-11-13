@@ -86,7 +86,11 @@ fn drop_indentation_tabs(yaml: &str) -> String {
 }
 
 fn load_once(yaml: &str) -> Result<Loaded, String> {
-    let mut b = Builder { parser: Parser::new_from_str(yaml), anchors: HashMap::new(), text: yaml };
+    let mut b = Builder {
+        parser: Parser::new_from_str(yaml),
+        anchors: HashMap::new(),
+        text: yaml,
+    };
     let mut value = Value::Null;
     let mut shape = TopShape::Empty;
     let mut documents = 0;
@@ -105,7 +109,15 @@ fn load_once(yaml: &str) -> Result<Loaded, String> {
                 let mut entries = Some(Vec::new());
                 let flow = matches!(ev, Event::MappingStart(..)) && b.char_at(&mark) == Some('{');
                 let is_map = matches!(ev, Event::MappingStart(..));
-                value = b.node(ev, mark, if is_map && !flow { entries.as_mut() } else { None })?;
+                value = b.node(
+                    ev,
+                    mark,
+                    if is_map && !flow {
+                        entries.as_mut()
+                    } else {
+                        None
+                    },
+                )?;
                 shape = match (&value, is_map, flow, entries) {
                     (Value::Null, ..) => TopShape::Empty,
                     (_, true, false, Some(e)) => TopShape::BlockMap(e),
@@ -134,14 +146,23 @@ impl Builder<'_> {
 
     /// Build the node that starts with `ev`. With `entries`, record the keys
     /// of this mapping as top-level entries.
-    fn node(&mut self, ev: Event, mark: Marker, entries: Option<&mut Vec<TopEntry>>) -> Result<Value, String> {
+    fn node(
+        &mut self,
+        ev: Event,
+        mark: Marker,
+        entries: Option<&mut Vec<TopEntry>>,
+    ) -> Result<Value, String> {
         match ev {
             Event::Scalar(text, style, anchor, tag) => {
                 let v = resolve_scalar(&text, style, tag.as_ref(), &mark)?;
                 self.remember(anchor, &v);
                 Ok(v)
             }
-            Event::Alias(id) => self.anchors.get(&id).cloned().ok_or_else(|| "unidentified alias".to_string()),
+            Event::Alias(id) => self
+                .anchors
+                .get(&id)
+                .cloned()
+                .ok_or_else(|| "unidentified alias".to_string()),
             Event::SequenceStart(anchor, tag) => {
                 let mut items = Vec::new();
                 loop {
@@ -165,7 +186,10 @@ impl Builder<'_> {
         }
     }
 
-    fn mapping(&mut self, mut entries: Option<&mut Vec<TopEntry>>) -> Result<Map<String, Value>, String> {
+    fn mapping(
+        &mut self,
+        mut entries: Option<&mut Vec<TopEntry>>,
+    ) -> Result<Map<String, Value>, String> {
         let mut out = Map::new();
         let mut overridable: HashSet<String> = HashSet::new();
         loop {
@@ -200,7 +224,11 @@ impl Builder<'_> {
             }
             let key = key_string(&key_node)?;
             if out.contains_key(&key) && !overridable.contains(&key) {
-                return Err(format!("duplicated mapping key at line {}, column {}", key_mark.line(), key_mark.col() + 1));
+                return Err(format!(
+                    "duplicated mapping key at line {}, column {}",
+                    key_mark.line(),
+                    key_mark.col() + 1
+                ));
             }
             overridable.remove(&key);
             out.insert(key, value);
@@ -216,17 +244,25 @@ impl Builder<'_> {
     }
 }
 
-fn merge_into(out: &mut Map<String, Value>, overridable: &mut HashSet<String>, source: Value) -> Result<(), String> {
+fn merge_into(
+    out: &mut Map<String, Value>,
+    overridable: &mut HashSet<String>,
+    source: Value,
+) -> Result<(), String> {
     let sources = match source {
         Value::Object(m) => vec![m],
         Value::Array(items) => items
             .into_iter()
             .map(|item| match item {
                 Value::Object(m) => Ok(m),
-                _ => Err("cannot merge mappings; the provided source object is unacceptable".to_string()),
+                _ => Err(
+                    "cannot merge mappings; the provided source object is unacceptable".to_string(),
+                ),
             })
             .collect::<Result<_, _>>()?,
-        _ => return Err("cannot merge mappings; the provided source object is unacceptable".into()),
+        _ => {
+            return Err("cannot merge mappings; the provided source object is unacceptable".into());
+        }
     };
     for m in sources {
         for (k, v) in m {
@@ -257,12 +293,25 @@ fn is_core(tag: &Tag, name: &str) -> bool {
 }
 
 fn tag_name(tag: &Tag) -> String {
-    if tag.handle == "!" { format!("!{}", tag.suffix) } else { format!("{}{}", tag.handle, tag.suffix) }
+    if tag.handle == "!" {
+        format!("!{}", tag.suffix)
+    } else {
+        format!("{}{}", tag.handle, tag.suffix)
+    }
 }
 
-fn resolve_scalar(text: &str, style: TScalarStyle, tag: Option<&Tag>, mark: &Marker) -> Result<Value, String> {
+fn resolve_scalar(
+    text: &str,
+    style: TScalarStyle,
+    tag: Option<&Tag>,
+    mark: &Marker,
+) -> Result<Value, String> {
     let Some(tag) = tag else {
-        return Ok(if style == TScalarStyle::Plain { resolve_plain(text) } else { Value::String(text.to_string()) });
+        return Ok(if style == TScalarStyle::Plain {
+            resolve_plain(text)
+        } else {
+            Value::String(text.to_string())
+        });
     };
     let explicit = |kind: &str, v: Option<Value>| {
         v.ok_or_else(|| {
@@ -273,7 +322,12 @@ fn resolve_scalar(text: &str, style: TScalarStyle, tag: Option<&Tag>, mark: &Mar
         return Ok(Value::String(text.to_string()));
     }
     if tag.handle != "tag:yaml.org,2002:" {
-        return Err(format!("unknown tag !<{}> at line {}, column {}", tag_name(tag), mark.line(), mark.col() + 1));
+        return Err(format!(
+            "unknown tag !<{}> at line {}, column {}",
+            tag_name(tag),
+            mark.line(),
+            mark.col() + 1
+        ));
     }
     match tag.suffix.as_str() {
         "str" => Ok(Value::String(text.to_string())),
@@ -285,12 +339,18 @@ fn resolve_scalar(text: &str, style: TScalarStyle, tag: Option<&Tag>, mark: &Mar
         "merge" => Ok(Value::String(text.to_string())),
         // js-yaml gives a Buffer; its base64 text is the closest JSON form.
         "binary" => Ok(Value::String(text.to_string())),
-        other => Err(format!("unknown tag !<tag:yaml.org,2002:{other}> at line {}, column {}", mark.line(), mark.col() + 1)),
+        other => Err(format!(
+            "unknown tag !<tag:yaml.org,2002:{other}> at line {}, column {}",
+            mark.line(),
+            mark.col() + 1
+        )),
     }
 }
 
 fn construct_sequence(items: Vec<Value>, tag: Option<&Tag>) -> Result<Value, String> {
-    let Some(tag) = tag else { return Ok(Value::Array(items)) };
+    let Some(tag) = tag else {
+        return Ok(Value::Array(items));
+    };
     match (tag.handle.as_str(), tag.suffix.as_str()) {
         ("tag:yaml.org,2002:", "seq" | "omap") | ("!", "") => Ok(Value::Array(items)),
         ("tag:yaml.org,2002:", "pairs") => items
@@ -300,7 +360,10 @@ fn construct_sequence(items: Vec<Value>, tag: Option<&Tag>) -> Result<Value, Str
                     let (k, v) = m.into_iter().next().expect("one entry");
                     Ok(Value::Array(vec![Value::String(k), v]))
                 }
-                _ => Err("cannot resolve a node with !<tag:yaml.org,2002:pairs> explicit tag".to_string()),
+                _ => Err(
+                    "cannot resolve a node with !<tag:yaml.org,2002:pairs> explicit tag"
+                        .to_string(),
+                ),
             })
             .collect::<Result<Vec<_>, _>>()
             .map(Value::Array),
@@ -311,7 +374,10 @@ fn construct_sequence(items: Vec<Value>, tag: Option<&Tag>) -> Result<Value, Str
 fn construct_mapping(map: Map<String, Value>, tag: Option<&Tag>) -> Result<Value, String> {
     match tag {
         None => Ok(Value::Object(map)),
-        Some(t) if (t.handle == "tag:yaml.org,2002:" && (t.suffix == "map" || t.suffix == "set")) || (t.handle == "!" && t.suffix.is_empty()) => {
+        Some(t)
+            if (t.handle == "tag:yaml.org,2002:" && (t.suffix == "map" || t.suffix == "set"))
+                || (t.handle == "!" && t.suffix.is_empty()) =>
+        {
             Ok(Value::Object(map))
         }
         Some(t) => Err(format!("unknown tag !<{}>", tag_name(t))),
@@ -393,7 +459,11 @@ fn resolve_int(data: &str) -> Option<f64> {
         if !has || last == b'_' {
             return None;
         }
-        if last != b':' { true } else { BASE60_TAIL.is_match(&data[i..]) }
+        if last != b':' {
+            true
+        } else {
+            BASE60_TAIL.is_match(&data[i..])
+        }
     };
     if !valid {
         return None;
@@ -410,7 +480,11 @@ fn resolve_int(data: &str) -> Option<f64> {
     if value == "0" {
         return Some(0.0);
     }
-    let radix = |digits: &str, r: u32| -> f64 { digits.chars().fold(0.0, |acc, c| acc * r as f64 + c.to_digit(r).unwrap_or(0) as f64) };
+    let radix = |digits: &str, r: u32| -> f64 {
+        digits.chars().fold(0.0, |acc, c| {
+            acc * r as f64 + c.to_digit(r).unwrap_or(0) as f64
+        })
+    };
     if let Some(rest) = value.strip_prefix('0') {
         if let Some(bin) = rest.strip_prefix('b') {
             return Some(sign * radix(bin, 2));
@@ -432,7 +506,8 @@ fn resolve_int(data: &str) -> Option<f64> {
     Some(sign * value.parse::<f64>().ok()?)
 }
 
-static BASE60_TAIL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(:[0-5]?[0-9])+$").expect("valid pattern"));
+static BASE60_TAIL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(:[0-5]?[0-9])+$").expect("valid pattern"));
 static FLOAT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"^(?:[-+]?(?:0|[1-9][0-9_]*)(?:\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?",
@@ -443,7 +518,8 @@ static FLOAT: LazyLock<Regex> = LazyLock::new(|| {
     ))
     .expect("valid pattern")
 });
-static DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([0-9]{4})-([0-9]{2})-([0-9]{2})$").expect("valid pattern"));
+static DATE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([0-9]{4})-([0-9]{2})-([0-9]{2})$").expect("valid pattern"));
 static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"^([0-9]{4})-([0-9][0-9]?)-([0-9][0-9]?)(?:[Tt]|[ \t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])",
@@ -482,7 +558,11 @@ fn resolve_float(data: &str) -> Option<f64> {
 
 /// `parseFloat`: the longest prefix that is a number.
 fn parse_float_prefix(s: &str) -> f64 {
-    (1..=s.len()).rev().filter(|&n| s.is_char_boundary(n)).find_map(|n| s[..n].parse::<f64>().ok()).unwrap_or(f64::NAN)
+    (1..=s.len())
+        .rev()
+        .filter(|&n| s.is_char_boundary(n))
+        .find_map(|n| s[..n].parse::<f64>().ok())
+        .unwrap_or(f64::NAN)
 }
 
 /// Days from 1970-01-01 to the given proleptic Gregorian date.
@@ -500,7 +580,11 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 /// same overflow rules: month 12 is January of the next year, day 0 is the
 /// last day of the previous month, and years 0 to 99 mean 1900 to 1999.
 fn date_utc(year: i64, month: i64, day: i64, h: i64, mi: i64, s: i64, ms: i64) -> i64 {
-    let year = if (0..=99).contains(&year) { 1900 + year } else { year };
+    let year = if (0..=99).contains(&year) {
+        1900 + year
+    } else {
+        year
+    };
     let y = year + month.div_euclid(12);
     let m = month.rem_euclid(12) + 1;
     let days = days_from_civil(y, m, 1) + day - 1;
@@ -540,7 +624,15 @@ fn iso_string(ms: i64) -> String {
 fn resolve_timestamp(data: &str) -> Option<String> {
     let num = |s: Option<regex::Match>| s.map_or(0, |m| m.as_str().parse::<i64>().unwrap_or(0));
     if let Some(m) = DATE.captures(data) {
-        return Some(iso_string(date_utc(num(m.get(1)), num(m.get(2)) - 1, num(m.get(3)), 0, 0, 0, 0)));
+        return Some(iso_string(date_utc(
+            num(m.get(1)),
+            num(m.get(2)) - 1,
+            num(m.get(3)),
+            0,
+            0,
+            0,
+            0,
+        )));
     }
     let m = TIMESTAMP.captures(data)?;
     let fraction = m.get(7).map_or(0, |f| {
@@ -550,7 +642,15 @@ fn resolve_timestamp(data: &str) -> Option<String> {
         }
         digits.parse::<i64>().unwrap_or(0)
     });
-    let mut ms = date_utc(num(m.get(1)), num(m.get(2)) - 1, num(m.get(3)), num(m.get(4)), num(m.get(5)), num(m.get(6)), fraction);
+    let mut ms = date_utc(
+        num(m.get(1)),
+        num(m.get(2)) - 1,
+        num(m.get(3)),
+        num(m.get(4)),
+        num(m.get(5)),
+        num(m.get(6)),
+        fraction,
+    );
     if let Some(sign) = m.get(9) {
         let delta = (num(m.get(10)) * 60 + num(m.get(11))) * 60_000;
         ms -= if sign.as_str() == "-" { -delta } else { delta };
@@ -614,8 +714,14 @@ mod tests {
     #[test]
     fn keys_order_and_merges() {
         let v = val("b: 1\n2: x\na: 3\n1: y\n");
-        assert_eq!(v.as_object().unwrap().keys().collect::<Vec<_>>(), ["1", "2", "b", "a"]);
-        assert_eq!(val("'1': a\ntrue: b\n~: c\n[x, y]: d\n"), json!({"1": "a", "true": "b", "null": "c", "x,y": "d"}));
+        assert_eq!(
+            v.as_object().unwrap().keys().collect::<Vec<_>>(),
+            ["1", "2", "b", "a"]
+        );
+        assert_eq!(
+            val("'1': a\ntrue: b\n~: c\n[x, y]: d\n"),
+            json!({"1": "a", "true": "b", "null": "c", "x,y": "d"})
+        );
         assert_eq!(
             val("base: &b {x: 1}\nother:\n  <<: *b\n  y: 2\n  x: 3\n"),
             json!({"base": {"x": 1}, "other": {"x": 3, "y": 2}})
@@ -624,22 +730,34 @@ mod tests {
 
     #[test]
     fn errors_like_js_yaml() {
-        assert!(load("a: 1\na: 2\n").unwrap_err().contains("duplicated mapping key"));
+        assert!(
+            load("a: 1\na: 2\n")
+                .unwrap_err()
+                .contains("duplicated mapping key")
+        );
         assert!(load("a: !foo x\n").unwrap_err().contains("unknown tag"));
-        assert_eq!(val("a: !!str 12\nb: !!int '7'\n"), json!({"a": "12", "b": 7}));
+        assert_eq!(
+            val("a: !!str 12\nb: !!int '7'\n"),
+            json!({"a": "12", "b": 7})
+        );
     }
 
     #[test]
     fn tab_indentation_reads_as_js_yaml_does() {
         let l = load("title: Test\nnested:\n\tvalue: ok\n").unwrap();
-        assert_eq!(l.value, json!({"title": "Test", "nested": null, "value": "ok"}));
+        assert_eq!(
+            l.value,
+            json!({"title": "Test", "nested": null, "value": "ok"})
+        );
         assert_eq!(l.shape, TopShape::Other);
     }
 
     #[test]
     fn records_top_level_entries() {
         let l = load("\n# c\na: 1\n\"q k\": |\n  x\nl:\n- 1\n").unwrap();
-        let TopShape::BlockMap(e) = l.shape else { panic!("{:?}", l.shape) };
+        let TopShape::BlockMap(e) = l.shape else {
+            panic!("{:?}", l.shape)
+        };
         let keys: Vec<_> = e.iter().map(|e| (e.key.as_str(), e.line, e.col)).collect();
         assert_eq!(keys, [("a", 2, 0), ("q k", 3, 0), ("l", 5, 0)]);
         assert_eq!(load("{a: 1}").unwrap().shape, TopShape::Other);
@@ -649,7 +767,18 @@ mod tests {
 
     #[test]
     fn implicit_resolution_for_the_dumper() {
-        for s in ["true", "null", "~", "12", "0x1F", "1:30", "1.5", ".inf", "2024-01-01", "<<"] {
+        for s in [
+            "true",
+            "null",
+            "~",
+            "12",
+            "0x1F",
+            "1:30",
+            "1.5",
+            ".inf",
+            "2024-01-01",
+            "<<",
+        ] {
             assert!(resolves_implicitly(s), "{s}");
         }
         for s in ["yes", "09", "hello", "1.2.3", "2024-1-1"] {

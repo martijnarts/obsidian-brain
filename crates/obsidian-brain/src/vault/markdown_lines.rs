@@ -8,7 +8,8 @@ use regex::Regex;
 
 use crate::util::js;
 
-static FENCE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[ \t]*(`{3,}|~{3,})").expect("valid pattern"));
+static FENCE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[ \t]*(`{3,}|~{3,})").expect("valid pattern"));
 
 pub fn strip_cr(line: &str) -> &str {
     line.strip_suffix('\r').unwrap_or(line)
@@ -85,7 +86,10 @@ mod tests {
 
     #[test]
     fn pairs_fences_by_character_and_length_and_runs_an_unclosed_one_to_the_end() {
-        assert_eq!(fence_ranges(&["````", "```", "````", "x", "~~~", "y"], 0), vec![(0, 2), (4, 5)]);
+        assert_eq!(
+            fence_ranges(&["````", "```", "````", "x", "~~~", "y"], 0),
+            vec![(0, 2), (4, 5)]
+        );
         assert_eq!(
             non_body_lines(&["---", "k: v", "---", "```", "code", "```", "text"]),
             vec![true, true, true, true, true, true, false]

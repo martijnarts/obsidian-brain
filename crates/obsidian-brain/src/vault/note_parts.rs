@@ -53,17 +53,25 @@ pub struct TaskCount {
     pub done: usize,
 }
 
-static HEADING_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^ {0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$").expect("valid pattern"));
-static FENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^ {0,3}(`{3,}|~{3,})").expect("valid pattern"));
-static LIST_ITEM_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:[-*+]|[0-9]+[.)])\s").expect("valid pattern"));
-static TASK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:[-*+]|[0-9]+[.)])\s+\[(.)\]").expect("valid pattern"));
-static BLOCK_ID_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)\^([A-Za-z0-9-]+)\s*$").expect("valid pattern"));
+static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^ {0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$").expect("valid pattern")
+});
+static FENCE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^ {0,3}(`{3,}|~{3,})").expect("valid pattern"));
+static LIST_ITEM_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*(?:[-*+]|[0-9]+[.)])\s").expect("valid pattern"));
+static TASK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*(?:[-*+]|[0-9]+[.)])\s+\[(.)\]").expect("valid pattern"));
+static BLOCK_ID_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?:^|\s)\^([A-Za-z0-9-]+)\s*$").expect("valid pattern"));
 
 /// Split into lines on `\n` or `\r\n`; a final newline does not add an
 /// empty last line.
 pub fn split_lines(raw: &str) -> Vec<&str> {
-    let mut lines: Vec<&str> = raw.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect();
+    let mut lines: Vec<&str> = raw
+        .split('\n')
+        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+        .collect();
     if lines.len() > 1 && lines.last() == Some(&"") {
         lines.pop();
     }
@@ -99,7 +107,10 @@ fn inert_lines(lines: &[&str]) -> Vec<bool> {
                 inert[i] = true;
                 if let Some(m) = m {
                     let f = &m[1];
-                    if f.as_bytes()[0] == open.as_bytes()[0] && f.len() >= open.len() && js::trim(lines[i]) == f {
+                    if f.as_bytes()[0] == open.as_bytes()[0]
+                        && f.len() >= open.len()
+                        && js::trim(lines[i]) == f
+                    {
                         fence = None;
                     }
                 }
@@ -118,7 +129,11 @@ pub fn extract_headings(raw: &str) -> Vec<Heading> {
         .filter(|(i, _)| !inert[*i])
         .filter_map(|(i, line)| {
             let m = HEADING_RE.captures(line)?;
-            Some(Heading { level: m[1].len(), text: js::trim(&m[2]).to_string(), line: i + 1 })
+            Some(Heading {
+                level: m[1].len(),
+                text: js::trim(&m[2]).to_string(),
+                line: i + 1,
+            })
         })
         .collect()
 }
@@ -152,7 +167,10 @@ pub fn find_heading_section(raw: &str, query: &str) -> Result<HeadingSection> {
     let lines = split_lines(raw);
     let headings = extract_headings(raw);
     let section_end = |h: &Heading| -> usize {
-        headings.iter().find(|o| o.line > h.line && o.level <= h.level).map_or(lines.len(), |next| next.line - 1)
+        headings
+            .iter()
+            .find(|o| o.line > h.line && o.level <= h.level)
+            .map_or(lines.len(), |next| next.line - 1)
     };
 
     let mut heading = pick_heading(&headings, js::trim(query), "the note")?;
@@ -165,7 +183,11 @@ pub fn find_heading_section(raw: &str, query: &str) -> Result<HeadingSection> {
                 bail!("Heading \"{segment}\" not found under {scope_name}");
             };
             let end = section_end(&found);
-            scope = headings.iter().filter(|h| h.line > found.line && h.line <= end && h.level > found.level).cloned().collect();
+            scope = headings
+                .iter()
+                .filter(|h| h.line > found.line && h.line <= end && h.level > found.level)
+                .cloned()
+                .collect();
             scope_name = format!("\"{}\"", found.text);
             heading = Some(found);
         }
@@ -176,18 +198,34 @@ pub fn find_heading_section(raw: &str, query: &str) -> Result<HeadingSection> {
 
     let end_line = section_end(&heading);
     let content = lines[heading.line - 1..end_line].join("\n");
-    Ok(HeadingSection { part: NotePart { start_line: heading.line, end_line, content }, heading })
+    Ok(HeadingSection {
+        part: NotePart {
+            start_line: heading.line,
+            end_line,
+            content,
+        },
+        heading,
+    })
 }
 
 fn pick_heading(candidates: &[Heading], text: &str, scope_name: &str) -> Result<Option<Heading>> {
     let mut hits: Vec<&Heading> = candidates.iter().filter(|h| h.text == text).collect();
     if hits.is_empty() {
         let lower = text.to_lowercase();
-        hits = candidates.iter().filter(|h| h.text.to_lowercase() == lower).collect();
+        hits = candidates
+            .iter()
+            .filter(|h| h.text.to_lowercase() == lower)
+            .collect();
     }
     if hits.len() > 1 {
-        let at = hits.iter().map(|h| format!("line {}", h.line)).collect::<Vec<_>>().join(", ");
-        bail!("Heading \"{text}\" is ambiguous in {scope_name} ({at}). Use a nested path such as \"Parent > {text}\".");
+        let at = hits
+            .iter()
+            .map(|h| format!("line {}", h.line))
+            .collect::<Vec<_>>()
+            .join(", ");
+        bail!(
+            "Heading \"{text}\" is ambiguous in {scope_name} ({at}). Use a nested path such as \"Parent > {text}\"."
+        );
     }
     Ok(hits.first().map(|h| (*h).clone()))
 }
@@ -211,7 +249,8 @@ pub fn find_block(raw: &str, block_id: &str) -> Result<BlockPart> {
         bail!("Block \"^{id}\" not found");
     };
 
-    let is_boundary = |i: usize| inert[i] || js::trim(lines[i]).is_empty() || HEADING_RE.is_match(lines[i]);
+    let is_boundary =
+        |i: usize| inert[i] || js::trim(lines[i]).is_empty() || HEADING_RE.is_match(lines[i]);
 
     let mut start = at;
     if js::trim(lines[at]) == format!("^{id}") {
@@ -231,7 +270,11 @@ pub fn find_block(raw: &str, block_id: &str) -> Result<BlockPart> {
 
     Ok(BlockPart {
         block_id: id.to_string(),
-        part: NotePart { start_line: start + 1, end_line: at + 1, content: lines[start..=at].join("\n") },
+        part: NotePart {
+            start_line: start + 1,
+            end_line: at + 1,
+            content: lines[start..=at].join("\n"),
+        },
     })
 }
 
@@ -251,7 +294,11 @@ pub fn slice_lines(raw: &str, start_line: usize, end_line: Option<usize>) -> Res
     let from = start_line.saturating_sub(1);
     Ok(LineSlice {
         total_lines: total,
-        part: NotePart { start_line, end_line: end, content: lines[from..end].join("\n") },
+        part: NotePart {
+            start_line,
+            end_line: end,
+            content: lines[from..end].join("\n"),
+        },
     })
 }
 
@@ -264,8 +311,20 @@ mod tests {
     #[test]
     fn headings_skip_frontmatter_and_code() {
         let hs = extract_headings(NOTE);
-        let got: Vec<_> = hs.iter().map(|h| (h.level, h.text.as_str(), h.line)).collect();
-        assert_eq!(got, vec![(1, "Top", 5), (2, "Project", 9), (3, "Notes", 16), (2, "Other", 18), (3, "Notes", 19)]);
+        let got: Vec<_> = hs
+            .iter()
+            .map(|h| (h.level, h.text.as_str(), h.line))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (1, "Top", 5),
+                (2, "Project", 9),
+                (3, "Notes", 16),
+                (2, "Other", 18),
+                (3, "Notes", 19)
+            ]
+        );
         assert_eq!(extract_headings("## Closed ##\n")[0].text, "Closed");
     }
 
@@ -279,32 +338,58 @@ mod tests {
         let s = find_heading_section(NOTE, "project").unwrap();
         assert_eq!((s.part.start_line, s.part.end_line), (9, 17));
         let err = find_heading_section(NOTE, "Notes").unwrap_err().to_string();
-        assert_eq!(err, "Heading \"Notes\" is ambiguous in the note (line 16, line 19). Use a nested path such as \"Parent > Notes\".");
+        assert_eq!(
+            err,
+            "Heading \"Notes\" is ambiguous in the note (line 16, line 19). Use a nested path such as \"Parent > Notes\"."
+        );
         let s = find_heading_section(NOTE, "Other > Notes").unwrap();
         assert_eq!((s.part.start_line, s.part.end_line), (19, 23));
         assert_eq!(
-            find_heading_section(NOTE, "Other > Missing").unwrap_err().to_string(),
+            find_heading_section(NOTE, "Other > Missing")
+                .unwrap_err()
+                .to_string(),
             "Heading \"Missing\" not found under \"Other\""
         );
-        assert_eq!(find_heading_section(NOTE, "Nope").unwrap_err().to_string(), "Heading \"Nope\" not found");
+        assert_eq!(
+            find_heading_section(NOTE, "Nope").unwrap_err().to_string(),
+            "Heading \"Nope\" not found"
+        );
     }
 
     #[test]
     fn finds_blocks() {
         let b = find_block(NOTE, "^intro").unwrap();
-        assert_eq!((b.part.start_line, b.part.end_line, b.part.content.as_str()), (7, 7, "intro ^intro"));
+        assert_eq!(
+            (b.part.start_line, b.part.end_line, b.part.content.as_str()),
+            (7, 7, "intro ^intro")
+        );
         let t = find_block(NOTE, "table").unwrap();
         // The paragraph line above the table has no blank line between them.
         assert_eq!((t.part.start_line, t.part.end_line), (20, 23));
-        assert_eq!(find_block(NOTE, "zzz").unwrap_err().to_string(), "Block \"^zzz\" not found");
-        assert_eq!(find_block(NOTE, " ^ ").unwrap_err().to_string(), "blockId is empty");
+        assert_eq!(
+            find_block(NOTE, "zzz").unwrap_err().to_string(),
+            "Block \"^zzz\" not found"
+        );
+        assert_eq!(
+            find_block(NOTE, " ^ ").unwrap_err().to_string(),
+            "blockId is empty"
+        );
     }
 
     #[test]
     fn slices_lines() {
         let s = slice_lines("a\r\nb\nc\n", 2, Some(9)).unwrap();
-        assert_eq!((s.total_lines, s.part.end_line, s.part.content.as_str()), (3, 3, "b\nc"));
-        assert_eq!(slice_lines("a\n", 5, None).unwrap_err().to_string(), "startLine 5 is past the end of the note (1 lines)");
-        assert_eq!(slice_lines("a\nb\nc", 3, Some(2)).unwrap_err().to_string(), "endLine 2 is before startLine 3");
+        assert_eq!(
+            (s.total_lines, s.part.end_line, s.part.content.as_str()),
+            (3, 3, "b\nc")
+        );
+        assert_eq!(
+            slice_lines("a\n", 5, None).unwrap_err().to_string(),
+            "startLine 5 is past the end of the note (1 lines)"
+        );
+        assert_eq!(
+            slice_lines("a\nb\nc", 3, Some(2)).unwrap_err().to_string(),
+            "endLine 2 is before startLine 3"
+        );
     }
 }

@@ -66,7 +66,11 @@ pub struct Split<'a> {
 pub fn split(raw: &str) -> Split<'_> {
     let bom = if raw.starts_with('\u{feff}') { 3 } else { 0 };
     let s = &raw[bom..];
-    let plain = Split { bom, block: None, content: s };
+    let plain = Split {
+        bom,
+        block: None,
+        content: s,
+    };
     if !s.starts_with("---") || s[3..].starts_with('-') {
         return plain;
     }
@@ -74,7 +78,13 @@ pub fn split(raw: &str) -> Split<'_> {
     let rest = &raw[start..];
     // `str.slice(0, str.search(/\r?\n/))`; without a newline, `slice(0, -1)`.
     let language_raw = match rest.find('\n') {
-        Some(nl) => &rest[..if nl > 0 && rest.as_bytes()[nl - 1] == b'\r' { nl - 1 } else { nl }],
+        Some(nl) => {
+            &rest[..if nl > 0 && rest.as_bytes()[nl - 1] == b'\r' {
+                nl - 1
+            } else {
+                nl
+            }]
+        }
         None => rest.char_indices().last().map_or("", |(i, _)| &rest[..i]),
     };
     let language = js::trim(language_raw).to_string();
@@ -91,7 +101,15 @@ pub fn split(raw: &str) -> Split<'_> {
             after.strip_prefix('\n').unwrap_or(after)
         }
     };
-    Split { bom, block: Some(Block { language, matter: start..matter_end, close }), content }
+    Split {
+        bom,
+        block: Some(Block {
+            language,
+            matter: start..matter_end,
+            close,
+        }),
+        content,
+    }
 }
 
 /// A parsed note: its frontmatter data and its body.
@@ -103,7 +121,8 @@ pub struct Parsed<'a> {
     pub split: Split<'a>,
 }
 
-static COMMENT_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^\s*#[^\n]+").expect("valid pattern"));
+static COMMENT_LINE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^\s*#[^\n]+").expect("valid pattern"));
 
 /// `matter(raw)`: the frontmatter as JSON, with the values js-yaml gives
 /// (dates as ISO strings with `.000Z`), and the body.
@@ -114,7 +133,11 @@ static COMMENT_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^\s*#[^
 pub fn parse(raw: &str) -> Result<Parsed<'_>, FrontmatterError> {
     let split = split(raw);
     let Some(block) = &split.block else {
-        return Ok(Parsed { data: Frontmatter::new(), content: split.content, split });
+        return Ok(Parsed {
+            data: Frontmatter::new(),
+            content: split.content,
+            split,
+        });
     };
     let matter = &raw[block.matter.clone()];
     let value = if js::trim(&COMMENT_LINE.replace_all(matter, "")).is_empty() {
@@ -122,21 +145,33 @@ pub fn parse(raw: &str) -> Result<Parsed<'_>, FrontmatterError> {
     } else {
         parse_block(&block.language, matter)?
     };
-    Ok(Parsed { data: to_frontmatter(value), content: split.content, split })
+    Ok(Parsed {
+        data: to_frontmatter(value),
+        content: split.content,
+        split,
+    })
 }
 
 fn parse_block(language: &str, matter: &str) -> Result<Value, FrontmatterError> {
     match language {
-        "" | "yaml" | "yml" => load::load(matter).map(|l| l.value).map_err(FrontmatterError),
+        "" | "yaml" | "yml" => load::load(matter)
+            .map(|l| l.value)
+            .map_err(FrontmatterError),
         "json" => serde_json::from_str(matter).map_err(|e| FrontmatterError(e.to_string())),
-        other => Err(FrontmatterError(format!("gray-matter engine \"{other}\" is not registered"))),
+        other => Err(FrontmatterError(format!(
+            "gray-matter engine \"{other}\" is not registered"
+        ))),
     }
 }
 
 fn to_frontmatter(value: Value) -> Frontmatter {
     match value {
         Value::Object(map) => map,
-        Value::Array(items) => items.into_iter().enumerate().map(|(i, v)| (i.to_string(), v)).collect(),
+        Value::Array(items) => items
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| (i.to_string(), v))
+            .collect(),
         _ => Frontmatter::new(),
     }
 }

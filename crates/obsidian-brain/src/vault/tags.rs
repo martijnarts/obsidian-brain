@@ -15,7 +15,10 @@ use crate::util::js::{is_js_whitespace, locale_compare};
 fn split_tag_value(value: Option<&Value>, out: &mut Vec<String>) {
     match value {
         Some(Value::Array(items)) => items.iter().for_each(|v| split_tag_value(Some(v), out)),
-        Some(Value::String(s)) => out.extend(s.split(|c: char| c == ',' || is_js_whitespace(c)).map(str::to_string)),
+        Some(Value::String(s)) => out.extend(
+            s.split(|c: char| c == ',' || is_js_whitespace(c))
+                .map(str::to_string),
+        ),
         _ => {}
     }
 }
@@ -64,7 +67,13 @@ pub fn count_tags<'a>(
     for fm in frontmatters {
         let mut tags: Vec<String> = Vec::new();
         let mut seen = HashSet::new();
-        for t in note_tags(fm).iter().flat_map(|x| if include_parents { tag_with_parents(x) } else { vec![x.clone()] }) {
+        for t in note_tags(fm).iter().flat_map(|x| {
+            if include_parents {
+                tag_with_parents(x)
+            } else {
+                vec![x.clone()]
+            }
+        }) {
             let key = t.to_lowercase();
             spelling.entry(key.clone()).or_insert(t);
             if seen.insert(key.clone()) {
@@ -93,8 +102,15 @@ pub struct TagCount {
 
 /// Count desc, then name asc.
 pub fn sort_tag_counts(counts: Vec<(String, usize)>) -> Vec<TagCount> {
-    let mut out: Vec<TagCount> = counts.into_iter().map(|(tag, count)| TagCount { tag, count }).collect();
-    out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| locale_compare(&a.tag, &b.tag)));
+    let mut out: Vec<TagCount> = counts
+        .into_iter()
+        .map(|(tag, count)| TagCount { tag, count })
+        .collect();
+    out.sort_by(|a, b| {
+        b.count
+            .cmp(&a.count)
+            .then_with(|| locale_compare(&a.tag, &b.tag))
+    });
     out
 }
 
@@ -115,14 +131,19 @@ mod tests {
     #[test]
     fn note_tags_merges_tags_tag_and_inline_tags_strips_hash_and_dedupes() {
         assert_eq!(
-            sorted(note_tags(&fm(json!({"tags": ["#a", "b/c"], "tag": "a", "inline_tags": ["d", "b/c"]})))),
+            sorted(note_tags(&fm(
+                json!({"tags": ["#a", "b/c"], "tag": "a", "inline_tags": ["d", "b/c"]})
+            ))),
             ["a", "b/c", "d"]
         );
     }
 
     #[test]
     fn note_tags_splits_a_string_value_on_commas_and_whitespace() {
-        assert_eq!(sorted(note_tags(&fm(json!({"tags": "#x, y z"})))), ["x", "y", "z"]);
+        assert_eq!(
+            sorted(note_tags(&fm(json!({"tags": "#x, y z"})))),
+            ["x", "y", "z"]
+        );
     }
 
     #[test]
@@ -148,7 +169,10 @@ mod tests {
 
     #[test]
     fn count_tags_counts_each_note_once_per_tag() {
-        let fms = [fm(json!({"tags": ["a/b", "a/c"]})), fm(json!({"tags": ["a"]}))];
+        let fms = [
+            fm(json!({"tags": ["a/b", "a/c"]})),
+            fm(json!({"tags": ["a"]})),
+        ];
         let as_map = |v: Vec<(String, usize)>| v.into_iter().collect::<HashMap<_, _>>();
         assert_eq!(
             as_map(count_tags(&fms, true)),
@@ -169,10 +193,21 @@ mod tests {
 
     #[test]
     fn treats_tags_that_differ_only_in_case_as_one_tag() {
-        assert_eq!(note_tags(&fm(json!({"tags": ["Project", "project"], "inline_tags": ["PROJECT"]}))), ["Project"]);
+        assert_eq!(
+            note_tags(&fm(
+                json!({"tags": ["Project", "project"], "inline_tags": ["PROJECT"]})
+            )),
+            ["Project"]
+        );
         assert!(tag_matches("Project/Alpha", "project"));
         assert!(tag_matches("project", "#PROJECT"));
-        let fms = [fm(json!({"tags": ["Project"]})), fm(json!({"tags": ["project/a"]}))];
-        assert_eq!(count_tags(&fms, true), vec![("Project".into(), 2), ("project/a".into(), 1)]);
+        let fms = [
+            fm(json!({"tags": ["Project"]})),
+            fm(json!({"tags": ["project/a"]})),
+        ];
+        assert_eq!(
+            count_tags(&fms, true),
+            vec![("Project".into(), 2), ("project/a".into(), 1)]
+        );
     }
 }

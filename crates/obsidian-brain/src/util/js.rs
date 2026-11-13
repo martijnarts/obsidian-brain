@@ -8,20 +8,14 @@ use serde_json::Value;
 pub fn is_js_whitespace(c: char) -> bool {
     matches!(
         c,
-        '\t' | '\n'
-            | '\u{b}'
-            | '\u{c}'
-            | '\r'
-            | ' '
-            | '\u{a0}'
-            | '\u{1680}'
-            | '\u{2000}'..='\u{200a}'
-            | '\u{2028}'
-            | '\u{2029}'
-            | '\u{202f}'
-            | '\u{205f}'
-            | '\u{3000}'
-            | '\u{feff}'
+        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+            ..='\u{200a}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202f}'
+                | '\u{205f}'
+                | '\u{3000}'
+                | '\u{feff}'
     )
 }
 
@@ -78,7 +72,9 @@ pub fn number_to_string(x: f64) -> String {
     }
     // `{:e}` prints the shortest round-trip digits, like `1.2345e19`.
     let sci = format!("{:e}", x.abs());
-    let (mantissa, exp) = sci.split_once('e').expect("LowerExp always has an exponent");
+    let (mantissa, exp) = sci
+        .split_once('e')
+        .expect("LowerExp always has an exponent");
     let exp: i64 = exp.parse().expect("LowerExp exponent is an integer");
     let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
     let k = digits.len() as i64;
@@ -163,7 +159,11 @@ fn write_json(out: &mut String, v: &Value) {
                 out.push_str(&i.to_string());
             } else {
                 let x = as_f64(n);
-                out.push_str(&if x.is_finite() { number_to_string(x) } else { "null".into() });
+                out.push_str(&if x.is_finite() {
+                    number_to_string(x)
+                } else {
+                    "null".into()
+                });
             }
         }
         Value::String(s) => out.push_str(&serde_json::to_string(s).expect("strings serialize")),
@@ -239,7 +239,8 @@ pub fn js_object_order(map: &mut serde_json::Map<String, Value>) {
         return;
     }
     let entries: Vec<(String, Value)> = std::mem::take(map).into_iter().collect();
-    let (mut index, rest): (Vec<_>, Vec<_>) = entries.into_iter().partition(|(k, _)| is_array_index(k));
+    let (mut index, rest): (Vec<_>, Vec<_>) =
+        entries.into_iter().partition(|(k, _)| is_array_index(k));
     index.sort_by_key(|(k, _)| k.parse::<u64>().unwrap_or(0));
     map.extend(index);
     map.extend(rest);
@@ -276,18 +277,27 @@ mod tests {
         assert_eq!(number_value(1.0), json!(1));
         assert_eq!(number_value(-0.0), json!(0));
         assert_eq!(number_value(f64::NAN), Value::Null);
-        assert_eq!(json_stringify(&number_value(12345678901234567890.0)), "12345678901234567000");
+        assert_eq!(
+            json_stringify(&number_value(12345678901234567890.0)),
+            "12345678901234567000"
+        );
         assert_eq!(number_value(1.5), json!(1.5));
     }
 
     #[test]
     fn json_stringify_is_compact() {
-        assert_eq!(json_stringify(&json!({"a": [1, 2.5, null], "b": "x\"\u{0}"})), r#"{"a":[1,2.5,null],"b":"x\"\u0000"}"#);
+        assert_eq!(
+            json_stringify(&json!({"a": [1, 2.5, null], "b": "x\"\u{0}"})),
+            r#"{"a":[1,2.5,null],"b":"x\"\u0000"}"#
+        );
     }
 
     #[test]
     fn object_order_puts_index_keys_first() {
-        let mut m = json!({"b": 1, "2": 2, "a": 3, "1": 4, "01": 5}).as_object().unwrap().clone();
+        let mut m = json!({"b": 1, "2": 2, "a": 3, "1": 4, "01": 5})
+            .as_object()
+            .unwrap()
+            .clone();
         js_object_order(&mut m);
         assert_eq!(m.keys().collect::<Vec<_>>(), ["1", "2", "b", "a", "01"]);
     }
