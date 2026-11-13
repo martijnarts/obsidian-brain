@@ -34,8 +34,8 @@ pub async fn serve(
         config,
     );
     let router = axum::Router::new()
-        .nest_service("/mcp", service.clone())
-        .route_service("/mcp/", service);
+        // A nested service answers both `/mcp` and `/mcp/`.
+        .nest_service("/mcp", service);
     let listener = tokio::net::TcpListener::bind(opts.listen).await?;
     tracing::info!(addr = %listener.local_addr()?, "serving MCP over HTTP at /mcp");
     axum::serve(listener, router)

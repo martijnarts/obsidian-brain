@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 const BIN: &str = env!("CARGO_BIN_EXE_obsidian-brain");
 
 fn fixture_vault() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures/vault")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/vault")
 }
 
 fn command(data_dir: &Path) -> Command {
@@ -354,4 +354,72 @@ fn no_catchup_skips_the_startup_catch_up_of_a_non_empty_index() {
     }
     drop(client.stdin.take());
     wait_exit(&mut client.child, Duration::from_secs(10));
+}
+
+/// One raw HTTP/1.1 POST; returns the status code and the body.
+fn http_post(port: u16, path: &str, host: &str, body: &str) -> (u16, String) {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    write!(
+        stream,
+        "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n\
+         Accept: application/json, text/event-stream\r\nMCP-Protocol-Version: 2025-06-18\r\n\
+         Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    let status = response.split(' ').nth(1).unwrap().parse().unwrap();
+    let body = response
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string())
+        .unwrap_or_default();
+    (status, body)
+}
+
+#[test]
+fn http_server_answers_at_mcp_and_refuses_foreign_hosts() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("note.md"), "# Note\n\nhello\n").unwrap();
+    let spec = format!("notes={}", dir.path().display());
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let listen = format!("127.0.0.1:{port}");
+    let mut child = command(&dir.path().join("data"))
+        .args([
+            "server",
+            "--transport",
+            "http",
+            "--listen",
+            &listen,
+            "--vault",
+            &spec,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+        assert!(Instant::now() < deadline, "the server never listened");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let list = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_vaults","arguments":{}}}"#;
+    for path in ["/mcp", "/mcp/"] {
+        let (status, body) = http_post(port, path, &listen, list);
+        assert_eq!(status, 200, "{path}: {body}");
+        assert!(body.contains(r#"\"name\": \"notes\""#), "{path}: {body}");
+    }
+    let (status, _) = http_post(port, "/mcp", "evil.example", list);
+    assert_eq!(status, 403, "a foreign Host header");
+    let (status, _) = http_post(port, "/other", &listen, list);
+    assert_eq!(status, 404);
+    sigterm(&child);
+    let status = wait_exit(&mut child, Duration::from_secs(10));
+    assert!(status.success());
 }
