@@ -45,7 +45,8 @@ async fn indexes_added_changed_and_removed_notes() {
     write(vault, ".obsidian/skip.md", "# Skip\n");
     write(vault, "image.txt", "not markdown");
     assert!(wait_until(&ctx, "Sub/note.md", true).await, "add");
-    assert!(has(&ctx, "_stub/Other.md"));
+    // The stub lands just after the note, as in the TS indexer.
+    assert!(wait_until(&ctx, "_stub/Other.md", true).await, "stub");
 
     write(vault, "Fresh/Deep/new.md", "# New\n");
     assert!(
