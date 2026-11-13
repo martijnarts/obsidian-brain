@@ -21,8 +21,3 @@ pub fn specs() -> Vec<ToolSpec> {
         query_notes::spec(),
     ]
 }
-
-/// JS `a.sort()` on strings: by UTF-16 code units.
-fn utf16_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    a.encode_utf16().cmp(b.encode_utf16())
-}

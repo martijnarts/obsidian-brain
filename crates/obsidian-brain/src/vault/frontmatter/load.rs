@@ -591,40 +591,12 @@ fn date_utc(year: i64, month: i64, day: i64, h: i64, mi: i64, s: i64, ms: i64) -
     days * 86_400_000 + h * 3_600_000 + mi * 60_000 + s * 1000 + ms
 }
 
-/// `Date.prototype.toISOString`.
-fn iso_string(ms: i64) -> String {
-    let days = ms.div_euclid(86_400_000);
-    let rem = ms.rem_euclid(86_400_000);
-    // civil_from_days
-    let z = days + 719468;
-    let era = z.div_euclid(146097);
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
-    let year = if (0..=9999).contains(&y) {
-        format!("{y:04}")
-    } else {
-        format!("{}{:06}", if y < 0 { '-' } else { '+' }, y.abs())
-    };
-    format!(
-        "{year}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:03}Z",
-        rem / 3_600_000,
-        rem / 60_000 % 60,
-        rem / 1000 % 60,
-        rem % 1000
-    )
-}
-
 /// js-yaml's timestamp type, as the ISO string `JSON.stringify` makes of
 /// the `Date`.
 fn resolve_timestamp(data: &str) -> Option<String> {
     let num = |s: Option<regex::Match>| s.map_or(0, |m| m.as_str().parse::<i64>().unwrap_or(0));
     if let Some(m) = DATE.captures(data) {
-        return Some(iso_string(date_utc(
+        return Some(js::iso_string(date_utc(
             num(m.get(1)),
             num(m.get(2)) - 1,
             num(m.get(3)),
@@ -655,7 +627,7 @@ fn resolve_timestamp(data: &str) -> Option<String> {
         let delta = (num(m.get(10)) * 60 + num(m.get(11))) * 60_000;
         ms -= if sign.as_str() == "-" { -delta } else { delta };
     }
-    Some(iso_string(ms))
+    Some(js::iso_string(ms))
 }
 
 /// A plain scalar with js-yaml's implicit types: null, bool, int, float,

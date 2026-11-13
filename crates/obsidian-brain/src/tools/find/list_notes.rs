@@ -4,11 +4,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::utf16_cmp;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::{all_node_ids, get_node, is_stub};
 use crate::store::sync::all_sync_mtimes;
 use crate::util::js::locale_compare;
+use crate::util::js::{self, utf16_cmp};
 use crate::vault::tags::{note_tags, tag_matches};
 
 const DESCRIPTION: &str = "List notes in the vault. Optionally filter by directory prefix or by tag (frontmatter or inline; `a` also matches `a/b`). Pass `sortBy: \"mtime\"` for the most recently modified notes first. Pass `includeStubs: false` to exclude unresolved wiki-link targets (nodes with `frontmatter._stub: true`) and see only real on-disk notes.";
@@ -119,7 +119,7 @@ fn list_notes(c: &rusqlite::Connection, args: Args) -> anyhow::Result<Value> {
             .take(cap)
             .map(|(mut r, ms)| {
                 if ms > 0.0
-                    && let Some(iso) = iso_from_ms(ms)
+                    && let Some(iso) = js::iso_from_ms(ms)
                 {
                     r.insert("mtime".into(), iso.into());
                 }
@@ -127,10 +127,4 @@ fn list_notes(c: &rusqlite::Connection, args: Args) -> anyhow::Result<Value> {
             })
             .collect(),
     ))
-}
-
-/// `new Date(ms).toISOString()`; the fraction of a millisecond is dropped.
-pub(super) fn iso_from_ms(ms: f64) -> Option<String> {
-    let dt = chrono::DateTime::from_timestamp_millis(ms.trunc() as i64)?;
-    Some(dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
 }

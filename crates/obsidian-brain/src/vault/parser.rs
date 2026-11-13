@@ -16,6 +16,7 @@ use super::wiki_links::{
 use crate::types::{Frontmatter, ParsedEdge, ParsedNode};
 use crate::util::errors::node_fs_error_message;
 use crate::util::js;
+use crate::util::js::basename_md;
 
 const EXCLUDED_DIRS: [&str; 3] = [".obsidian", "_FileOrganizer2000", "attachments"];
 
@@ -42,15 +43,6 @@ pub struct ParsedFile {
     pub edges: Vec<ParsedEdge>,
     /// Unique, in first-seen order.
     pub stub_ids: Vec<String>,
-}
-
-/// `basename(relPath, '.md')`.
-fn basename_md(rel_path: &str) -> &str {
-    let base = rel_path.rsplit('/').next().unwrap_or(rel_path);
-    match base.strip_suffix(".md") {
-        Some(stem) if !stem.is_empty() => stem,
-        _ => base,
-    }
 }
 
 /// The node title: the frontmatter `title` (any non-null value, as its JS

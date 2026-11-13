@@ -7,11 +7,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::all_notes;
 use crate::store::sync::all_sync_mtimes;
 use crate::util::errors::node_fs_error_message;
+use crate::util::js;
 use crate::util::js::locale_compare;
 use crate::vault::tags::{count_tags, sort_tag_counts};
 
@@ -89,7 +89,7 @@ pub fn spec() -> ToolSpec {
             .into_iter()
             .take(args.recent.unwrap_or(10) as usize)
             .map(|n| {
-                json!({ "id": n.id, "title": n.title, "mtime": args::iso_from_ms(mtime(&n.id)) })
+                json!({ "id": n.id, "title": n.title, "mtime": js::iso_from_ms(mtime(&n.id)).unwrap_or_default() })
             })
             .collect();
 

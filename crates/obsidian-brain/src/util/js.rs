@@ -354,6 +354,77 @@ pub fn utf16_slice(s: &str, start: usize, end: usize) -> String {
     String::from_utf16_lossy(&units[start..end])
 }
 
+/// `new Date(ms).toISOString()` for a whole number of milliseconds;
+/// years outside 0 to 9999 get a sign and six digits.
+pub fn iso_string(ms: i64) -> String {
+    let days = ms.div_euclid(86_400_000);
+    let rem = ms.rem_euclid(86_400_000);
+    // civil_from_days
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    let year = if (0..=9999).contains(&y) {
+        format!("{y:04}")
+    } else {
+        format!("{}{:06}", if y < 0 { '-' } else { '+' }, y.abs())
+    };
+    format!(
+        "{year}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rem / 3_600_000,
+        rem / 60_000 % 60,
+        rem / 1000 % 60,
+        rem % 1000
+    )
+}
+
+/// `new Date(ms).toISOString()`; the fraction of a millisecond is dropped.
+/// `None` where JS throws: NaN and times past the `Date` range.
+pub fn iso_from_ms(ms: f64) -> Option<String> {
+    (ms.abs() <= 8.64e15).then(|| iso_string(ms.trunc() as i64))
+}
+
+/// `date.toISOString()` for a file time, as `fs.Stats` gives it.
+pub fn iso_time(t: std::time::SystemTime) -> String {
+    let ms = match t.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs_f64() * 1000.0,
+        Err(e) => -(e.duration().as_secs_f64() * 1000.0),
+    };
+    iso_from_ms(ms).unwrap_or_default()
+}
+
+/// JS `<` on strings, and the default `sort()` order: by UTF-16 code units.
+pub fn utf16_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
+/// `s.slice(0, max)` on UTF-16 units, as a `&str`: a cut inside a
+/// surrogate pair drops the whole character.
+pub fn utf16_prefix(s: &str, max: usize) -> &str {
+    &s[..utf16_to_byte(s, max)]
+}
+
+/// `path.posix.basename(p, '.md')`.
+pub fn basename_md(p: &str) -> &str {
+    basename(p, ".md")
+}
+
+/// `path.posix.basename(p, ext)`: the last segment, trailing slashes
+/// ignored, without `ext` unless `ext` is all of it.
+pub fn basename<'a>(p: &'a str, ext: &str) -> &'a str {
+    let trimmed = p.trim_end_matches('/');
+    let base = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    match base.strip_suffix(ext) {
+        Some(stem) if !stem.is_empty() && !ext.is_empty() => stem,
+        _ => base,
+    }
+}
+
 /// The process environment as a map, the shape of `process.env`.
 pub fn process_env() -> HashMap<String, String> {
     std::env::vars().collect()
@@ -534,6 +605,30 @@ mod tests {
         assert_eq!(byte_to_utf16(s, 5), 3);
         assert_eq!(trim("\u{feff} x \u{a0}"), "x");
         assert_eq!(trim("\u{85}x"), "\u{85}x");
+    }
+
+    #[test]
+    fn iso_strings_match_date_to_iso_string() {
+        assert_eq!(iso_string(0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(iso_string(-1), "1969-12-31T23:59:59.999Z");
+        assert_eq!(iso_string(253402300800000), "+010000-01-01T00:00:00.000Z");
+        assert_eq!(
+            iso_from_ms(1.9).as_deref(),
+            Some("1970-01-01T00:00:00.001Z")
+        );
+        assert_eq!(iso_from_ms(f64::NAN), None);
+        assert_eq!(iso_from_ms(8.64e15 + 1.0), None);
+    }
+
+    #[test]
+    fn basename_is_node_posix_basename() {
+        assert_eq!(basename("a/b.md", ".md"), "b");
+        assert_eq!(basename("b.md", ".md"), "b");
+        assert_eq!(basename("a/.md", ".md"), ".md");
+        assert_eq!(basename("a/b/", ""), "b");
+        assert_eq!(basename("a\\b.md", ".md"), "a\\b");
+        assert_eq!(utf16_prefix("a🎉b", 2), "a");
+        assert_eq!(utf16_prefix("a🎉b", 3), "a🎉");
     }
 
     #[test]

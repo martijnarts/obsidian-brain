@@ -7,9 +7,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::utf16_cmp;
 use crate::mcp::tool::ToolSpec;
 use crate::util::js;
+use crate::util::js::utf16_cmp;
 use crate::util::safe_regex::{UserRegex, compile_user_regex};
 use crate::vault::parser::collect_markdown_files;
 use crate::vault::vault_path::{read_utf8, resolve_folder};

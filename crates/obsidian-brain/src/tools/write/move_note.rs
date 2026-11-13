@@ -10,7 +10,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::basename_md;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::resolve_single_note;
 use crate::store::edges::get_edges_by_target;
@@ -19,6 +18,7 @@ use crate::store::rename::rename_node;
 use crate::store::sync::set_sync_mtime;
 use crate::tools::support::run_background_reindex;
 use crate::util::errors::node_fs_error_message;
+use crate::util::js::basename_md;
 use crate::vault::mover::move_note;
 use crate::vault::vault_path::{read_utf8, resolve_vault_path, write_file_atomic};
 use crate::vault::wiki_links::rewrite_wiki_links;

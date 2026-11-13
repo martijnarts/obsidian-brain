@@ -11,6 +11,7 @@ use crate::resolve::single_note::resolve_single_note;
 use crate::store::nodes::all_node_ids;
 use crate::tools::support::background_reindex::run_background_reindex;
 use crate::tools::support::patch::create_patch;
+use crate::util::js::basename_md;
 use crate::vault::block_id::{
     BLOCK_ID, all_block_ids, attach_block_id, existing_block_id, find_heading_lines,
     generate_block_id, locate_block,
@@ -56,15 +57,6 @@ fn heading_target(lines: &[&str], heading: &str, path: &str) -> Result<usize> {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-    }
-}
-
-/// `path.posix.basename(path, ".md")`.
-fn basename_md(path: &str) -> &str {
-    let base = path.rsplit('/').next().unwrap_or(path);
-    match base.strip_suffix(".md") {
-        Some(stem) if !stem.is_empty() => stem,
-        _ => base,
     }
 }
 

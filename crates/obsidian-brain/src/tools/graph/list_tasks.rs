@@ -10,6 +10,7 @@ use serde_json::{Map, Value, json};
 
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
+use crate::util::js;
 use crate::vault::parser::collect_markdown_files;
 use crate::vault::tasks::{TaskState, scan_tasks};
 use crate::vault::vault_path::{normalize_folder, read_note_file, resolve_folder};
@@ -40,11 +41,6 @@ struct Args {
     offset: Option<u64>,
 }
 
-/// JS's default sort order: by UTF-16 code units.
-fn utf16_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    a.encode_utf16().cmp(b.encode_utf16())
-}
-
 fn notes_under(vault: &Path, folder: &str) -> Result<Vec<String>> {
     let rel = normalize_folder(Some(folder))?;
     if rel.split('/').any(|seg| seg.starts_with('.')) {
@@ -52,7 +48,7 @@ fn notes_under(vault: &Path, folder: &str) -> Result<Vec<String>> {
     }
     resolve_folder(vault, Some(folder))?;
     let mut paths = collect_markdown_files(vault, &rel)?;
-    paths.sort_by(|a, b| utf16_cmp(a, b));
+    paths.sort_by(|a, b| js::utf16_cmp(a, b));
     Ok(paths)
 }
 

@@ -3,7 +3,6 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::Path;
-use std::time::UNIX_EPOCH;
 
 use anyhow::bail;
 use schemars::JsonSchema;
@@ -11,7 +10,6 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use super::json_logic::{self, JsVal};
-use super::list_notes::iso_from_ms;
 use crate::mcp::tool::ToolSpec;
 use crate::types::Frontmatter;
 use crate::util::js;
@@ -180,7 +178,7 @@ fn query(
             title,
             tags: note_tags(&parsed),
             frontmatter,
-            mtime: mtime_iso(&st).unwrap_or_default(),
+            mtime: st.modified().map(js::iso_time).unwrap_or_default(),
             size: st.len(),
             path: id,
         };
@@ -242,16 +240,6 @@ fn query(
     }
     out.insert("results".into(), Value::Array(results));
     Ok(Value::Object(out))
-}
-
-/// `stat.mtime.toISOString()`.
-fn mtime_iso(st: &std::fs::Metadata) -> Option<String> {
-    let modified = st.modified().ok()?;
-    let ms = match modified.duration_since(UNIX_EPOCH) {
-        Ok(d) => d.as_secs_f64() * 1000.0,
-        Err(e) => -(e.duration().as_secs_f64() * 1000.0),
-    };
-    iso_from_ms(ms)
 }
 
 fn sort_value(rec: &NoteRecord, field: &str) -> Option<Value> {

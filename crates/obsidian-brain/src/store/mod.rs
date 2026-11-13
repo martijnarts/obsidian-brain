@@ -137,62 +137,9 @@ pub(crate) fn vector_blob(vector: &[f32]) -> Vec<u8> {
     out
 }
 
-/// Truncate to `max` UTF-16 code units, as JS `slice(0, max)` does. A cut
-/// inside a surrogate pair drops the whole character.
-pub(crate) fn utf16_prefix(s: &str, max: usize) -> &str {
-    let mut units = 0;
-    for (i, c) in s.char_indices() {
-        units += c.len_utf16();
-        if units > max {
-            return &s[..i];
-        }
-    }
-    s
-}
-
-pub(crate) fn utf16_len(s: &str) -> usize {
-    s.chars().map(char::len_utf16).sum()
-}
-
-/// JS `String.prototype.trim` whitespace.
-pub(crate) fn js_trim(s: &str) -> &str {
-    s.trim_matches(is_js_space)
-}
-
-/// JS `\s` and the `trim` set: WhiteSpace plus LineTerminator.
-pub(crate) fn is_js_space(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-    )
-}
-
-/// Milliseconds since the epoch, as `Date.now()`.
-pub(crate) fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn utf16_prefix_counts_code_units() {
-        assert_eq!(utf16_prefix("abc", 2), "ab");
-        assert_eq!(utf16_prefix("a🎉b", 2), "a");
-        assert_eq!(utf16_prefix("a🎉b", 3), "a🎉");
-        assert_eq!(utf16_len("a🎉b"), 4);
-    }
 
     #[tokio::test]
     async fn run_executes_on_a_blocking_thread() {

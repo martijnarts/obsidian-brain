@@ -3,7 +3,8 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Result, now_ms};
+use super::Result;
+use crate::util::js::now_ms;
 
 /// The value of `key`, or `None` if it was never written.
 pub fn get_metadata(conn: &Connection, key: &str) -> Result<Option<String>> {

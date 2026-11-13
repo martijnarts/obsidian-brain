@@ -16,13 +16,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::basename_md;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::{migrate_stub_to_real, upsert_node};
 use crate::tools::support::run_background_reindex;
 use crate::types::ParsedNode;
 use crate::util::errors::node_fs_error_message;
 use crate::util::js;
+use crate::util::js::basename_md;
 use crate::vault::frontmatter::{self, FrontmatterOp, edit_frontmatter};
 use crate::vault::parser::node_title;
 use crate::vault::templates::{

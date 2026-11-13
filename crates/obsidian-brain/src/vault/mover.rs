@@ -19,6 +19,7 @@ use crate::store::embeddings::delete_embedding;
 use crate::store::nodes::{delete_node, prune_orphan_stubs};
 use crate::store::sync::delete_sync_path;
 use crate::util::errors::node_fs_error_message;
+use crate::util::js::basename_md;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,15 +100,6 @@ pub fn move_note(vault_path: &Path, source_rel: &str, destination_rel: &str) -> 
         old_path: source_rel.to_string(),
         new_path: dest.rel,
     })
-}
-
-/// `path.basename(p, '.md')`.
-fn basename_md(p: &str) -> &str {
-    let base = p.rsplit(['/', '\\']).next().unwrap_or(p);
-    match base.strip_suffix(".md") {
-        Some(stem) if !stem.is_empty() => stem,
-        _ => base,
-    }
 }
 
 /// If the moved file's frontmatter `title` equals the old basename, set it

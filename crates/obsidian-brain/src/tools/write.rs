@@ -22,12 +22,3 @@ pub fn specs() -> Vec<ToolSpec> {
         delete_note::spec(),
     ]
 }
-
-/// `path.basename(p, '.md')` on `/`-separated paths.
-fn basename_md(p: &str) -> &str {
-    let base = p.rsplit('/').next().unwrap_or(p);
-    match base.strip_suffix(".md") {
-        Some(stem) if !stem.is_empty() => stem,
-        _ => base,
-    }
-}

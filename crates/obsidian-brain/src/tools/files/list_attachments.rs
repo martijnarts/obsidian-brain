@@ -16,7 +16,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::util::errors::node_fs_error_message;
 use crate::util::js;
@@ -62,7 +61,7 @@ pub fn spec() -> ToolSpec {
         // the listed folder: a bare filename may match a file elsewhere.
         let mut all = Vec::new();
         collect_attachments(&ctx.config.vault_path, "", &mut all)?;
-        all.sort_by(|a, b| args::utf16_cmp(&a.path, &b.path));
+        all.sort_by(|a, b| js::utf16_cmp(&a.path, &b.path));
         let paths: Vec<String> = all.iter().map(|a| a.path.clone()).collect();
         let counts = ctx.db.with(|conn| count_references(conn, &paths))?;
 
@@ -142,7 +141,7 @@ fn count_references(conn: &Connection, paths: &[String]) -> Result<HashMap<Strin
     for p in paths {
         by_path.insert(p.to_lowercase(), p.clone());
         by_name
-            .entry(basename(p).to_lowercase())
+            .entry(js::basename(p, "").to_lowercase())
             .or_default()
             .push(p.clone());
     }
@@ -276,7 +275,7 @@ fn resolve_attachment(
 
     let suffix = format!("/{t}");
     let candidates: Vec<&String> = by_name
-        .get(&basename(&t).to_lowercase())
+        .get(&js::basename(&t, "").to_lowercase())
         .map(|list| {
             list.iter()
                 .filter(|p| !t.contains('/') || p.to_lowercase().ends_with(&suffix))
@@ -338,15 +337,6 @@ fn dirname(p: &str) -> &str {
     }
 }
 
-/// `path.posix.basename`.
-fn basename(p: &str) -> &str {
-    let trimmed = p.trim_end_matches('/');
-    match trimmed.rfind('/') {
-        Some(i) => &trimmed[i + 1..],
-        None => trimmed,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,8 +350,8 @@ mod tests {
         assert_eq!(posix_normalize(""), ".");
         assert_eq!(dirname("a/b/c.md"), "a/b");
         assert_eq!(dirname("c.md"), ".");
-        assert_eq!(basename("a/b.png"), "b.png");
-        assert_eq!(basename("b.png"), "b.png");
+        assert_eq!(js::basename("a/b.png", ""), "b.png");
+        assert_eq!(js::basename("b.png", ""), "b.png");
     }
 
     #[test]

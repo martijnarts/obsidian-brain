@@ -1,7 +1,6 @@
 //! The file tools: batch and partial reads, file and folder management,
 //! attachments, and the vault-wide views of tags, properties and bookmarks.
 
-mod args;
 mod create_attachment;
 mod create_folder;
 mod delete_folder;
