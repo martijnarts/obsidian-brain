@@ -15,7 +15,7 @@ pub struct ParsedNode {
     pub id: String,
     /// From the frontmatter `title`, else the file name without extension.
     pub title: String,
-    /// The full markdown, frontmatter included.
+    /// The markdown body, without the frontmatter block.
     pub content: String,
     pub frontmatter: Frontmatter,
 }

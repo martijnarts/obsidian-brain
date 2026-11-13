@@ -145,10 +145,7 @@ pub fn build_chunk_embedding_text(chunk: &Chunk) -> String {
     }
 }
 
-/// The stable chunk id. Node ids are paths, which never contain `::`.
-pub fn chunk_id(node_id: &str, chunk_index: usize) -> String {
-    format!("{node_id}::{chunk_index}")
-}
+pub use crate::store::chunks::chunk_id;
 
 fn strip_frontmatter(raw: &str) -> &str {
     // Only a document that starts with `---` has frontmatter; a later `---`
