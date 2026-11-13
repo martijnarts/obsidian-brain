@@ -36,3 +36,6 @@ website/.venv/
 .venv-build-seed/
 __pycache__/
 *.pyc
+
+# Rust
+/target

@@ -1,0 +1,1994 @@
+{
+  "tools": [
+    {
+      "name": "list_vaults",
+      "description": "List the vaults this server serves. Every other tool takes one of these names as its required `vault` argument.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search",
+      "description": "Search vault notes. `hybrid` (default) fuses semantic + full-text ranks via Reciprocal Rank Fusion — no tuning needed, best for most queries. `semantic` is concept-only (better for abstract/paraphrased queries). `fulltext` is literal-token (better when you know the exact phrase exists). Semantic search is chunk-level — results are deduped to one-per-note by default. Set `unique: \"chunks\"` to return chunk-level hits with `chunkHeading`, `chunkStartLine`, and `chunkExcerpt`; supported by `semantic` and `hybrid` modes. `fulltext` is note-level only and ignores `unique` (full-text chunk search is not yet supported). Response is wrapped as `{data, context}` where `context.next_actions` suggests the agent's most useful follow-up call (read top hit, explore connections, or retry with broader phrasing on zero hits).",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "query": {
+            "type": "string",
+            "description": "Natural-language query or keyword phrase."
+          },
+          "mode": {
+            "description": "Default `hybrid`. Semantic-only queries chunk vectors; fulltext-only queries FTS5.",
+            "type": "string",
+            "enum": [
+              "hybrid",
+              "semantic",
+              "fulltext"
+            ]
+          },
+          "limit": {
+            "description": "Max results to return. Default 20.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unique": {
+            "description": "Default `\"notes\"` (one row per note). Set `\"chunks\"` for raw chunk rows with chunkHeading, chunkStartLine, chunkExcerpt.",
+            "type": "string",
+            "enum": [
+              "notes",
+              "chunks"
+            ]
+          }
+        },
+        "required": [
+          "vault",
+          "query"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_note",
+      "description": "Read a note's content. Brief mode (default) returns title + metadata + linked-note titles; full mode returns full content + edge context. Full mode also reports `truncated: true` when the body exceeded `maxContentLength` (default 2000 chars) and was sliced. Response is wrapped as `{data, context}` where `context.next_actions` suggests follow-ups like creating missing linked notes or exploring outgoing connections.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path, filename, or fuzzy match for the note to read."
+          },
+          "mode": {
+            "description": "Default `\"brief\"` (metadata + linked-note titles). `\"full\"` adds the body + edge context.",
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ]
+          },
+          "maxContentLength": {
+            "description": "In `full` mode, max body chars before truncation. Default 2000.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault",
+          "name"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_notes",
+      "description": "List notes in the vault. Optionally filter by directory prefix or by tag (frontmatter or inline; `a` also matches `a/b`). Pass `sortBy: \"mtime\"` for the most recently modified notes first. Pass `includeStubs: false` to exclude unresolved wiki-link targets (nodes with `frontmatter._stub: true`) and see only real on-disk notes.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "directory": {
+            "description": "Restrict to notes under this subdirectory prefix.",
+            "type": "string"
+          },
+          "tag": {
+            "description": "Restrict to notes with this tag or a tag nested below it.",
+            "type": "string"
+          },
+          "sortBy": {
+            "description": "Default `path`. `mtime` sorts newest first and adds `mtime` to each result.",
+            "type": "string",
+            "enum": [
+              "path",
+              "mtime"
+            ]
+          },
+          "limit": {
+            "description": "Max results to return. Default 100.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "includeStubs": {
+            "description": "Default `true`. Set `false` to exclude unresolved wiki-link targets.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_notes_by_name",
+      "description": "Find notes by a half-remembered name, like Obsidian's quick switcher: fuzzy, case-insensitive match against the filename, title and frontmatter `aliases`, best first. Use `grep_vault` or `search` to look inside note bodies instead.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name fragment. Typos and non-contiguous characters still match."
+          },
+          "folder": {
+            "description": "Only notes under this vault-relative folder.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Max results (1-100). Default 20.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "vault",
+          "query"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "grep_vault",
+      "description": "Search the text of every note file on disk, frontmatter included, for a literal string or a JavaScript regex, line by line like grep. Returns matching lines with 1-based line numbers and surrounding lines; `truncated: true` means the scan stopped early at the file limit or the 2 s time cap.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Literal text, or a regex source without slashes when `regex` is true."
+          },
+          "regex": {
+            "description": "Treat `query` as a JavaScript regex. Default false.",
+            "type": "boolean"
+          },
+          "caseSensitive": {
+            "description": "Default false.",
+            "type": "boolean"
+          },
+          "folder": {
+            "description": "Only notes under this vault-relative folder.",
+            "type": "string"
+          },
+          "contextLines": {
+            "description": "Lines of context before and after each match. Default 1.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "limit": {
+            "description": "Max files with matches to return. Default 20.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "maxMatchesPerFile": {
+            "description": "Max matching lines per file. Default 5.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "vault",
+          "query"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "query_notes",
+      "description": "Filter notes by metadata with a JsonLogic `filter`; the headless replacement for Dataview queries. Each note is `{path, folder, name, title, tags, frontmatter, mtime, size}`: `tags` merges frontmatter and inline tags without `#`, `mtime` is ISO 8601, and `{\"var\": \"frontmatter.status\"}` reads a property. The extra operator `has_tag` matches a tag case-insensitively, nested tags included. Example: `{\"and\": [{\"has_tag\": [{\"var\": \"tags\"}, \"book\"]}, {\">=\": [{\"var\": \"frontmatter.rating\"}, 4]}]}`.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "filter": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "JsonLogic expression; a note matches when it is truthy. `{\"==\": [1, 1]}` matches every note."
+          },
+          "fields": {
+            "description": "Frontmatter keys to return. Default all.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "description": "Default: by path, ascending.",
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "`path`, `title`, `mtime` or `frontmatter.<key>`."
+              },
+              "order": {
+                "description": "Default `asc`.",
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "field"
+            ]
+          },
+          "limit": {
+            "description": "Max results (1-500). Default 50.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "vault",
+          "filter"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_connections",
+      "description": "Find notes linked to (from or to) a given note, up to N hops. Optionally return the full subgraph instead of a flat list. Response is wrapped as `{data, context}` where `context.next_actions` suggests follow-ups like tracing a path to the furthest neighbour via `find_path_between`. Broken-wikilink stub neighbours are excluded by default; pass `includeStubs: true` to include them.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Starting note (path or fuzzy match)."
+          },
+          "depth": {
+            "description": "Number of hops to traverse. Default 1, max 3.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "returnSubgraph": {
+            "description": "Return all edges in the neighborhood as a full subgraph instead of a flat list.",
+            "type": "boolean"
+          },
+          "includeStubs": {
+            "description": "Default `false`. Set `true` to include broken-wikilink stub neighbours (`frontmatter._stub: true`).",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "name"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_path_between",
+      "description": "Find link paths between two notes. Returns all simple paths up to maxDepth edges, optionally including their shared neighbors. Broken-wikilink stub nodes are excluded by default — they are degree-1 dead ends in the undirected graph and will block legitimate paths if left in. Pass `includeStubs: true` to include them.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "from": {
+            "type": "string",
+            "description": "Source note (path or fuzzy match)."
+          },
+          "to": {
+            "type": "string",
+            "description": "Target note (path or fuzzy match)."
+          },
+          "maxDepth": {
+            "description": "Maximum path length in hops. Default 3.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "includeCommon": {
+            "description": "Also return notes that both `from` and `to` link to (shared neighbors).",
+            "type": "boolean"
+          },
+          "includeStubs": {
+            "description": "Default `false`. Set `true` to include broken-wikilink stub nodes (`frontmatter._stub: true`) in the path search.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "from",
+          "to"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "rank_notes",
+      "description": "Rank notes by importance: 'influence' (densely-connected hubs), 'bridging' (notes that connect otherwise-separate topic clusters), or both. Credibility guards (I): by default, `influence` excludes notes with fewer than `minIncomingLinks: 2` incoming edges — this filters out random-orphan noise that makes PageRank feel meaningless on personal vaults. Pass `minIncomingLinks: 0` to see the unfiltered ranking. Bridging scores are normalized by graph size (divided by n*(n-1)/2) so values compare across vaults of different sizes — a bridging score of 0.5 means the same thing in any vault. Broken-wikilink stub targets are excluded by default; pass `includeStubs: true` to include them.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "metric": {
+            "description": "Ranking metric. Default `\"both\"`. `\"influence\"` = PageRank; `\"bridging\"` = betweenness centrality.",
+            "type": "string",
+            "enum": [
+              "influence",
+              "bridging",
+              "both"
+            ]
+          },
+          "limit": {
+            "description": "Max results to return. Default 20.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "includeStubs": {
+            "default": false,
+            "description": "Default `false`. Set `true` to include unresolved wiki-link target stubs (`frontmatter._stub: true`) in the ranked set. With stubs in, popular link targets dominate eigenvector-style centrality even when they have no real content behind them.",
+            "type": "boolean"
+          },
+          "minIncomingLinks": {
+            "default": 2,
+            "description": "Minimum incoming links for influence ranking. Default 2. Pass 0 to see unfiltered PageRank.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_note",
+      "description": "Create a new note in the vault with a title, body, and optional YAML frontmatter. The new note is indexed immediately so semantic search and graph tools can find it. Auto-injects a `title:` field into frontmatter matching the note title unless frontmatter already has one.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Note title. Used as the filename base and auto-injected into frontmatter."
+          },
+          "content": {
+            "type": "string",
+            "description": "Markdown body (do not include frontmatter here)."
+          },
+          "directory": {
+            "description": "Vault-relative subdirectory to create the note in.",
+            "type": "string"
+          },
+          "frontmatter": {
+            "description": "YAML frontmatter key/value map. `title` is auto-injected unless explicitly set.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "vault",
+          "title",
+          "content"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_note_from_template",
+      "description": "Create a note from an Obsidian core Templates template, filling `{{title}}`, `{{date}}`, `{{time}}`, `{{date:FORMAT}}`, `{{time:FORMAT}}` and any `variables`. Templater `<% %>` code is not run and stays as written. Fails if the note exists.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "template": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Template name in the templates folder, or a vault-relative path. `.md` is optional."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Note title. Used as the filename base and for `{{title}}`."
+          },
+          "directory": {
+            "description": "Vault-relative subdirectory to create the note in.",
+            "type": "string"
+          },
+          "variables": {
+            "description": "Extra `{{key}}` substitutions.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "date": {
+            "description": "ISO date or date-time to use instead of now.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vault",
+          "template",
+          "title"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "edit_note",
+      "description": "Modify an existing note. Supports six edit modes: append (add to end; defensively inserts a leading newline if the source didn't end with one), prepend (insert after frontmatter if present, otherwise at file start), replace_window (find a block of text and replace it — optionally fuzzy; fuzzy extends match to consume trailing .?! so the replacement has no doubled punctuation), patch_heading (insert or replace content under a specific heading; `headingOp: 'before' | 'after'` inserts immediately before/after the heading line — use `before` on the NEXT heading to append to a section's end; `headingOp: 'replace'` with `scope: 'section'` (default) replaces to the next same-or-higher heading or EOF — CAREFUL on the LAST heading, this consumes everything below including content separated by blank lines — pass `scope: 'body'` to stop at the first blank line after the body; if the target heading text appears MORE THAN ONCE the call throws MultipleMatches listing each occurrence with its line number — pass `headingIndex: 0 | 1 | ...` (0-indexed, top-to-bottom) to pick one), patch_frontmatter (set a single YAML key; pass `value: null` to clear — or from XML-stringifying clients use `valueJson: 'null'` for true null, `valueJson: 'true'` for a real boolean, `valueJson: '42'` for a number, `valueJson: '[\"a\"]'` for an array; `valueJson` wins over `value` when both are set), at_line (insert or replace at a 1-indexed line number that counts from file start including frontmatter lines). Pass `edits` (array) to apply multiple edits atomically — all succeed or none are written.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path or fuzzy match of the note to edit."
+          },
+          "mode": {
+            "description": "Edit mode. Required unless `edits` array is provided.",
+            "type": "string",
+            "enum": [
+              "append",
+              "prepend",
+              "replace_window",
+              "patch_heading",
+              "patch_frontmatter",
+              "at_line"
+            ]
+          },
+          "content": {
+            "description": "New content to insert or replace (meaning is mode-dependent).",
+            "type": "string"
+          },
+          "search": {
+            "description": "For `replace_window`: the block of text to locate and replace.",
+            "type": "string"
+          },
+          "fuzzy": {
+            "description": "For `replace_window`: tolerate whitespace and trailing-punctuation drift.",
+            "type": "boolean"
+          },
+          "fuzzyThreshold": {
+            "description": "Similarity threshold for fuzzy replace_window matches (0-1, default 0.7). Higher = stricter. 0.9 is recommended for typo-tolerant matching of known-good text.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "heading": {
+            "description": "Target heading text for `patch_heading` mode.",
+            "type": "string"
+          },
+          "headingOp": {
+            "description": "For `patch_heading`. `replace` (default) replaces section; `before`/`after` inserts adjacent to the heading line.",
+            "type": "string",
+            "enum": [
+              "replace",
+              "before",
+              "after"
+            ]
+          },
+          "scope": {
+            "description": "For `patch_heading replace`: `section` (default) consumes to next same-or-higher heading; `body` stops at first blank line.",
+            "type": "string",
+            "enum": [
+              "section",
+              "body"
+            ]
+          },
+          "headingIndex": {
+            "description": "For `patch_heading` when the heading appears more than once — 0-indexed top-to-bottom picker.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "key": {
+            "description": "For `patch_frontmatter`: the YAML key to set.",
+            "type": "string"
+          },
+          "value": {
+            "description": "For `patch_frontmatter`: value to set. Use `null` to clear a key. Prefer `valueJson` from clients that stringify params."
+          },
+          "valueJson": {
+            "description": "For `patch_frontmatter`: JSON-encoded value (wins over `value`). Use `\"null\"` to clear, `\"true\"` for boolean, `\"42\"` for number.",
+            "type": "string"
+          },
+          "line": {
+            "description": "For `at_line`: 1-indexed line number (counts from file start including frontmatter).",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lineOp": {
+            "description": "For `at_line`: insert before/after the target line, or replace it. Default `replace`.",
+            "type": "string",
+            "enum": [
+              "before",
+              "after",
+              "replace"
+            ]
+          },
+          "expectedContent": {
+            "description": "Optional guard for edits that replace text: the exact text being replaced, as last read. If the note changed since, the edit fails and nothing is written. Not with `edits`.",
+            "type": "string"
+          },
+          "dryRun": {
+            "description": "If true, return a unified-diff preview without writing. Pass the returned previewId to apply_edit_preview to commit.",
+            "type": "boolean"
+          },
+          "from_buffer": {
+            "description": "If true, retry a previously failed replace_window edit using the cached content + search with fuzzy: true, fuzzyThreshold: 0.5. Use when the prior edit failed with NoMatch. Cleared on success.",
+            "type": "boolean"
+          },
+          "edits": {
+            "description": "Array of edits to apply atomically to a single file. If any edit fails, no edit is written. Applied in order against the accumulated state (each edit sees the result of previous edits in the batch). Use replace_window / patch_heading for content-anchored edits; at_line references the accumulated state, not the original file.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "append",
+                    "prepend",
+                    "replace_window",
+                    "patch_heading",
+                    "patch_frontmatter",
+                    "at_line"
+                  ]
+                },
+                "content": {
+                  "type": "string"
+                },
+                "search": {
+                  "type": "string"
+                },
+                "fuzzy": {
+                  "type": "boolean"
+                },
+                "fuzzyThreshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "heading": {
+                  "type": "string"
+                },
+                "headingOp": {
+                  "type": "string",
+                  "enum": [
+                    "replace",
+                    "before",
+                    "after"
+                  ]
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "section",
+                    "body"
+                  ]
+                },
+                "headingIndex": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "key": {
+                  "type": "string"
+                },
+                "value": {},
+                "valueJson": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "lineOp": {
+                  "type": "string",
+                  "enum": [
+                    "before",
+                    "after",
+                    "replace"
+                  ]
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            }
+          }
+        },
+        "required": [
+          "vault",
+          "name"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "apply_edit_preview",
+      "description": "Apply a previously previewed edit. Pass the `previewId` returned by `edit_note` with `dryRun: true`. Previews expire after 5 minutes. Fails with a descriptive error if the target file changed since the preview was generated — in that case, regenerate the preview and try again.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "previewId": {
+            "type": "string",
+            "description": "The previewId returned by `edit_note` with `dryRun: true`."
+          }
+        },
+        "required": [
+          "vault",
+          "previewId"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "link_notes",
+      "description": "Add a wiki-link from one note to another with a context sentence describing why they're connected. Appends the link to the source note and records the edge in the graph so analytics pick it up.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "source": {
+            "type": "string",
+            "description": "Source note to add the link from (path or fuzzy match)."
+          },
+          "target": {
+            "type": "string",
+            "description": "Target note to link to (path, title, or new wiki-link ref)."
+          },
+          "context": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One-sentence explanation of why these notes are connected."
+          },
+          "dryRun": {
+            "description": "If true, return the line that would be appended without writing.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "source",
+          "target",
+          "context"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "move_note",
+      "description": "Rename or move a note. Inbound wiki-links in other notes are rewritten in place immediately (bare [[old]], [[old|alias]], ![[old]] embeds, and [[old#heading]]/[[old^block]] suffixes all handled). If the note's frontmatter has a `title:` field matching the old basename, it's auto-rewritten to the new basename (custom titles and missing titles are left alone). Response includes `linksRewritten: { files, occurrences }`.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "source": {
+            "type": "string",
+            "description": "Current path or fuzzy match of the note to move."
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New vault-relative path (including `.md`). `.md` is appended automatically if omitted."
+          },
+          "dryRun": {
+            "description": "If true, report what would be rewritten without mutating any files.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "source",
+          "destination"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_note",
+      "description": "Permanently delete a note. Removes the file from disk AND its index rows (edges, embedding, node). Requires `confirm: true` to guard against accidents. When the delete removes inbound edges, the response is wrapped in a next_actions envelope suggesting a follow-up `rank_notes(method=pagerank, minIncomingLinks=0)` to spot newly orphaned notes.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path or fuzzy match of the note to delete."
+          },
+          "confirm": {
+            "type": "boolean",
+            "const": true,
+            "description": "Must literally be `true` to execute. Guards against accidental deletion."
+          },
+          "dryRun": {
+            "description": "If true, report what would be deleted without removing any files.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "name",
+          "confirm"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_canvas",
+      "description": "Read an Obsidian canvas (JSON Canvas) and return its nodes and edges with their ids, positions and content.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Vault-relative path of the `.canvas` file. The extension is optional."
+          }
+        },
+        "required": [
+          "vault",
+          "path"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "edit_canvas",
+      "description": "Change an Obsidian canvas: `add_node` (creates the canvas if missing; placed right of the right-most node by default), `update_node`, `delete_node` (also removes its edges), `connect` or `disconnect`. Returns the changed node or edge.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Vault-relative path of the `.canvas` file. The extension is optional."
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "add_node",
+              "update_node",
+              "delete_node",
+              "connect",
+              "disconnect"
+            ]
+          },
+          "nodeId": {
+            "description": "Node to change (`update_node`, `delete_node`).",
+            "type": "string"
+          },
+          "type": {
+            "description": "Node type (`add_node`).",
+            "type": "string",
+            "enum": [
+              "text",
+              "file",
+              "link",
+              "group"
+            ]
+          },
+          "text": {
+            "description": "Markdown content of a `text` node.",
+            "type": "string"
+          },
+          "file": {
+            "description": "Vault-relative file a `file` node shows.",
+            "type": "string"
+          },
+          "subpath": {
+            "description": "Heading or block of a `file` node, e.g. `#Heading`. `null` removes it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "description": "URL of a `link` node.",
+            "type": "string"
+          },
+          "label": {
+            "description": "Label of a `group` node or an edge. `null` removes it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "color": {
+            "description": "Preset `\"1\"`-`\"6\"` or hex like `\"#ff0000\"`. `null` removes it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "width": {
+            "description": "Default 400.",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "description": "Default 200.",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "fromNode": {
+            "description": "Edge start node id (`connect`).",
+            "type": "string"
+          },
+          "toNode": {
+            "description": "Edge end node id (`connect`).",
+            "type": "string"
+          },
+          "fromSide": {
+            "type": "string",
+            "enum": [
+              "top",
+              "right",
+              "bottom",
+              "left"
+            ]
+          },
+          "toSide": {
+            "type": "string",
+            "enum": [
+              "top",
+              "right",
+              "bottom",
+              "left"
+            ]
+          },
+          "fromEnd": {
+            "description": "Default `none`.",
+            "type": "string",
+            "enum": [
+              "none",
+              "arrow"
+            ]
+          },
+          "toEnd": {
+            "description": "Default `arrow`.",
+            "type": "string",
+            "enum": [
+              "none",
+              "arrow"
+            ]
+          },
+          "edgeId": {
+            "description": "Edge to remove (`disconnect`).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vault",
+          "path",
+          "operation"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "reindex",
+      "description": "Re-index the vault: re-embeds notes whose mtime changed and prunes orphan stubs.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "index_status",
+      "description": "Report the current state of the vault index: embedder model + dim, count of notes / chunks indexed, chunks skipped during the last reindex (if any), advertised vs discovered max tokens, last reindex reasons, whether a reindex is currently in flight, and the last init error. Read-only — does not mutate anything.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "vault_overview",
+      "description": "One-call orientation for an unfamiliar vault: note and attachment counts, notes per top-level folder, the most used tags, and the most recently modified notes. Use `list_tags` or `list_notes` for more than the snapshot.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "topTags": {
+            "description": "Tags to include. Default 15.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "recent": {
+            "description": "Recently modified notes to include. Default 10.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_tags",
+      "description": "List every tag in the vault with the number of notes that carry it. Counts frontmatter `tags`/`tag` and inline `#tags`; tags are returned without the `#`.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "sort": {
+            "description": "Default `count` (descending). `name` sorts alphabetically.",
+            "type": "string",
+            "enum": [
+              "count",
+              "name"
+            ]
+          },
+          "limit": {
+            "description": "Max tags to return. Default 100.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "prefix": {
+            "description": "Only tags starting with this text, e.g. `project/`.",
+            "type": "string"
+          },
+          "includeParents": {
+            "description": "Default `true`: a note tagged `a/b` also counts toward `a`.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_bookmarks",
+      "description": "List the vault's Obsidian bookmarks (`.obsidian/bookmarks.json`) as a tree of groups, files, folders, searches, headings and blocks. `totalItems` counts every non-group bookmark.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "types": {
+            "description": "Only these bookmark types. Without `group`, group contents are flattened.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "file",
+                "folder",
+                "search",
+                "heading",
+                "block",
+                "group"
+              ]
+            }
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_property_values",
+      "description": "List the distinct values of one frontmatter property across notes, with how many times each occurs. Each element of a list value counts separately. Also reports how many notes have the key.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Frontmatter key, e.g. `status`."
+          },
+          "folder": {
+            "description": "Only notes under this folder.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Max distinct values to return. Default 100.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault",
+          "key"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_properties",
+      "description": "Set and remove several frontmatter properties of one note in a single write. Creates the frontmatter block if the note has none; the body and keys not named stay as they are. Pass `dryRun: true` to see the resulting frontmatter without writing.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path or fuzzy match of the note."
+          },
+          "set": {
+            "description": "Keys to write, with their values. A `null` value removes the key.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "remove": {
+            "description": "Keys to remove. Absent keys are skipped.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dryRun": {
+            "description": "Return the new frontmatter without writing.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "name"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_notes",
+      "description": "Read up to 20 notes in one call. Returns one entry per name, in order: `{path, title, frontmatter, content, truncated}`, or `{name, error}` when that name does not resolve.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "names": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths, filenames, or fuzzy matches of the notes to read."
+          },
+          "maxContentLength": {
+            "description": "Max body chars per note before truncation. Default 2000.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault",
+          "names"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_note_part",
+      "description": "Read part of a note from disk: its heading `outline`, the section under a `heading`, a range of `lines`, or the `block` that carries a `^blockId`. Line numbers are 1-based and count the frontmatter.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path, filename, or fuzzy match for the note."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "outline",
+              "heading",
+              "lines",
+              "block"
+            ],
+            "description": "Which part to read."
+          },
+          "heading": {
+            "description": "For `heading`: heading text, or a nested path like `Parent > Child`.",
+            "type": "string"
+          },
+          "startLine": {
+            "description": "For `lines`: first line, 1-based, inclusive.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "endLine": {
+            "description": "For `lines`: last line, inclusive. Default and maximum: the end of the note.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blockId": {
+            "description": "For `block`: the block id, with or without the leading `^`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vault",
+          "name",
+          "mode"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "file_info",
+      "description": "Describe a vault path without its body: kind (note, attachment, folder), size, times, and for a note its link, heading, task and tag counts. Link counts come from the index.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "path": {
+            "type": "string",
+            "description": "Vault-relative path of a note, attachment or folder."
+          }
+        },
+        "required": [
+          "vault",
+          "path"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_folder",
+      "description": "Create a folder in the vault, with any missing parent folders. Succeeds with `created: false` when the folder already exists.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "path": {
+            "type": "string",
+            "description": "Vault-relative folder path, e.g. `Projects/2026`."
+          }
+        },
+        "required": [
+          "vault",
+          "path"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_folder",
+      "description": "Permanently delete a folder. Refuses a non-empty folder unless `recursive: true`; notes inside also leave the index. Requires `confirm: true`; `dryRun` lists what would go.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "path": {
+            "type": "string",
+            "description": "Vault-relative folder path."
+          },
+          "confirm": {
+            "type": "boolean",
+            "const": true,
+            "description": "Must literally be `true` to execute. Guards against accidental deletion."
+          },
+          "recursive": {
+            "description": "Delete the folder with everything in it. Default false: refuse a non-empty folder.",
+            "type": "boolean"
+          },
+          "dryRun": {
+            "description": "If true, report what would be deleted without removing anything.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "path",
+          "confirm"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_attachments",
+      "description": "List non-markdown files (images, PDFs, ...) with their size and `references`: how many notes link to or embed each one. `unreferencedOnly` finds orphans.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "folder": {
+            "description": "Vault-relative folder to list, recursively. Default: the whole vault.",
+            "type": "string"
+          },
+          "extensions": {
+            "description": "Keep only these extensions, case-insensitive, e.g. `[\"png\", \".pdf\"]`.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unreferencedOnly": {
+            "description": "Return only attachments no note references.",
+            "type": "boolean"
+          },
+          "limit": {
+            "description": "Max results. Default 100.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "offset": {
+            "description": "Results to skip, for paging. Default 0.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_attachment",
+      "description": "Create a binary file (image, PDF, ...) from base64 content, with any missing parent folders. Max 10 MB decoded. Use `create_note` for markdown.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "path": {
+            "type": "string",
+            "description": "Vault-relative file path with extension, e.g. `assets/diagram.png`."
+          },
+          "content": {
+            "type": "string",
+            "description": "File bytes, base64-encoded."
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Default false.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "path",
+          "content"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_tasks",
+      "description": "List markdown tasks (`- [ ] text`) in the vault, one folder, or one note, ordered by path and line. Each task has its 1-based `line`, raw `status` character, `state` (open/done/cancelled), `text`, nesting `indent`, `parentLine` when nested under another task, and `due` from `📅 YYYY-MM-DD`. Use `line` with `set_task_status` or `ensure_block_id`.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "description": "Path or fuzzy match of one note. Omit to scan the vault.",
+            "type": "string"
+          },
+          "folder": {
+            "description": "Vault-relative folder to scan recursively.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Default `open`: every status but `x`, `X` and `-`. `done`: `x`/`X`. `all` adds cancelled (`-`).",
+            "type": "string",
+            "enum": [
+              "open",
+              "done",
+              "all"
+            ]
+          },
+          "limit": {
+            "description": "Max tasks to return. Default 200, max 1000.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "offset": {
+            "description": "Tasks to skip, for paging. Default 0.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "set_task_status",
+      "description": "Set the status of one markdown task in place. Only the character between the brackets changes; the rest of the file stays byte-identical. Refuses a line that is not a task.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path or fuzzy match of the note."
+          },
+          "line": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "1-based line of the task, as `list_tasks` returns it."
+          },
+          "status": {
+            "type": "string",
+            "description": "`open` (space), `done` (`x`), or one raw status character such as `/` or `-`."
+          },
+          "expectedText": {
+            "description": "The task text you expect on that line. The write is refused when it differs, e.g. after the note changed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vault",
+          "name",
+          "line",
+          "status"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "ensure_block_id",
+      "description": "Return the `^block-id` of a block in a note, adding one when it has none, plus a ready `[[Note#^id]]` link. Target the block by `line` or by `heading` (the heading line itself). Placement follows Obsidian: ` ^id` at the end of a paragraph, list item or heading; `^id` on its own line after a table, quote, callout or code block.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path or fuzzy match of the note."
+          },
+          "line": {
+            "description": "1-based line inside the block.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "heading": {
+            "description": "Heading text; the id goes on that heading line.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Id to write when the block has none: letters, digits, dashes. Default: random 6 characters.",
+            "type": "string"
+          },
+          "dryRun": {
+            "description": "If true, return the id and diff without writing.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "name"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_broken_links",
+      "description": "List wikilinks whose target note is missing, or whose `#heading` / `#^block` is missing from the target. Read-only. Returns source path, 1-based line, link text and reason per broken link.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "folder": {
+            "description": "Only scan notes under this folder.",
+            "type": "string"
+          },
+          "excludeFolders": {
+            "description": "Folders to skip.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "description": "Max broken links returned. Default 100.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_orphaned_notes",
+      "description": "List notes with no incoming wikilinks from other notes (self-links do not count). Read-only. Returns path, title and outgoing link count per orphan.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "folder": {
+            "description": "Only report notes under this folder.",
+            "type": "string"
+          },
+          "excludeFolders": {
+            "description": "Folders whose notes are not reported. Their links still count.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "description": "Max orphans returned. Default 100.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_and_replace",
+      "description": "Find and replace text across note bodies. Dry run by default: returns per-file match counts and before/after samples; pass `dryRun: false` to write. Skips frontmatter and fenced code unless asked.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "pattern": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Text to find, or a JavaScript regex when `regex` is true. `^`/`$` match at line ends."
+          },
+          "replacement": {
+            "type": "string",
+            "description": "Replacement text. With `regex`, `$1`, `$<name>` and `$&` expand."
+          },
+          "regex": {
+            "description": "Treat `pattern` as a regex. Default false.",
+            "type": "boolean"
+          },
+          "caseSensitive": {
+            "description": "Default true.",
+            "type": "boolean"
+          },
+          "folder": {
+            "description": "Only touch notes under this folder.",
+            "type": "string"
+          },
+          "includeFrontmatter": {
+            "description": "Also replace inside YAML frontmatter. Default false.",
+            "type": "boolean"
+          },
+          "includeCode": {
+            "description": "Also replace inside fenced code blocks. Default false.",
+            "type": "boolean"
+          },
+          "dryRun": {
+            "description": "Default true. Pass false to write.",
+            "type": "boolean"
+          },
+          "maxFiles": {
+            "description": "Refuse to write when more files match. Default 200.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "vault",
+          "pattern",
+          "replacement"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "rename_tag",
+      "description": "Rename a tag across the vault: inline `#tag` (not in code, URLs or headings) and frontmatter `tags`/`tag`. Dry run by default: returns per-file counts; pass `dryRun: false` to write.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Tag to rename, `#` optional. Case-insensitive."
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New tag name, `#` optional."
+          },
+          "includeNested": {
+            "description": "Also rename `#from/child` to `#to/child`. Default true.",
+            "type": "boolean"
+          },
+          "dryRun": {
+            "description": "Default true. Pass false to write.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "from",
+          "to"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "rename_heading",
+      "description": "Rename a heading in a note and rewrite every wikilink and embed that points to it across the vault. Errors if `from` is missing or `to` already exists in the note.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "vault": {
+            "type": "string",
+            "enum": [
+              "fixture"
+            ],
+            "description": "The vault to work in. `list_vaults` describes each vault."
+          },
+          "name": {
+            "type": "string",
+            "description": "Path or fuzzy match of the note."
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Current heading text, without `#`."
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New heading text, without `#`."
+          },
+          "dryRun": {
+            "description": "If true, report the changes without writing. Default false.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "vault",
+          "name",
+          "from",
+          "to"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

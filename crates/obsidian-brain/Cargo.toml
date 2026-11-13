@@ -1,0 +1,43 @@
+[package]
+name = "obsidian-brain"
+version = "2.0.0"
+description = "MCP server for semantic search, a link graph and editing over Obsidian vaults"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+schemars = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+clap = { version = "4", features = ["derive", "env"] }
+rmcp = { version = "3.10", features = ["server", "transport-io", "transport-streamable-http-server"] }
+axum = "0.8"
+rusqlite = { version = "0.42", features = ["bundled", "functions"] }
+sqlite-vec = "=0.1.9"
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "load-dynamic", "api-27"] }
+ndarray = "0.17"
+tokenizers = { version = "1.0.0-rc.4", default-features = false, features = ["serialize", "normalizers", "bpe", "unigram", "wordpiece", "wordlevel", "unicode-scripts", "regex"] }
+hf-hub = { version = "0.4", default-features = false, features = ["tokio", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+notify = "8"
+fancy-regex = "0.20"
+regex = "1"
+similar = "3"
+datalogic-rs = "5"
+serde_yaml_ng = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+walkdir = "2"
+chrono = { version = "0.4", features = ["serde"] }
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+pretty_assertions = "1"
