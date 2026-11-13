@@ -1,33 +1,24 @@
----
-title: Scheduled indexing (Linux)
-description: Run obsidian-brain as a systemd user service — either the live watcher or a timer-driven reindex.
----
+# Running as a service (Linux)
 
-# Scheduled indexing (Linux)
+A client that starts `obsidian-brain server` over stdio needs no service: the server watches its vaults while it runs. This page covers two setups for a machine where the server must run on its own. Both are systemd user units under `~/.config/systemd/user/`, with no root.
 
-!!! note "Most users don't need this"
-    `obsidian-brain server` auto-watches the vault when running from any MCP client — the index stays live as you edit, no scheduled job required. Use scheduled indexing only when you can't keep `server` running continuously, or when the watcher can't observe changes reliably (SMB, some NFS setups).
+Replace `/home/you/.nix-profile/bin/obsidian-brain` with the output of `command -v obsidian-brain`, and the vault paths with yours.
 
-Two approaches for keeping the index fresh on Linux outside of an active MCP client session: a persistent `watch` daemon via a systemd user service, or a timer-driven `index` job that runs every 30 minutes. No root, no system-wide install — everything lives under `~/.config/systemd/user/`.
+## A long-running HTTP server
 
-`obsidian-brain server` already watches the vault whenever it's running, so most users who launch obsidian-brain from an MCP client don't need anything here. If you want a dedicated daemon that keeps the index fresh even when no MCP client is running, use the [watcher service](#recommended-run-the-watcher-instead) below. If your vault lives somewhere inotify can't observe (SMB, some NFS setups) or you prefer a fixed schedule, skip to the [timer fallback](#what-it-does-scheduled-fallback).
-
-## Recommended: run the watcher instead
-
-Run the `watch` subcommand as a systemd user service — useful on a server, a headless box, or any machine where you want the index live even when no MCP client is running. Create `~/.config/systemd/user/obsidian-brain-watch.service`:
+The HTTP server indexes its vaults at startup and watches them while it runs. Create `~/.config/systemd/user/obsidian-brain.service`:
 
 ```ini
 [Unit]
-Description=obsidian-brain live vault watcher
+Description=obsidian-brain MCP server
 After=network.target
 
 [Service]
-Type=simple
-ExecStart=/usr/bin/obsidian-brain watch --vault notes=/absolute/path/to/your/vault
-Restart=always
+ExecStart=/home/you/.nix-profile/bin/obsidian-brain server \
+  --transport http --listen 127.0.0.1:8091 \
+  --vault personal=/home/you/vaults/personal
+Restart=on-failure
 RestartSec=5
-StandardOutput=append:%h/.local/state/obsidian-brain-watch.log
-StandardError=append:%h/.local/state/obsidian-brain-watch.err
 
 [Install]
 WantedBy=default.target
@@ -36,159 +27,65 @@ WantedBy=default.target
 Then:
 
 ```bash
-mkdir -p ~/.local/state
 systemctl --user daemon-reload
-systemctl --user enable --now obsidian-brain-watch.service
-systemctl --user status obsidian-brain-watch.service
+systemctl --user enable --now obsidian-brain.service
+journalctl --user -u obsidian-brain.service -f
 ```
 
-Adjust `/usr/bin/obsidian-brain` to match `which obsidian-brain`. The service keeps a server's index live only when it uses the same `DATA_DIR` and the same vault name as the server. If you want the service to survive logout, run `sudo loginctl enable-linger $USER` once. The timer-based flow below is the fallback if you set `OBSIDIAN_BRAIN_NO_WATCH=1` or your vault lives on a filesystem where inotify doesn't fire (SMB, some NFS setups).
+The server has no authentication. Keep it on loopback and put an authenticating proxy in front of it. If the proxy sends its public host name as the `Host` header, add `--allowed-host <name>`.
 
-## What it does (scheduled fallback)
+To keep the service running after you log out, run `sudo loginctl enable-linger $USER` once.
 
-A systemd user timer runs `obsidian-brain index` every 30 minutes as your user account. Because everything lives under `~/.config/systemd/user/`, there is no sudo required and nothing is installed system-wide. The timer is tied to your login session and will stop when you log out — unless you enable `linger` (see the optional step below).
+Do not run `obsidian-brain watch` as a service: it stops when its standard input closes, and systemd gives a service a closed input.
 
-## Prerequisites
+## An index on a timer
 
-- `npm install -g obsidian-brain` — puts the `obsidian-brain` binary on your `PATH`. Confirm with `which obsidian-brain` and note the path (commonly `/usr/bin/obsidian-brain`, `/usr/local/bin/obsidian-brain`, or an nvm-scoped variant).
-- You know the absolute path to your Obsidian vault and the name your server uses for it (`--vault <name>=<path>`).
-- A systemd-based Linux distribution (most modern distros: Ubuntu, Debian, Fedora, Arch, openSUSE, etc.).
+Use this when the watcher misses changes, for example on SMB or NFS, or when no server runs all the time. The `index` command is incremental, so each run is cheap.
 
-If you're running from a local source clone instead of npm, see the [source install variant](#variant-running-from-a-local-clone) at the bottom of this file.
-
-## 1. Create the service unit
-
-Create `~/.config/systemd/user/obsidian-brain.service`:
+`~/.config/systemd/user/obsidian-brain-index.service`:
 
 ```ini
 [Unit]
-Description=obsidian-brain vault reindex
-After=network.target
+Description=obsidian-brain incremental index
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/obsidian-brain index --vault notes=/absolute/path/to/your/vault
-StandardOutput=append:%h/.local/state/obsidian-brain-index.log
-StandardError=append:%h/.local/state/obsidian-brain-index.err
+ExecStart=/home/you/.nix-profile/bin/obsidian-brain index --vault personal=/home/you/vaults/personal
 ```
 
-Notes:
-
-- `%h` is expanded by systemd to your `$HOME` directory.
-- Adjust `/usr/bin/obsidian-brain` to match wherever `which obsidian-brain` reports on your system. If you installed node via `nvm`, the binary will be under `/absolute/path/to/.nvm/versions/node/vXX.Y.Z/bin/obsidian-brain` — use that full path; systemd does **not** expand `~` inside `ExecStart`.
-- The job writes to `<DATA_DIR>/<name>/kg.db`. It keeps a server's index fresh only when it uses the same `DATA_DIR` and the same vault name as the server. Add `Environment=DATA_DIR=...` if the server sets one.
-- `Type=oneshot` is correct here: the reindex runs to completion and exits; the timer will trigger the next run.
-
-## 2. Create the timer unit
-
-Create `~/.config/systemd/user/obsidian-brain.timer`:
+`~/.config/systemd/user/obsidian-brain-index.timer`:
 
 ```ini
 [Unit]
-Description=Run obsidian-brain reindex every 30 minutes
+Description=Run the obsidian-brain index every 30 minutes
 
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=30min
-Unit=obsidian-brain.service
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 ```
 
-What these fields mean:
-
-- `OnBootSec=5min` — wait 5 minutes after the user manager starts before the first run, so login isn't slowed by indexing.
-- `OnUnitActiveSec=30min` — after each run finishes, wait 30 minutes before firing the next one.
-- `Persistent=true` — if the machine was off or asleep when a run was supposed to fire, systemd will run it as soon as possible after resume / boot. Without this, missed runs are simply skipped.
-
-## 3. Enable and start
-
-```bash
-mkdir -p ~/.local/state
-systemctl --user daemon-reload
-systemctl --user enable --now obsidian-brain.timer
-systemctl --user list-timers --all | grep obsidian-brain
-```
-
-The last command should print a row showing `obsidian-brain.timer` along with its `NEXT` and `LEFT` columns.
-
-## 4. Optional — survive logout
-
-By default, user services stop when you log out. On a desktop that's usually fine. On a server, or if you want indexing to continue after logging out of a graphical session, enable linger for your user:
-
-```bash
-sudo loginctl enable-linger $USER
-```
-
-This is the one step in the whole guide that needs sudo, and it's optional.
-
-## 5. Check status and logs
-
-```bash
-systemctl --user status obsidian-brain.service
-systemctl --user status obsidian-brain.timer
-journalctl --user -u obsidian-brain.service -n 50
-tail -f ~/.local/state/obsidian-brain-index.log
-```
-
-`journalctl` shows systemd's view of every execution (exit codes, timings). The log file captures the indexer's stdout; the `.err` file captures stderr.
-
-## 6. Trigger a run manually
-
-Useful for verifying the unit works without waiting for the timer:
-
-```bash
-systemctl --user start obsidian-brain.service
-```
-
-Then check the log file or `journalctl` to confirm it ran.
-
-## 7. Adjust the interval
-
-Edit `~/.config/systemd/user/obsidian-brain.timer`, change `OnUnitActiveSec` to whatever you want (for example `15min`, `1h`, `6h`), then reload:
+Then:
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user restart obsidian-brain.timer
+systemctl --user enable --now obsidian-brain-index.timer
+systemctl --user list-timers obsidian-brain-index.timer
 ```
 
-## 8. Disable and uninstall
+`systemctl --user start obsidian-brain-index.service` runs it at once. The timer updates the index a server uses when both use the same `DATA_DIR` and the same vault name. Set `OBSIDIAN_BRAIN_NO_WATCH=1` on that server if the timer replaces its watcher.
+
+## Environment
+
+Add `Environment=` lines to `[Service]` for the variables in [Configuration](configuration.md), or `EnvironmentFile=` with a file in the format of `.env.example`.
+
+## Remove
 
 ```bash
-systemctl --user disable --now obsidian-brain.timer
-rm ~/.config/systemd/user/obsidian-brain.service
-rm ~/.config/systemd/user/obsidian-brain.timer
+systemctl --user disable --now obsidian-brain.service obsidian-brain-index.timer
+rm ~/.config/systemd/user/obsidian-brain*.{service,timer}
 systemctl --user daemon-reload
 ```
-
-Log files under `~/.local/state/` are left in place — remove them manually if you want.
-
-## 9. Troubleshooting
-
-- **`status=203/EXEC`** — systemd could not execute the binary. Usually the path in `ExecStart` is wrong. Run `which obsidian-brain` and put that exact absolute path into the unit file, then `systemctl --user daemon-reload` and try again.
-- **nvm users** — always use the fully expanded absolute path (for example `/absolute/path/to/.nvm/versions/node/v20.11.1/bin/obsidian-brain`). systemd does **not** expand `~` inside `ExecStart`, so paths like `~/.nvm/...` will fail with 203/EXEC.
-- **Timer not firing** — `systemctl --user list-timers` must show `obsidian-brain.timer` with a real `NEXT` time. If it doesn't appear, re-run `systemctl --user enable --now obsidian-brain.timer`. If `NEXT` is `n/a`, double-check the `[Timer]` section syntax.
-- **`better-sqlite3` native-module errors** — the native binding must be built against the same node version systemd will invoke. Rebuild it with that node on your `PATH`:
-
-  ```bash
-  PATH=/absolute/path/to/node/bin:$PATH npm rebuild -g better-sqlite3
-  ```
-
-- **Environment looks empty** — systemd user services start with a minimal environment. If your indexer needs extra variables (for example `DATA_DIR`), add `Environment=KEY=VALUE` lines to the `[Service]` section, one per line.
-
-## Variant: running from a local clone
-
-If you're developing obsidian-brain from a source clone rather than the npm package, your `[Service]` section needs both a `WorkingDirectory` and a `node dist/cli/index.js index` invocation:
-
-```ini
-[Service]
-Type=oneshot
-WorkingDirectory=/absolute/path/to/obsidian-brain
-ExecStart=/usr/bin/node dist/cli/index.js index --vault notes=/absolute/path/to/your/vault
-StandardOutput=append:%h/.local/state/obsidian-brain-index.log
-StandardError=append:%h/.local/state/obsidian-brain-index.err
-```
-
-Everything else (timer unit, enable/start flow, troubleshooting) stays identical.

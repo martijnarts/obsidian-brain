@@ -1,745 +1,98 @@
----
-title: Troubleshooting
-description: Known issues, common gotchas, and the fix for each. Covers install, startup, indexing, watcher, and tool-call failure modes.
----
-
 # Troubleshooting
 
-This guide covers errors and edge cases beyond the short Troubleshooting section in the README. Entries are grouped by symptom. If you only have a moment, scan the headers below and jump to the one that matches what you are seeing.
+## Reading the logs
 
-For architecture context (how the indexer, SQLite cache, and MCP server fit together) see [architecture.md](./architecture.md). For client-specific setup see [jan.md](./jan.md), [launchd.md](./launchd.md), and [systemd.md](./systemd.md).
+The server logs to stderr. A stdio client writes that stream to its MCP log, for example `~/Library/Logs/Claude/mcp-server-obsidian-brain.log` for Claude Desktop on macOS. For more detail, set `OBSIDIAN_BRAIN_LOG=debug` in the `env` block of the client config. The value takes the `EnvFilter` syntax of `tracing`, so `obsidian_brain::pipeline=debug` limits the detail to the index pipeline.
 
-## Contents
+## The server does not start: missing `--vault`
 
-- [Connector has no tools available in Claude Desktop](#connector-has-no-tools-available-in-claude-desktop)
-- [ERR_DLOPEN_FAILED: NODE_MODULE_VERSION mismatch](#err_dlopen_failed-node_module_version-mismatch)
-- [No vault given](#no-vault-given)
-- [First run very slow or appears to hang](#first-run-very-slow-or-appears-to-hang)
-- [Index stale after a manual edit outside Claude](#index-stale-after-a-manual-edit-outside-claude)
-- [tools/call returns "No node found matching X"](#toolscall-returns-no-node-found-matching-x)
-- [tools/call returns "Ambiguous name X. Candidates: ..."](#toolscall-returns-ambiguous-name-x-candidates)
-- [Transport closed in Jan only (Claude Desktop works fine)](#transport-closed-in-jan-only-claude-desktop-works-fine)
-- [launchd job not re-indexing](#launchd-job-not-re-indexing)
-- [systemd timer not firing](#systemd-timer-not-firing)
-- [SQLite index corrupted or weird schema errors](#sqlite-index-corrupted-or-weird-schema-errors)
-- [Embeddings look wrong or search returns irrelevant results](#embeddings-look-wrong-or-search-returns-irrelevant-results)
-- [index_status reports a large notesMissingEmbeddings count](#index_status-reports-a-large-notesmissingembeddings-count)
-- [After upgrading, semantic search returns {status: "preparing"} for a few minutes](#after-upgrading-semantic-search-returns-status-preparing-for-a-few-minutes)
-- [Cached model metadata is stale](#cached-model-metadata-is-stale)
-- [tools/list returns -32603 Cannot read properties of undefined (reading '_zod')](#toolslist-returns-32603-cannot-read-properties-of-undefined-reading-_zod)
-- [Race condition: edit appears in Claude but not in search for 30 min](#race-condition-edit-appears-in-claude-but-not-in-search-for-30-min)
-- [Watcher not firing](#watcher-not-firing)
-- [Embedding dimension mismatch error on startup](#embedding-dimension-mismatch-error-on-startup)
-- [Collecting MCP server logs](#collecting-mcp-server-logs)
-- [Tool calls hang for 4 minutes then time out client-side](#tool-calls-hang-for-4-minutes-then-time-out-client-side)
-- [Server crashes silently — no error in the MCP log](#server-crashes-silently-no-error-in-the-mcp-log)
-- [Ollama BYOM model not pulling (custom `EMBEDDING_MODEL`)](#ollama-byom-model-not-pulling-custom-embedding_model)
-- ["Failed to parse GITHUB_REGISTRIES_PROXY" in CI runs](#failed-to-parse-github_registries_proxy-in-ci-runs)
-- [Running multiple MCP clients against the same vault](#running-multiple-mcp-clients-against-the-same-vault)
-- [`apply_edit_preview` fails with "file has changed since preview"](#apply_edit_preview-fails-with-file-has-changed-since-preview)
-- [`edit_note({ mode: "replace_window" })` returns `NoMatch`](#edit_note-mode-replace_window-returns-nomatch)
-- [Still stuck?](#still-stuck)
+`obsidian-brain server` needs at least one `--vault <name>=<path>`. Without one, it exits with `the following required arguments were not provided: --vault <VAULTS>`. Add `"--vault", "notes=/absolute/path/to/your/vault"` to the `args` of the client config. A name has letters, digits, `-` and `_`.
 
----
+## The client shows no tools
 
-## Connector has no tools available in Claude Desktop
+The server stopped at startup. Check the client's MCP log for the last `obsidian-brain` line. Common causes:
 
-**Summary.** The connector is listed and enabled, but the tools palette is empty.
+- The command path is wrong. Desktop apps do not always see the `PATH` of your shell; use the absolute path from `command -v obsidian-brain`.
+- A vault path does not exist.
+- An environment variable has a bad value, such as an unknown `EMBEDDING_PRESET`. The error names the valid values.
 
-**Cause.** The server process started (so Claude Desktop shows it as connected) but its first `tools/list` response threw. The most common reason is a stale `dist/` directory compiled against a different version of Zod or of the internal schema module than what is now on disk.
+## The first start is slow
 
-**Fix.**
+On the first start the server downloads the embedding model into `<DATA_DIR>/models` (about 34 MB for the default preset, up to 279 MB for `multilingual-quality`) and indexes every vault. Tools answer during that time, and semantic search reports that it is preparing. Later starts reuse the model and index only changed files.
 
-```bash
-npm run build
-```
+If the download fails, the next start tries again. When the model files are damaged, the server deletes that model's cache directory and downloads it once more on its own. To start clean by hand, delete `<DATA_DIR>/models`.
 
-Then fully quit Claude Desktop with Cmd-Q (closing the window is not enough; the background process keeps running) and relaunch. If tools still do not appear, read the real error from the Claude Desktop MCP log:
+## The index misses an edit
 
-```bash
-tail -n 200 ~/Library/Logs/Claude/mcp-server-obsidian-brain.log
-```
+The watcher in `server` reindexes a note about 5 seconds after its last save. If an edit does not appear:
 
-The stack trace at the bottom of that file is almost always the actual cause.
+- `OBSIDIAN_BRAIN_NO_WATCH=1` may be set in the client config, the shell, a systemd `Environment=` line or a launchd `EnvironmentVariables` dictionary.
+- The vault may be on SMB, NFS or a sync folder where inotify and FSEvents miss changes.
+- The file may not end in `.md`, or it may be under `.obsidian`, `.trash`, `.git`, `node_modules` or `attachments`.
 
----
-
-## ERR_DLOPEN_FAILED: NODE_MODULE_VERSION mismatch
-
-**Summary.** Startup fails with a line like `ERR_DLOPEN_FAILED: NODE_MODULE_VERSION X ... requires Y`.
-
-**Cause.** A native module (typically `better-sqlite3`) was compiled against one Node major version during `npm install`, but at runtime a different Node is being used. This very commonly happens when you installed with your shell's `node` (for example from Homebrew or nvm) but the client launches the server with a different `node` from its own bundled runtime or from `/usr/local/bin`.
-
-**npx cache poisoning.** A second common variant: if you ran `npx obsidian-brain@latest server` under Node N, npx cached the compiled `better-sqlite3.node` in `~/.npm/_npx/`. If you later upgrade or downgrade Node (including removing an `fnm` / `nvm` version you had active at the time), the cached binary's ABI no longer matches the runtime.
-
-**Auto-heal.** On the first occurrence the server detects the mismatch, spawns a detached `npm rebuild better-sqlite3` in the background, and prints a message telling you to restart your MCP client in about a minute. If you see a line like "Auto-heal: a background rebuild of better-sqlite3 was started (PID …). … restart your MCP client in about 1 minute", just wait and restart — no manual action needed. A marker file at `~/.cache/obsidian-brain/abi-heal-attempted-<ABI>` prevents infinite retry loops: if the rebuild itself fails (typically because the system has no C++ toolchain and no prebuilt is available for your ABI), the second restart falls through to the manual-fix message below.
-
-**Manual fix (if auto-heal fails or you're on an older release):**
-
-```bash
-rm -rf ~/.npm/_npx
-```
-
-Then restart your MCP client. The next `npx` invocation does a fresh install, which triggers our `postinstall` hook to rebuild `better-sqlite3` against your current Node.
-
-**Fix.** Rebuild the native module under the same Node the client will use:
-
-```bash
-# if you installed via npm:
-PATH=/opt/homebrew/bin:$PATH npm rebuild -g better-sqlite3
-
-# if you're running from a local source clone:
-cd /absolute/path/to/obsidian-brain && PATH=/opt/homebrew/bin:$PATH npm rebuild better-sqlite3
-```
-
-Adjust `PATH` so the `node` on it matches the one your client actually launches. If the rebuild itself fails with a missing-compiler error — typical when the initial `npm install` found no prebuilt binary for your Node version and the `node-gyp` fallback didn't have a C++ toolchain to use — install one:
-
-- **macOS**: `xcode-select --install`
-- **Debian/Ubuntu**: `sudo apt install build-essential python3`
-- **Fedora/RHEL**: `sudo dnf install gcc-c++ make python3`
-
-Then re-run the rebuild command above. To avoid this happening again, prefer the npm-installed path in your client config so the binary is always resolved via Node's own tooling:
-
-```json
-{
-  "mcpServers": {
-    "obsidian-brain": {
-      "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/vault"]
-    }
-  }
-}
-```
-
----
-
-## No vault given
-
-**Summary.** The server aborts on startup with `Give at least one vault with --vault <name=path>.`
-
-**Cause.** `obsidian-brain server` takes its vaults from `--vault` flags. It does not read the vault from an environment variable.
-
-**Fix.** Add `--vault <name>=<path>` to the server arguments in your MCP client config (see the JSON snippet above), or to the command line: `obsidian-brain server --vault notes=/path/to/vault`. Repeat the flag to serve more than one vault. The name may contain letters, digits, `-` and `_`.
-
----
-
-## First run very slow or appears to hang
-
-**Summary.** The first invocation of any tool takes a minute or more before returning, or the CLI appears frozen.
-
-**Cause.** On first use, the default embedding model (`bge-small-en-v1.5` at ~34 MB; other presets range from 22 MB `english-fast` to 118 MB `multilingual`) is downloaded into `DATA_DIR/models/`. No progress is printed to stdout because stdout is the MCP transport.
-
-**Fix.** Wait. Subsequent runs reuse the cached model and start in well under a second. If the download actually failed (network dropped, disk full, etc.) delete the partial download and retry:
-
-```bash
-rm -rf "$DATA_DIR/models"
-```
-
-The next run will re-download cleanly.
-
----
-
-## Index stale after a manual edit outside Claude
-
-**Summary.** You edited notes directly in Obsidian (or on disk) and `search` does not reflect the change.
-
-**Cause.** The `server` watcher normally picks this up within a few seconds. If search is still stale, one of: the watcher is disabled (`OBSIDIAN_BRAIN_NO_WATCH=1`), the vault lives somewhere FSEvents/inotify can't observe (SMB, NFS, some iCloud setups), or you're running on the scheduled-index fallback which only ticks every 30 minutes. See also [Watcher not firing](#watcher-not-firing).
-
-**Fix.** Either call the `reindex` tool from chat, or run the CLI manually:
-
-```bash
-# npm-installed:
-obsidian-brain index --vault notes=/path/to/vault
-
-# local source clone:
-cd /absolute/path/to/obsidian-brain && node dist/cli/index.js index --vault notes=/path/to/vault
-```
-
----
-
-## tools/call returns "No node found matching X"
-
-**Summary.** Tools are listed, but calling one with a name argument returns `No node found matching "X"`.
-
-**Cause.** The fuzzy name resolver could not match the string you passed to any known note.
-
-**Fix.** Try the exact filename (case sensitive, including folder prefix if the note lives in a subfolder). If you are not sure of the exact name, call `search` first and pass the result's `id` field to `read_note`. IDs always resolve unambiguously.
-
----
-
-## tools/call returns "Ambiguous name X. Candidates: ..."
-
-**Summary.** The tool rejects your input and lists two or more candidate notes.
-
-**Cause.** Multiple notes fuzzy-match the name you supplied.
-
-**Fix.** Pass one of the `id` values from the candidate list instead of the short name. For example, pass `Concepts/Widget Theory.md` rather than `Widget` if both `Concepts/Widget Theory.md` and `Projects/Widget Launch.md` were listed as candidates.
-
----
-
-## Transport closed in Jan only (Claude Desktop works fine)
-
-**Summary.** Jan reports `Transport closed` within seconds of launching the connector; the same server works fine in Claude Desktop.
-
-**Cause.** Jan 0.7.x ships an rmcp client with an open bug ([rust-sdk#468](https://github.com/modelcontextprotocol/rust-sdk/issues/468)) parsing SSE frames from Streamable HTTP MCP servers. This only affects HTTP transports. obsidian-brain is stdio-only at source, so if you are hitting this you have configured Jan to talk to it over HTTP (likely via an HTTP proxy or wrapper).
-
-**Fix.** Remove the HTTP entry and add a stdio entry per [jan.md](./jan.md). The rmcp bug does not apply to stdio, and obsidian-brain is a stdio server; you only want the HTTP path if you have wrapped it in a proxy on purpose.
-
----
-
-## launchd job not re-indexing
-
-**Summary.** You set up a launchd agent for periodic reindexing on macOS, but the index never refreshes.
-
-**Cause.** Usually the `PATH` inside the plist does not include the directory containing your `node` binary, or the `--vault` path in the plist's `ProgramArguments` points somewhere wrong, or its name or `DATA_DIR` differs from the server's so the job indexes a different `kg.db`.
-
-**Fix.** Check the stderr log and reload the job:
-
-```bash
-tail -f /tmp/obsidian-brain-index.err
-launchctl unload ~/Library/LaunchAgents/com.you.obsidian-brain.plist
-launchctl load ~/Library/LaunchAgents/com.you.obsidian-brain.plist
-launchctl list | grep obsidian-brain
-```
-
-If `launchctl list` shows a non-zero exit status in the second column, the most recent run failed; the stderr log will tell you why. See [launchd.md](./launchd.md) for the full plist template, including the correct `PATH` and `--vault` entries.
-
----
-
-## systemd timer not firing
-
-**Summary.** You set up a user-level systemd timer on Linux and no reindex ever happens.
-
-**Cause.** Usually the service unit's `ExecStart` points at the wrong `node` binary, or the timer was written but never enabled.
-
-**Fix.**
-
-```bash
-systemctl --user status obsidian-brain.service
-journalctl --user -u obsidian-brain.service -n 50
-systemctl --user list-timers | grep obsidian-brain
-```
-
-If `status=203/EXEC` appears, the kernel could not execute the `ExecStart` path — fix the `node` path in the unit file. If the timer is not in `list-timers`, you likely forgot to enable it:
-
-```ini
-# Enable and start the timer
-systemctl --user enable --now obsidian-brain.timer
-```
-
-See [systemd.md](./systemd.md) for the full unit file templates.
-
----
-
-## SQLite index corrupted or weird schema errors
-
-**Summary.** Startup or queries fail with messages like `database disk image is malformed`, `no such column`, or other schema-level SQLite errors.
-
-**Cause.** Rare but possible after a crash or power loss mid-write. Can also occur if you rolled back to an older server build whose migrations do not match the on-disk schema.
-
-**Fix.** Delete the data directory and reindex:
-
-```bash
-rm -rf "$DATA_DIR"
-```
-
-Default locations: `$HOME/.local/share/obsidian-brain` on Linux, `$HOME/Library/Application Support/obsidian-brain` on macOS, or whatever `DATA_DIR` points at if you set it explicitly. You will lose the SQLite cache but not any vault content; the next run will rebuild the cache from your notes.
-
----
-
-## Embeddings look wrong or search returns irrelevant results
-
-**Summary.** `search` returns notes that seem unrelated to your query, or misses obviously-matching ones, or top semantic scores are negative.
-
-**Cause.** Three common reasons:
-
-1. **Stale prefix cache (most common cause for negative scores).** Vaults indexed before the bundled-seed mechanism existed, or vaults whose `embedder_capability` cache was populated by the embedder-probe-fallback path (HF unreachable + embedder loaded), can have rows with `query_prefix = NULL`. Asymmetric models (BGE/E5/mdbr-leaf-ir, the default `english-fast`) then embed both queries and documents with no prefix, sending them to different regions of the latent space than the model was trained for — cosine similarities collapse to near-zero or negative. **The current release self-heals this on next boot**: the resolver detects the stale row, promotes the bundled-seed prefixes over it, and triggers a one-time reindex (look for `embedding model X uses different query/document prefixes than before — re-embedding for accurate search` in stderr). If you want to force the rewrite without restarting, run `obsidian-brain models refresh-cache` (see "Cached model metadata is stale" below).
-2. The embedding model's notion of semantic similarity does not match what you actually want (this happens often with short or jargon-heavy queries).
-3. Your vault is mostly empty or stub notes, so there is not enough signal for embedding-based retrieval to work well.
-
-**Fix.** The default `search` mode is `hybrid` — Reciprocal-Rank-Fused semantic + full-text — so both signals combine out of the box. If the hybrid result still misses literal-token matches you know are in your vault, force FTS:
-
-```json
-{ "mode": "fulltext" }
-```
-
-passed via `search`. For pure concept queries, force semantic:
-
-```json
-{ "mode": "semantic" }
-```
-
-If you want better semantic retrieval overall, switch to a larger model — the server stores the active embedding model/dim/provider in `index_metadata` and **auto-reindexes from scratch the next time it boots under a new identifier**. No `--drop` needed:
-
-```bash
-EMBEDDING_MODEL=Xenova/bge-base-en-v1.5 obsidian-brain server --vault notes=/path/to/vault
-# or for the Ollama path:
-EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text obsidian-brain server --vault notes=/path/to/vault
-```
-
-On the next startup the server logs a single reason line ("Embedding model changed: X(d) → Y(d'). Auto-reindexing.") and rebuilds per-chunk embeddings. See [Architecture → Why local embeddings](./architecture.md#why-local-embeddings) for the bootstrap flow.
-
----
-
-## index_status reports a large `notesMissingEmbeddings` count
-
-**Summary.** `index_status` shows e.g. "2,639 / 3,867 notes indexed; 1,228 missing" and the count doesn't change across reindexes.
-
-**Cause.** In older releases, notes whose body produced zero chunks (empty files, frontmatter-only metadata notes, embeds-only collector notes, daily notes with just `# 2026-04-25` and no body, anything shorter than `minChunkChars` after frontmatter strip) were silently dropped by the chunker. The end-of-reindex self-heal would wipe their `sync.mtime` and try again on the next pass — same empty-body, same zero chunks, infinite no-op loop. The missing count stayed pinned regardless of what embedder you used because the cause was structural, not model-specific.
-
-**Fix.** Upgrade to a current release. The indexer now synthesises a fallback chunk from `title + tags + scalar frontmatter values + first 5 wikilink/embed targets` so daily notes etc. stay searchable by name. Notes with literally nothing to embed (no title, no frontmatter, no body) are recorded once in `failed_chunks` with reason `no-embeddable-content` and surfaced as a distinct bucket in `index_status`. After the next reindex, `notesNoEmbeddableContent` will show the count of structurally-unembeddable notes and `notesMissingEmbeddings` will reflect only genuine failures (typically <5% of any normal vault).
-
----
-
-## After upgrading, semantic search returns `{status: "preparing"}` for a few minutes
-
-**Summary.** After an `npx obsidian-brain@latest` upgrade, the next boot does a one-time auto-reindex.
-
-**Cause.** Several past releases shipped one-time auto-reindex triggers:
-
-- The `english-fast` preset uses `MongoDB/mdbr-leaf-ir` (22 MB, 768d post-Dense projection, asymmetric mxbai-style query prefix). If your vault was previously embedded with a different `english-fast` model, the next boot auto-detects the change and re-embeds once.
-- A schema bump that added seven metadata-cache columns to `embedder_capability`. The migration is additive (nullable columns, ALTER TABLE), so existing data is preserved — but the schema-version bump itself triggers a reindex reason on the boot that performs the migration.
-
-**Fix.** No action required. Semantic search returns `{status: "preparing"}` during the rebuild; fulltext search and every non-semantic tool work throughout. Typical 3000-note vault re-embeds in 5–15 minutes. If you want to pin the old `english-fast` model explicitly, set `EMBEDDING_MODEL=Xenova/paraphrase-MiniLM-L3-v2` to override the preset.
-
----
-
-## Cached model metadata is stale
-
-**Summary.** A model author fixed an upstream config (e.g. corrected a `tokenizer_config.json` `model_max_length` that used to lie) and you want the new value picked up. The metadata cache lives forever once written — there's no automatic refetch, so you have to invalidate it explicitly.
-
-**Fix.** Run the CLI command, then restart your MCP client:
-
-```bash
-# Invalidate every cached model metadata entry
-npx obsidian-brain models refresh-cache
-
-# Or just one model
-npx obsidian-brain models refresh-cache --model Xenova/bge-small-en-v1.5
-```
-
-Output looks like:
-
-```json
-{
-  "dataDir": "/Users/you/.local/share/obsidian-brain",
-  "scope": "all",
-  "rowsCleared": 2,
-  "vaults": [
-    { "dbPath": "/Users/you/.local/share/obsidian-brain/notes/kg.db", "rowsCleared": 2 }
-  ],
-  "nextBoot": "will refetch via metadata-resolver chain (cache miss → seed → live HF). Restart the server for the change to take effect."
-}
-```
-
-After the next boot the resolver re-runs the seed → HF chain. If `dim` or the prefix changed, the existing prefix-strategy reindex trigger fires automatically; otherwise the change is invisible (metadata correction with no behaviour delta).
-
-`refresh-cache` is cheap: ~0 HF calls for any model in the bundled seed (the 348-entry seed re-populates the cache instantly on next boot) and exactly 1 HF call per non-seeded BYOM id. Safe to run any time you suspect cached metadata is stale. Only edge case: if you run it OFFLINE on a non-seeded BYOM id, fallback safe defaults (512 max-tokens, no prefixes) get cached — fix by running again online, or by setting an explicit `models override`.
-
----
-
-## Wrong query/document prefix shipped upstream (and you don't want to wait for an npm release)
-
-**Summary.** MTEB's curated metadata or HuggingFace's `config_sentence_transformers.json` has a wrong prefix for a model you actually run, and the bug is silently degrading retrieval quality. Symptoms: cosine similarity for query/document pairs is much lower than expected; semantic search returns junk; the prefix strings printed by `npx obsidian-brain models check <id>` don't match what the model author documents.
-
-**Fix.** Two options, both survive `npm update obsidian-brain`:
-
-```bash
-# Option 1: pull the latest seed from upstream main (if the fix already
-# landed in the repo but isn't on npm yet).
-npx obsidian-brain models fetch-seed
-
-# Option 2: hand-fix the prefix locally without waiting for any release.
-npx obsidian-brain models override <model-id> \
-  --query-prefix "Represent this sentence for searching relevant passages: " \
-  --document-prefix ""
-
-# Then invalidate the cache so the override takes effect on the next boot
-# even for the row that was already populated:
-npx obsidian-brain models refresh-cache --model <model-id>
-```
-
-Both files live in `~/.config/obsidian-brain/` (or `$XDG_CONFIG_HOME/obsidian-brain/`, or `$OBSIDIAN_BRAIN_CONFIG_DIR`, or `%APPDATA%/obsidian-brain/` on Windows). The override file is a flat JSON dict keyed on model id — easy to share via dotfiles. The prefix-strategy hash in `bootstrap.ts` automatically detects the changed prefix and triggers a one-time re-embed of the vault on next boot. See `docs/cli.md` for the full `models override` flag reference.
-
----
-
-## Ollama: I ran `ollama pull` and now retrieval feels worse
-
-**Summary.** Ollama tags are mutable: `ollama pull bge-m3` can replace local weights with a newer build under the same tag. obsidian-brain auto-detects this and triggers a re-embed, but only when Ollama is reachable at boot.
-
-**How the auto-detect works.** `OllamaEmbedder.init()` calls `/api/tags` and reads the manifest digest (`sha256:…`) for your active model. The digest is stored in `index_metadata` as `embedder_identity_hash` and compared on every subsequent boot. When the digest differs (because Ollama swapped weights underneath), `bootstrap.ts` wipes embeddings + re-embeds the vault, same path as a model id change.
-
-**When auto-detect doesn't fire.**
-
-- **Ollama wasn't running at boot** — `/api/tags` failed, the digest came back null, the comparison was skipped. Fix: start Ollama, restart the server. The next boot stamps the current digest; the boot AFTER that catches any subsequent `ollama pull`.
-- **You're on a very old Ollama version that doesn't return `digest` in `/api/tags`** — same skip, same fix (upgrade Ollama).
-- **You want to force a rebuild right now** without waiting for the next pull:
-
-  ```bash
-  obsidian-brain index --vault notes=/path/to/vault --drop
-  ```
-
-**Pinning a tag if you want stricter identity.** Ollama tags like `bge-m3` resolve to whatever the registry currently calls "latest." If you want a stable pin that obsidian-brain treats as a different model whenever it changes, pin the explicit tag:
-
-```bash
-ollama pull bge-m3:567ca40d
-# then in your MCP client config:
-EMBEDDING_MODEL=bge-m3:567ca40d
-```
-
-The model id string itself differs across versions, so even the boot-time `modelIdentifier()` check (which fires before the digest check) catches the change.
-
----
-
-## Wanting to register a model that MTEB doesn't track
-
-**Summary.** You're running an obscure HF model (research preview, fork, or a community Ollama model) that's not in the bundled seed. Without registration, every first-use boot triggers a live HF fetch (slow), and prefix resolution falls back to Tier 3 README fingerprinting (often wrong on long-form READMEs).
-
-**Fix.** Use `models add` to register the model with its load-bearing fields:
-
-```bash
-npx obsidian-brain models add my-org/exotic-embedder \
-  --max-tokens 4096 \
-  --query-prefix "Query: " \
-  --document-prefix "Document: "
-```
-
-When all three fields are specified, the resolver short-circuits the HF lookup entirely for this id — your override IS the metadata. `models add` refuses if the id is already in the seed (use `models override` to patch existing entries) or already has an override (use `models override <id> --remove` to clear first, then `add` again). No silent overwrites.
-
----
-
-## tools/list returns -32603 Cannot read properties of undefined (reading '_zod')
-
-**Summary.** The client gets JSON-RPC error `-32603` with the message `Cannot read properties of undefined (reading '_zod')` when listing tools.
-
-**Cause.** A tool handler somewhere uses the deprecated single-argument form `z.record(x)`. Newer Zod versions require the two-argument form `z.record(z.string(), x)`.
-
-**Fix.** In the handler file, change:
-
-```ts
-z.record(someSchema)
-```
-
-to:
-
-```ts
-z.record(z.string(), someSchema)
-```
-
-Rebuild and restart the client. This is rare in our code (we have fixed it once already), but worth knowing if you are writing your own tools against the same SDK.
-
----
-
-## Race condition: edit appears in Claude but not in search for 30 min
-
-**Summary.** You wrote a note via an MCP tool. It shows up on disk and in Obsidian immediately, but `search` does not find it until much later.
-
-**Cause.** The write tool refreshes the affected file in the index immediately after the write succeeds, and the live watcher catches it on disk as a second-chance. If both failed (transient SQLite lock, filesystem error, or watcher disabled on a vault FSEvents can't observe), the file won't show up in search until the next scheduled pass from launchd or systemd — which only runs if you've set up a timer-based fallback, otherwise never.
-
-**Fix.** Check the MCP server log for a re-index error near the time of the write:
-
-```bash
-tail -n 200 ~/Library/Logs/Claude/mcp-server-obsidian-brain.log
-```
-
-You can force a refresh immediately by calling the `reindex` tool, or by running the CLI command shown in the "Index stale" section above.
-
----
+The `reindex` tool or `obsidian-brain index --vault notes=/path/to/vault` updates the index at once. For a vault the watcher cannot see, run `index` on a timer, as [Running as a service](systemd.md) shows.
 
 ## Watcher not firing
 
-**Summary.** `obsidian-brain server` is running but edits made in Obsidian don't show up in `search` until you call `reindex` manually.
+At startup, the server logs `watching <path> for changes` for each vault. If that line is missing, look for `OBSIDIAN_BRAIN_NO_WATCH`. If it is present, the file system does not report changes; see the previous section.
 
-**Cause.** One of:
+## "No note found matching X" or "Multiple notes match X"
 
-1. Vault on a network drive. macOS FSEvents and Linux inotify don't reliably observe changes on SMB/NFS shares (and iCloud Drive is its own mess). Workaround: set `OBSIDIAN_BRAIN_NO_WATCH=1` and use a scheduled `obsidian-brain index` via launchd / systemd instead.
-2. `OBSIDIAN_BRAIN_NO_WATCH=1` is set somewhere you forgot about — inherited from a shell, a launchd `EnvironmentVariables` block, or a systemd `Environment=` line.
-3. Obsidian's own save debounce is longer than our reindex debounce. If the file hasn't actually landed on disk yet, chokidar can't see it. Check Obsidian → Settings → Files and links.
-4. The file isn't a `.md`. The watcher ignores everything else by design.
+A tool that takes a note name could not resolve it. "No note found" means no note matches. "Multiple notes match" lists the candidates. Pass the vault-relative path, such as `Concepts/Widget Theory.md`, in place of the short name. The `id` of a `search` result is such a path.
 
-**Fix.** First confirm the watcher started — on stderr you should see a line like:
+## Search results look wrong
 
-```
-obsidian-brain: watching /absolute/path/to/vault for changes
-```
+The default `search` mode is `hybrid`: it combines semantic and full-text ranks. For a phrase you know is in the vault, pass `mode: "fulltext"`. For a question about a concept, pass `mode: "semantic"`.
 
-If that line is missing, check `OBSIDIAN_BRAIN_NO_WATCH`. If it's present, the issue is one of the platform causes above.
+For better semantic results, switch to a larger model, such as `EMBEDDING_PRESET=english-quality`. The server embeds the vault again on the next start; no `--drop` is needed.
 
----
+## Semantic search says it is preparing
 
-## Embedding dimension mismatch error on startup
+The embedder is loading, or the server is embedding the vault again after a model change. Full-text search and the other tools work in the meantime. `index_status` shows the progress.
 
-**Summary.** Server aborts with an error about embedding dimensions not matching the stored index.
+## `index_status` reports missing embeddings
 
-**Cause.** You're running an old server and changed `EMBEDDING_MODEL` to a model whose output dimensionality differs from the stored index (e.g. 384 → 768). Older servers couldn't auto-migrate across dim changes.
+`notesMissingEmbeddings` counts notes whose chunks failed to embed. `notesNoEmbeddableContent` counts notes with nothing to embed: no title, no frontmatter and no body. `index_status` also lists the chunks skipped in the last pass and why. A chunk that is too long for the model is skipped, and the indexer lowers the chunk size limit for later chunks.
 
-**Fix.** Upgrade to a current release — `src/pipeline/bootstrap.ts` records the active model/dim/provider in the `index_metadata` table and, when any of those differs on startup, automatically drops the vec tables + sync mtimes and rebuilds per-chunk embeddings against the new model on next boot. No `--drop` flag required; just set the new env var and restart:
+## The index is damaged
+
+Errors such as `database disk image is malformed` or `no such table` during an index pass mean a damaged index. Stop the server and delete the index of that vault:
 
 ```bash
-EMBEDDING_MODEL=Xenova/bge-base-en-v1.5 obsidian-brain server --vault notes=/path/to/vault
+rm "$DATA_DIR/<name>/index.db"*
 ```
 
-If you are stuck on an older release and cannot upgrade, wipe `$DATA_DIR` and let the fresh index build under the new model (vault content is untouched):
+The default `DATA_DIR` is `~/.local/share/obsidian-brain`. The next start builds the index again from the vault; the notes are not touched.
 
-```bash
-rm -rf "$DATA_DIR"
-```
+## An index of version 1
 
----
+Version 2 keeps its index in `<DATA_DIR>/<name>/index.db` and its models in the Hugging Face cache layout. It does not read the `kg.db` files or the model cache of version 1. It builds a new index and downloads the model on the first start. You can delete the old `kg.db` files.
 
-## Collecting MCP server logs
+## Tool calls time out
 
-**Summary.** You're debugging a hang, a timeout, or weird tool output and want to see what the server actually did.
+A tool call that runs longer than its time limit returns an error that names the tool and the limit. The limit is 30 seconds, and 10 minutes for `reindex`. `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS` changes it for every tool; `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS_<TOOL>` changes it for one.
 
-**Where the logs live.**
+If a call hangs in the client with no error, check the server log for the request. A request that never appears in the server log did not reach the server.
 
-- **macOS (Claude Desktop)**: `~/Library/Logs/Claude/mcp-server-obsidian-brain.log`
-- **Windows (Claude Desktop)**: `%APPDATA%\Claude\logs\mcp-server-obsidian-brain.log`
-- **Linux (Claude Desktop)**: `~/.config/Claude/logs/mcp-server-obsidian-brain.log`
-- **Other clients** (Cursor, Jan, VS Code, Cline, Zed, etc.): each writes to its own location — check the client's own logs directory.
+## Several clients on one vault
 
-**What the log contains.** Every inbound `Message from client` and outbound `Message from server` line is logged with an ISO timestamp. Each tool call has a matching `id` on both sides.
+Each stdio client starts its own server. Two servers with the same `DATA_DIR` and the same vault name share one index file. SQLite runs in WAL mode with a 5-second busy timeout, so two writers take turns. Each server runs a catch-up index at startup and a watcher, and each loads its own copy of the model. Set `OBSIDIAN_BRAIN_NO_CATCHUP=1` and `OBSIDIAN_BRAIN_NO_WATCH=1` for the client you use less. To share one process, run `server --transport http` and connect both clients to it.
 
-**Quick way to see round-trip times per tool call.** Extract just the `tools/call` requests and their matching responses with the time delta:
+## `apply_edit_preview` fails
 
-```bash
-grep -E 'Message from (client|server)' ~/Library/Logs/Claude/mcp-server-obsidian-brain.log \
-  | grep -E '"method":"tools/call"|"result":|"error":' \
-  | awk -F'[T"]' '{print substr($0,1,23), $0}'
-```
+`File "X" has changed since the preview was generated` means the note changed between `edit_note` with `dryRun: true` and the apply. `Preview "X" not found or expired` means more than 5 minutes passed, or the server restarted. In both cases, run the dry run again and apply the new preview id.
 
-If request `id=N` has a `Message from client` and then a `Message from server` with the same `id` milliseconds later, the server responded fast. If there's a big gap between the client message and the server's response, the server was busy. **If there's NO server response at all for an `id`, the server never received it** — that's a client-side transport problem, not ours.
+## `edit_note` with `replace_window` returns `NoMatch`
 
-**Note**: per-tool-call timeouts default to 30s. If the server hits that internally, it returns a visible error rather than hanging silently. Set `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS=<millis>` to tune.
+The `search` text is not in the note. Retry with `from_buffer: true`: the server keeps the failed `content` and `search` for 30 minutes and retries them with `fuzzy: true` and `fuzzyThreshold: 0.5`. Content over 512 KB is not kept. You can also pass `fuzzy: true` and a lower `fuzzyThreshold` yourself.
 
----
+## An Ollama model is not pulled
 
-## Tool calls hang for 4 minutes then time out client-side
+For a model outside Ollama's official library, such as `user/custom-model`, the server does not pull it and says so. Run `ollama pull user/custom-model`, or set `OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL=1`. With `OBSIDIAN_BRAIN_OLLAMA_AUTO_PULL=0`, the server pulls no model at all.
 
-**Summary.** A tool call appears to hang until your MCP client gives up with a "No result received" message after ~4 minutes. Subsequent calls in the same session also hang. Restarting the client fixes it.
+If the Ollama server is not reachable, the error asks whether Ollama runs at `OLLAMA_BASE_URL` with the model pulled.
 
-**Cause.** Almost always a client-side stdio transport stall, not a server-side hang. Both Claude Desktop and some other MCP clients have intermittent buffer/write issues where a request you think you sent never actually makes it down the pipe. The server sits there waiting; the client's internal timeout eventually trips.
+## macOS: the server cannot read the vault
 
-**How to tell.** Compare the request `id` in the client's log against the server log at the path above. If the request never appears in the server log's `Message from client` lines, the server never saw it — confirms it's a client issue.
+A vault under `~/Documents`, `~/Desktop` or iCloud Drive needs Full Disk Access. A stdio server gets the access of the client that starts it, so grant Full Disk Access to the client app in System Settings, Privacy and Security, and restart it.
 
-**Fix / mitigation.**
-
-- Restart the MCP client (⌘Q in Claude Desktop, then reopen).
-- The server itself times out any tool handler that runs longer than `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS` (default 30000) and returns an actionable error. So a future hang that IS server-side will surface much faster.
-- If it's reproducible, please attach the server log (macOS path above) to an issue at <https://github.com/sweir1/obsidian-brain/issues>.
-
----
-
-## Running multiple MCP clients against the same vault
-
-**Summary.** You have `obsidian-brain` configured in two clients (e.g. Claude Desktop AND Cursor) pointing at the same vault.
-
-**How it works.** Each MCP client spawns its own `obsidian-brain server` process. Both processes share the vault directory and the default `DATA_DIR`, which means they share the SQLite index file (`<DATA_DIR>/<name>/kg.db`, where `<name>` is the vault name from `--vault`). Give the vault the same name in both clients so they use the same index.
-
-**Correctness.** Fine. SQLite is in WAL mode plus a 5-second `busy_timeout`, so concurrent writers serialise cleanly instead of throwing `SQLITE_BUSY`. Reads from one process don't block writes from the other.
-
-**Efficiency caveats.**
-
-- Both processes run a startup catchup reindex on boot → duplicate work on every relaunch. Set `OBSIDIAN_BRAIN_NO_CATCHUP=1` in the less-used client's config to skip it there.
-- Both chokidar watchers fire on every file change → duplicate live-reindexing. Set `OBSIDIAN_BRAIN_NO_WATCH=1` in one of the client configs if you want only one watcher live.
-- Each process loads its own embedder (~200 MB RAM, shared model file on disk cached under `DATA_DIR/transformers-cache` so only one download).
-
-**If you hit `SQLITE_BUSY` despite the timeout**: one of your processes is holding a very long write transaction. Most likely a stuck catchup indexing a huge backlog. `OBSIDIAN_BRAIN_NO_CATCHUP=1` in all but one client fixes it.
-
----
-
-## `apply_edit_preview` fails with "file has changed since preview"
-
-You called `edit_note({ dryRun: true })`, got a `previewId`, but between then and `apply_edit_preview(previewId)` the target file was modified (either by you, Obsidian's autosave, or another tool call). The preview's cached `originalContent` no longer matches what's on disk, and the tool refuses to apply rather than clobber intervening changes.
-
-**Fix:** regenerate the preview. Re-call `edit_note({ dryRun: true, ...same args... })` — you'll get a fresh `previewId` computed against the current file content. Then `apply_edit_preview(newPreviewId)`.
-
-Preview TTL is 5 minutes. If you wait longer than that between dry-run and apply, you'll see `"Preview <previewId> not found or expired"` instead — same fix.
-
----
-
-## `edit_note({ mode: "replace_window" })` returns `NoMatch`
-
-Your `search` string didn't match anything in the target file. Three common causes: (a) the file content changed since you read it, (b) the search string has subtle whitespace / punctuation drift, (c) you're editing a note that was re-generated and the anchor text no longer exists.
-
-**Quick fix — retry with `from_buffer`:**
-
-```json
-edit_note({ "name": "foo.md", "from_buffer": true })
-```
-
-When `replace_window` fails with `NoMatch`, obsidian-brain buffers the proposed `content` + `search` under the file path. A follow-up call with `from_buffer: true` retrieves the buffered content and retries with `fuzzy: true, fuzzyThreshold: 0.5` — tolerant enough to match through whitespace drift and minor wording changes.
-
-**Manual alternative:** re-issue the original call with `fuzzy: true` + a lower `fuzzyThreshold` (e.g. `0.5`) yourself, tightening the `search` string to match what's actually in the file.
-
-Buffer TTL is 30 minutes; per-entry content cap is 512 KB. If your `replace_window` content is larger than that, the buffer refuses to accept it — the tool response will include a `reason` field explaining why.
-
----
-
-## Claude Desktop / Jan can't find node or npx
-
-**Symptom.** The client's MCP log shows `spawn npx ENOENT` or `spawn node ENOENT`.
-
-**Cause.** GUI apps on macOS inherit a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin`) and don't see `/opt/homebrew/bin` where Homebrew installs node.
-
-**Fix.**
-
-```bash
-sudo mkdir -p /usr/local/bin
-sudo ln -sf "$(which node)" /usr/local/bin/node
-sudo ln -sf "$(which npx)" /usr/local/bin/npx
-```
-
-Then restart the client. **Alternative:** use absolute paths in the client config (`"command": "/opt/homebrew/bin/npx"`). The symlink is preferred because it survives config-shape churn across client updates.
-
----
-
-## macOS: vault reads fail or the embedding-model download hangs silently
-
-**Symptom.** The server starts but `search` returns zero results, or the first-boot model download never finishes (no progress in the log).
-
-**Cause.** macOS Full Disk Access not granted to the client. obsidian-brain inherits the client's filesystem privileges.
-
-**Fix.** Open **System Settings → Privacy & Security → Full Disk Access**, enable the client (Claude Desktop / Jan / Cursor / etc.), then quit and relaunch the client.
-
-Note: granting *Files & Folders* access for the specific vault folder is not sufficient — transformers.js downloads the model to a cache path that usually falls outside any per-folder grant. Full Disk Access is required.
-
----
-
-## npx is launching an old version
-
-**Symptom.** Logs show obsidian-brain starting under an older version even though npm shows a newer one as `latest`.
-
-**Cause.** npx caches resolved versions under `~/.npm/_npx`. If the cached entry for `obsidian-brain` is stale and the config uses `npx obsidian-brain` (no `@latest`), npx reuses the cache.
-
-**Fix.**
-
-```bash
-rm -rf ~/.npm/_npx
-```
-
-Then restart the client. **Prevention:** always use `obsidian-brain@latest` in your client config — the `@latest` tag forces npx to re-resolve from npm on every launch. All config examples in this repo use `@latest` for this reason.
-
----
-
-## The embedding-model cache looks corrupt
-
-**Symptom.** `onnxruntime` errors, or `Invalid model file` at boot.
-
-**Cause.** An interrupted model download left a truncated file in the transformers.js cache.
-
-**Fix.** Delete the cache directory and let it re-download:
-
-```bash
-# Default transformers.js cache location when DATA_DIR is unset
-rm -rf ~/.cache/huggingface
-# If you set DATA_DIR, the model lives under $DATA_DIR/models instead
-```
-
-Then restart the client. First boot will re-download (~34 MB for the english preset, ~135 MB for multilingual).
-
----
-
-## Server crashes silently — no error in the MCP log
-
-**Summary.** The MCP client (Claude Desktop / Claude Code / Cursor / Jan / etc.) shows the connector as disconnected and there's no useful error in `~/Library/Logs/Claude/mcp-server-obsidian-brain.log`. Just the boot banner and silence.
-
-**Cause.** Three known failure classes:
-
-1. **Top-level native-module load failure** (`better-sqlite3` / `sqlite-vec` ABI mismatch after a Node version change). The preflight wrapper records to `~/.cache/obsidian-brain/last-startup-error.log`.
-2. **Unhandled async rejection** (something throws after `startServer()` returns — chokidar event handler, MCP SDK callback, transitive-dep EventEmitter, fire-and-forget block). Global error nets record the same crash log file.
-3. **`npm 11.x` stdio-pipe bug under `npx -y obsidian-brain@latest`**. External — can't fix from inside our code; the workaround is in the next subsection.
-
-**Fix.**
-
-1. **First, check `~/.cache/obsidian-brain/last-startup-error.log`.** Both preflight and the global error nets write to that file synchronously, so it survives any Claude Desktop logger truncation. The `type:` line near the top tells you which crash class:
-   - `type: better-sqlite3` / `type: sqlite-vec` → ABI mismatch, see [`ERR_DLOPEN_FAILED` section](#err_dlopen_failed-node_module_version-mismatch).
-   - `type: uncaught-exception` / `type: unhandled-rejection` → an async error escaped a handler. The stack trace is in the same file. Open a GitHub issue with that file's contents.
-
-2. **If the file doesn't exist OR has no useful trace, enable debug mode:**
-   ```jsonc
-   {
-     "mcpServers": {
-       "obsidian-brain": {
-         "command": "npx",
-         "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/path/to/your/vault"],
-         "env": {
-           "OBSIDIAN_BRAIN_DEBUG": "1"
-         }
-       }
-     }
-   }
-   ```
-   Restart your MCP client. The log now shows a step-by-step trace of every startup phase:
-   ```
-   obsidian-brain debug [+65ms]: preflight: starting native-module checks
-   obsidian-brain debug [+66ms]: preflight: better-sqlite3 loaded successfully
-   obsidian-brain debug [+115ms]: cli: 'server' subcommand action entered
-   obsidian-brain debug [+117ms]: createContext: entry, calling resolveConfig
-   obsidian-brain debug [+125ms]: startServer: server.connect returned — transport is live
-   obsidian-brain debug [+125ms]: background: dbIsEmpty branch — first-boot, calling ensureEmbedderReady
-   …
-   ```
-   The **last line before silence** is the step that hung or crashed. Include it in any bug report.
-
-3. **If debug mode shows the server reached `server.connect returned` but nothing happened after that** — and you're using `npx -y obsidian-brain@latest` — you're hitting the npm 11.x stdio bug. Workaround: change `args` to a local install path:
-   ```jsonc
-   "args": ["-y", "/Users/you/path/to/dist/cli/index.js", "server", "--vault", "notes=/path/to/your/vault"]
-   ```
-   `npx` skips the install/postinstall wrapper when given an absolute path, which sidesteps the bug.
-
-## Ollama BYOM model not pulling (custom `EMBEDDING_MODEL`)
-
-**Symptom:** when you set `EMBEDDING_PROVIDER=ollama` plus a custom `EMBEDDING_MODEL=user/custom-fork` (not from a known preset), the server refuses to auto-pull and the MCP response / CLI stderr shows:
-
-```
-Ollama model 'user/custom-fork' is not pulled and auto-pull was skipped.
-Reason: third-party namespace 'user' is not in the auto-pull allowlist
-(only Ollama's official 'library' models auto-pull by default for BYOM).
-To fix:
-  1. Run manually: ollama pull user/custom-fork
-  2. Or opt in: OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL=1
-  3. Or switch to a preset: EMBEDDING_PRESET=multilingual-ollama (uses qwen3-embedding:0.6b)
-```
-
-**Why this happens:** Ollama itself has no built-in "verified-model" trust gate ([ollama/ollama#11941](https://github.com/ollama/ollama/issues/11941) tracks a proposed but unshipped "Secure Mode"; CVE-2024-37032 was a real path-traversal exploit via crafted manifests). To prevent silently downloading arbitrary user-named artifacts from third-party namespaces, obsidian-brain auto-pulls only:
-
-- Preset-known models (when `EMBEDDING_PRESET=multilingual-ollama` is set — `qwen3-embedding:0.6b` auto-pulls)
-- Bare model ids with no `/` (Ollama's official `library` namespace — `nomic-embed-text`, `bge-m3`, `qwen3-embedding:0.6b` all auto-pull)
-- `library/<name>` explicitly-prefixed ids (also official — `library/llama3:8b` auto-pulls)
-
-Anything with a third-party namespace prefix (`user/fork`, `myregistry.com/team/model`) requires the explicit opt-in env var.
-
-**Three fixes, in order of preference:**
-
-1. **Run the pull manually** — fast, no config change needed:
-   ```bash
-   ollama pull user/custom-fork
-   ```
-   Then restart your MCP client.
-
-2. **Opt in to BYOM auto-pull** — set `OBSIDIAN_BRAIN_OLLAMA_BYOM_AUTO_PULL=1` in your MCP client's env block. Future BYOM models will auto-pull on first boot. This is the right choice if you regularly try different forks.
-
-3. **Switch to a preset** — if the BYOM model isn't load-bearing, `EMBEDDING_PRESET=multilingual-ollama` (or any other listed preset) covers the common cases and continues to auto-pull by default.
-
-Note: the master kill-switch `OBSIDIAN_BRAIN_OLLAMA_AUTO_PULL=0` overrides ALL auto-pull (including presets and library models) and falls back to a "HTTP 404 — try: ollama pull <model>" error path.
-
-## "Failed to parse GITHUB_REGISTRIES_PROXY" in CI runs
-
-**Symptom:** the repo's Dependabot Updates workflow logs `Failed to parse GITHUB_REGISTRIES_PROXY environment variable` on every run. PR creation succeeds (Dependabot still opens version-bump and security PRs), but the workflow-runner step records the warning.
-
-**Why:** known benign warning from GitHub's hosted Dependabot runner — tracked upstream at [dependabot/dependabot-core#13328](https://github.com/dependabot/dependabot-core/issues/13328). The runner emits the line when no `registries:` section is defined in `.github/dependabot.yml`. There is no repo-side fix; the warning does not affect Dependabot's behavior.
-
-**Action:** none. Ignore the line. When upstream ships a fix the warning will stop appearing.
-
-## Still stuck?
-
-If none of the above matches, the two places to look next are:
-
-- **`~/.cache/obsidian-brain/last-startup-error.log`** — the synchronous crash log. The preflight wrapper writes native-module load failures here; the global error nets write uncaught-exception / unhandled-rejection here too. It survives logger truncation that the MCP client's stderr capture is prone to.
-- **The Claude Desktop MCP log** at `~/Library/Logs/Claude/mcp-server-obsidian-brain.log` (macOS) or the equivalent on your platform. With `OBSIDIAN_BRAIN_DEBUG=1` set in the env block, the stderr trace will include every startup checkpoint — the last line before any silent failure tells you exactly which step the server reached. For other clients, consult that client's own log location.
-- **The GitHub issues tracker** at [https://github.com/sweir1/obsidian-brain/issues](https://github.com/sweir1/obsidian-brain/issues). Search for your error text first; if nothing matches, open a new issue. Include:
-  - Output of `~/.cache/obsidian-brain/last-startup-error.log` (or note that it doesn't exist)
-  - The boot-banner line from the MCP log (it has Node version, ABI, npm version, platform)
-  - The full debug trace (with `OBSIDIAN_BRAIN_DEBUG=1` enabled)
-  - Your MCP client and version

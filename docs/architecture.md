@@ -1,268 +1,95 @@
----
-title: Architecture
-description: Why obsidian-brain is stdio-only, SQLite-backed, chunk-level — and how all the pieces fit together.
----
+# Architecture
 
-# obsidian-brain architecture
+This page describes how the server is built and why. The code is one crate, `crates/obsidian-brain`.
 
-This document explains *why* obsidian-brain is built the way it is. The [Quick start](getting-started.md) and [Tool reference](tools.md) cover *what* it does; this covers the decisions behind the structure, what each one trades away, and when you might want to revisit it.
+## Modules
 
-## Module layout at a glance
+| Module | Job |
+|---|---|
+| `cli` | The `server`, `index`, `watch` and `search` commands, and shutdown. |
+| `mcp` | The MCP server on rmcp: the tool list, the `vault` argument, argument validation, time limits and the HTTP transport. |
+| `vaults` | Opens, indexes, watches and closes the set of vaults. |
+| `context` | One vault: its database, search, writer, index pipeline and embedder state. |
+| `tools` | The 41 tools, in five groups: `find`, `write`, `files`, `graph` and `maintenance`. |
+| `pipeline` | The indexer, the startup compatibility check and the file watcher. |
+| `embeddings` | The local and Ollama embedders, the presets, the chunker, the model metadata chain and the chunk size limits. |
+| `store` | The SQLite schema and the queries of each table. |
+| `search` | Semantic, full-text and hybrid search. |
+| `graph` | The link graph, PageRank, betweenness and paths. |
+| `vault` | Reading, parsing, editing and moving Markdown files; frontmatter; wiki links. |
+| `resolve` | Turns a note name from a tool argument into a note path. |
 
-```mermaid
-flowchart LR
-    CLI["cli/<br/>(user entry)"] --> Server["server.ts"]
-    CLI --> Pipeline["pipeline/"]
-    Server --> Tools["tools/<br/>(18 handlers)"]
-    Tools --> Pipeline
-    Tools --> Search["search/"]
-    Tools --> Graph["graph/"]
-    Tools --> Vault["vault/"]
-    Tools --> Resolve["resolve/"]
-    Pipeline --> Vault
-    Pipeline --> Embedder["embeddings/"]
-    Pipeline --> Graph
-    Search --> Embedder
-    Pipeline --> Store[("store/<br/>SQLite")]
-    Search --> Store
-    Graph --> Store
-    Vault --> Store
-    Resolve --> Store
-```
-
-One-way-ish deps: everything flows toward `store/`. Tools never reach into `store/` directly — they go through `search/` / `graph/` / `vault/` / `resolve/` which own the query shapes. That boundary lets us swap any store implementation without touching tool handlers.
-
-## How indexing actually runs
-
-```mermaid
-flowchart LR
-    Scan["Scan vault<br/>for .md files"] --> Diff{"mtime<br/>changed?"}
-    Diff -->|"yes or new"| Parse["Parse frontmatter<br/>+ wiki-links"]
-    Diff -->|"no"| Skip[Skip]
-    Diff -->|"deleted"| Remove["deleteNode()"]
-    Parse --> Chunk["Chunk<br/>(heading-aware,<br/>code/LaTeX preserved)"]
-    Chunk --> Embed["Embed per chunk<br/>(SHA-256 content-hash dedup)"]
-    Embed --> Store[("SQLite<br/>nodes · edges · chunks<br/>FTS5 · chunks_vec")]
-    Remove --> Store
-    Skip --> Done
-    Store --> Done
-    Done["All files handled"] --> Stats["Return IndexStats"]
-```
-
-Incremental by default — only files whose `mtime` has changed go through parse + embed. That's why a re-index of a 10k-note vault with nothing changed costs roughly one `stat()` per file.
-
-## Why stdio, not HTTP
-
-The single most consequential decision. `obsidian-brain server` speaks stdio by default: `startServer` in `src/server.ts` instantiates a `StdioServerTransport` and nothing else.
-
-The one exception is `obsidian-brain server --transport http` (`src/http-server.ts`), a long-running server for a remote client. It binds to loopback by default and has no authentication of its own, so an authenticating proxy must sit in front of it. Everything below still holds for the default stdio transport.
-
-Arguments for stdio:
-
-- **No network listener, no network failure modes.** No firewall prompt, no port conflict with whatever else you're running, no auth scheme to implement (and get wrong). The only ambient authority is "whoever can exec our binary."
-- **Process lifetime tracks the client.** The MCP host (Claude Desktop, Claude Code, Jan, etc.) spawns the server as a child. When the client exits, the server exits. There is no "I closed Obsidian but the server is still holding a port" failure class, and no orphaned daemons to reap.
-- **Immune to a whole class of MCP transport bugs.** The most topical example is [modelcontextprotocol/rust-sdk#468](https://github.com/modelcontextprotocol/rust-sdk/issues/468): rmcp's Streamable-HTTP client mis-parses SSE frames emitted by TypeScript-SDK servers, so the first request works and every subsequent request fails with "Transport closed." That bug is what causes the aaronsb Obsidian MCP plugin to break when paired with Jan. See [Appendix: the rmcp / SSE bug](#appendix-the-rmcp-sse-bug-in-detail) below.
-
-Tradeoff given up: a stdio server cannot run on a remote host. For that topology, use `--transport http` behind an authenticating proxy.
+Tools reach the database through `search`, `graph`, `vault` and `resolve`, which own the query shapes.
 
 ## Several vaults, one server
 
-`server` takes one or more `--vault <name>=<path>` flags. Each vault gets its own `ServerContext`: DB, search, writer, pipeline and watcher. All vaults share one embedder, so the model loads once and one idle unload frees it for every vault. `src/vaults.ts` registers every tool once per vault on a capturing shim, then exposes each tool once, with a required `vault` argument whose schema is an enum of the vault names. A call goes to the handler of the vault it names. The tool modules stay single-vault and know nothing of this.
+`server` takes one or more `--vault <name>=<path>` flags. Each vault gets its own context: a database, a search index, a writer, an index pipeline and a watcher. All vaults share one embedder, so the model loads once, and one idle unload frees it for every vault.
 
-There is no default vault, so a wrong-vault write is always an explicit choice by the caller. `list_vaults` reports each vault and its index state. To give a client only some of the vaults, run a separate server with just those vaults.
+The server lists each tool once. Each tool except `list_vaults` has a required `vault` argument whose schema is an enum of the vault names. A call goes to the context of the vault it names. There is no default vault, so a write to the wrong vault needs an explicit wrong name.
 
-## Why SQLite with FTS5 + sqlite-vec
+At startup the vaults index one at a time in the background, after the MCP handshake. Tools answer during that time.
 
-The index is a single `better-sqlite3` file that holds everything: graph nodes, edges, full-text index, vector embeddings, and per-file sync state. No separate vector DB (LanceDB, Chroma, Qdrant), no separate search daemon (Meilisearch, Tantivy).
+## Transports
 
-Reference points in the code:
+stdio is the default. The client starts the server as a child process, and the server stops with the client. There is no port and no authentication to configure. A watchdog checks once a minute that the parent process is still alive, so a server whose client crashed stops too.
 
-- Schema: `src/store/db.ts` — `nodes`, `edges`, `sync`, `chunks`, `index_metadata`, plus `embedder_capability` (per-model adaptive capacity + metadata cache) and `failed_chunks` (fault-tolerant skip log); the FTS5 virtual table `nodes_fts` (tokenizer `porter unicode61`); and two sqlite-vec virtual tables: `nodes_vec` (mean-pooled note-level vector, kept for compat) and `chunks_vec` (per-chunk vectors, the main retrieval target). The vec0 dim is reconciled against the embedder at runtime and `index_metadata` records the active embedding model/dim/provider so a mismatch on reboot triggers an auto-reindex (`src/pipeline/bootstrap.ts`). Auto-reindex also fires on schema-version bumps, prefix-strategy changes, and provider switches (Ollama ↔ transformers also wipes `embedder_capability` and `failed_chunks` so stale capacity / metadata can't poison the next pass). `embedder_capability` caches per-model `(advertised_max_tokens, discovered_max_tokens, method, dim, query_prefix, document_prefix, prefix_source, base_model, size_bytes, fetched_at)` keyed on `(embedder_id, model_hash)` so the chunker picks a safe token budget AND the embedder applies the correct query/document prefix without re-probing on every boot; the cache lives forever once written (HF model configs are immutable for a given revision), users invalidate explicitly via `obsidian-brain models refresh-cache`. `fetched_at` is informational — surfaced via `index_status` and used by `clearMetadataCache` as the "is this row populated?" sentinel. `failed_chunks` records `(chunk_id, note_id, reason, error_message, failed_at)` for any chunk the fault-tolerant loop skipped (surfaced via the `index_status` tool); reasons include `too-long`, `embed-error`, `note-too-long`, `note-embed-error`, and `no-embeddable-content` (empty / frontmatter-only / sub-`minChunkChars` notes recorded once, never retried).
-- Chunking: `src/embeddings/chunker.ts` (~337 LoC) — heading-aware recursive chunker, preserves code fences + `$$…$$` LaTeX via U+E000/U+E001 sentinel masking, dedups unchanged chunks across reindexes via SHA-256 content-hash so edits to a single section skip re-embedding the rest.
-- Vector kNN: `src/store/embeddings.ts` + `src/store/chunks.ts` — `embedding MATCH ? AND k = ?` against `vec0`; chunk-level results group by `node_id` with max-score-per-note unless `unique: 'chunks'` is requested.
-- Full-text: `src/store/fulltext.ts` — FTS5 `MATCH` with `ORDER BY bm25(nodes_fts, 5.0, 1.0)` (5× title weight vs body) and `snippet()` for excerpts.
-- Hybrid fusion: `src/search/unified.ts` `hybrid()` — runs `semantic()` and `fulltext()` in parallel and fuses via Reciprocal Rank Fusion (RRF, k=60). This is the default `search` mode.
-- Sync state: `src/store/sync.ts` — tracks `(path, mtime, indexed_at)` for incremental re-index.
+`--transport http` serves streamable HTTP at `/mcp` for a remote client. It is stateless: no tool sends a message the client did not ask for, so each POST gets its own answer. It has no authentication and accepts only loopback `Host` headers and the `--allowed-host` values. Put an authenticating proxy in front of it.
 
-Why one file for all of it:
+## The index
 
-- **One data dir, one backup, one invariant.** If you `cp` the SQLite file, you've copied the entire index atomically. If you delete `DATA_DIR`, everything resets cleanly. There is no "the vector DB is ahead of the graph DB" drift to reason about.
-- **Vault-relative path is the universal join key.** Every row everywhere uses the relative path (e.g. `Areas/Ideas/thought.md`) as its ID. Nodes, edges, embeddings, and sync all join on it. See `src/store/nodes.ts`, `src/store/edges.ts`, `src/store/embeddings.ts`.
-- **better-sqlite3 is synchronous and fast.** For a single-vault, single-user workload there is no concurrent writer, so we skip connection pooling and async ceremony entirely. `src/store/db.ts:25` sets `journal_mode = WAL` for safe reads during writes and that is the whole concurrency story.
+Each vault has one SQLite file, `<DATA_DIR>/<name>/index.db`. It holds:
 
-**Stub-lifecycle helpers.** `src/store/nodes.ts` ships `pruneOrphanStubs`, `pruneAllOrphanStubs`, and `migrateStubToReal`. `move_note` and `delete_note` call these to clean up zero-inbound stubs left behind when a note is renamed or deleted; `create_note` repoints inbound edges from a matching stub to the new real note. `src/pipeline/indexer.ts` runs `resolveForwardStubs` + `pruneAllOrphanStubs` at the end of every `index()` call as a backstop.
+- `nodes` and `edges`: the notes and their wiki links. Links to missing notes point at stub nodes.
+- `nodes_fts`: an FTS5 index of title and content, with the `porter unicode61` tokenizer.
+- `chunks` and `chunks_vec`: the chunks of each note and their vectors, in a sqlite-vec `vec0` table.
+- `nodes_vec`: one vector per note, for note-level search.
+- `sync`: the modification time of each indexed file.
+- `index_metadata`: the model, dimension, provider, model identity, layout version and prefix strategy the index was built with.
+- `embedder_capability`: per model, the token limit and the query and document prefixes.
+- `failed_chunks`: the chunks that could not be embedded, and why.
 
-**FTS5 hyphen-safe queries.** `src/store/fts5-escape.ts` phrase-quotes user queries containing characters FTS5 treats as operators (`-`, `:`, `(`, `)`, `*`, etc.) so queries like `foo-bar-baz` don't crash. Pure-alphanumeric queries pass through unchanged, preserving `AND` / `OR` / `NEAR` for power users.
+One file means one backup and one thing to delete. The vault-relative path is the key of every row. The database runs in WAL mode with a 5-second busy timeout, so two processes can use one index.
 
-Tradeoff: sqlite-vec does a full scan for kNN. This is fine at the vault sizes we target (50k notes: subsecond on commodity hardware). Past roughly 500k notes you'd want an ANN index and this decision would need re-evaluation.
+The index has a layout version. When the version changes, the server drops the index and builds it again. There are no in-place migrations.
 
-## Database schema reference
+## Indexing
 
-Two SQLite tables that don't have a single owning module ship with their definitions in `src/store/db.ts` and are surfaced here for reference when debugging cache-state issues (e.g. "why does my preset use the wrong dim?", "why isn't the prefix-strategy hash flipping when I'd expect it to?"). For the rest of the schema (`nodes`, `chunks`, `edges`, `chunks_vec`, `nodes_vec`, `failed_chunks`, `sync`, `block_refs`), read the source — those are tightly coupled to their consumers in `src/store/`.
+An index pass scans the vault for `.md` files and compares each modification time with `sync`. It parses changed and new files: frontmatter, inline `key:: value` fields, wiki links and embeds. It deletes the nodes of files that are gone. A pass over a vault with no changes costs about one `stat` per file.
 
-### `index_metadata`
+The chunker splits a note at headings up to level 4, and splits long sections at paragraphs and sentences. It keeps code fences and `$$` math blocks whole. Each chunk has a SHA-256 hash of its text, so an edit to one section embeds only that section again. A note with no body gets one fallback chunk from its title, tags, scalar frontmatter values and first links, so it stays findable by name.
 
-Key/value store for migration-driving identity values: `embedding_model`, `embedding_dim`, `embedder_provider`, `embedder_identity`, `schema_version`, `prefix_strategy_version`. Bootstrap (`src/pipeline/bootstrap.ts`) reads/writes these on every boot and decides whether the persistent state is compatible with the live embedder. Mismatch on any of them triggers an auto-reindex.
+The chunk size limit is 90% of the model's token limit. When a chunk is too long for the model anyway, the indexer records it in `failed_chunks`, halves the limit for that model and goes on. The limit never drops below 256 tokens, and it resets at the start of each full pass.
 
-```sql
-CREATE TABLE IF NOT EXISTS index_metadata (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-```
+## Startup check
 
-When users report "why is it re-embedding everything?", the answer is in this table: SELECT one of the keys, compare against `embedder.modelIdentifier()` / `embedder.dimensions()` / `embedder.identityHash()`, find the mismatch.
+At startup, the server compares `index_metadata` with the live embedder. A different model, dimension, provider, Ollama weight digest or prefix strategy deletes the vectors and embeds the vault again in the background. Until that ends, semantic search reports that it is preparing. Full-text search and the other tools work during the rebuild.
 
-### `embedder_capability`
+## Search
 
-Per-model metadata cache. Permanent (no TTL); users invalidate explicitly via `obsidian-brain models refresh-cache`. Populated by the resolver chain (`src/embeddings/metadata-resolver.ts`): cache → bundled seed (`data/seed-models.json`) → HF live fetch → embedder probe → safe defaults.
+- Semantic search embeds the query and runs a k-nearest-neighbour query on `chunks_vec`. Results group by note, with the best chunk score per note, unless the caller asks for chunks.
+- Full-text search runs an FTS5 `MATCH` and orders by `bm25(nodes_fts, 5.0, 1.0)`, so a title match counts five times a body match. Queries with FTS5 operator characters, such as `-` or `:`, are quoted as a phrase.
+- Hybrid search, the default, runs both and fuses the ranks with Reciprocal Rank Fusion, with `k = 60`.
 
-```sql
-CREATE TABLE IF NOT EXISTS embedder_capability (
-  embedder_id            TEXT NOT NULL,
-  model_hash             TEXT NOT NULL,
-  advertised_max_tokens  INTEGER,
-  discovered_max_tokens  INTEGER,
-  discovered_at          INTEGER,
-  method                 TEXT,
-  dim                    INTEGER,
-  query_prefix           TEXT,
-  document_prefix        TEXT,
-  prefix_source          TEXT,
-  base_model             TEXT,
-  size_bytes             INTEGER,
-  fetched_at             INTEGER,
-  PRIMARY KEY (embedder_id, model_hash)
-);
-```
+sqlite-vec scans every vector. This is fast enough for vaults up to tens of thousands of notes.
 
-- `(embedder_id, model_hash)` — composite primary key. `embedder_id` is the full model identifier (e.g. `Xenova/bge-small-en-v1.5`, `ollama:qwen3-embedding:0.6b`); `model_hash` is a sha256-truncated digest used for migration safety.
-- `advertised_max_tokens` — value the model's `tokenizer_config.json` declares (or `/api/show.context_length` for Ollama).
-- `discovered_max_tokens` — value the chunker has empirically tested with reserved special tokens accounted for. Equals `advertised_max_tokens` on first write; ratchets down only via the adaptive-capacity flow if the model rejects what it advertised.
-- `method` — provenance of the discovered value (`metadata-cache`, `tokenizer`, `ollama-show`, `manual`, `fallback`).
-- `dim` — output vector dimensionality. For transformers.js this is read from the loaded ONNX synchronously; for Ollama it's read from `/api/show.embedding_length`.
-- `query_prefix` / `document_prefix` — task-type prefixes for asymmetric models (BGE-style `Represent this sentence …`, qwen3-style `Instruct: …\nQuery:`, e5-style `query: ` / `passage: `). NULL means "no prefix known" (probe-fallback row); empty string means "symmetric model, no prefix needed."
-- `prefix_source` — provenance: `override` (user `models override`), `seed` (bundled), `metadata` (HF live fetch), `metadata-base` (fallback to base model's metadata), `readme` (Tier-3 fingerprinting), `fallback` (probe), `none` (legacy row before this column existed).
-- `base_model` / `size_bytes` — display-only.
-- `fetched_at` — Unix-ms timestamp of last write. The canonical "this row is populated" marker (legacy rows have it `NULL` and are treated as a cache miss).
+## Embeddings
 
-### Per-model overrides
+The local embedder downloads `onnx/model_quantized.onnx`, `tokenizer.json` and the model config from Hugging Face with hf-hub, and runs the model with ONNX Runtime on two threads. It mean-pools the last hidden state and normalises the vector. The Nix package links the ONNX Runtime of nixpkgs.
 
-Users can override `maxTokens`, `queryPrefix`, and `documentPrefix` for any model via `obsidian-brain models override <model> [--query-prefix=…] …`. Overrides land in `~/.config/obsidian-brain/model-overrides.json` and are layered on top of the resolved metadata at materialise time — they take precedence even if the cache row says otherwise.
+The model metadata comes from a chain:
 
-Per-model token budget can also be overridden via env var: `OBSIDIAN_BRAIN_MAX_CHUNK_TOKENS_<MODEL_HASH>=N` (where `<MODEL_HASH>` is the same digest used as the primary key). See `docs/configuration.md`.
+1. A complete user override in `model-overrides.json`.
+2. A row in `embedder_capability`.
+3. The bundled seed, `crates/obsidian-brain/data/seed-models.json`, compiled into the binary. It covers 349 models.
+4. The loaded model: its dimension, 512 tokens and no prefixes.
+5. Safe defaults, with a warning.
 
-## Boot-time version banner
+A partial override patches whatever the chain resolved. The Ollama embedder reads the context length and the dimension from `/api/show`.
 
-Every server boot logs a single deterministic banner line to stderr as the first emit. Useful for bug reports — paste this line into any troubleshooting issue and the responder has the full runtime context.
+## Writes
 
-```
-obsidian-brain: starting (vX.Y.Z, Node vN.N.N, NODE_MODULE_VERSION ABI, npm vN.N.N, platform os-arch, debug=on|off)
-```
+Each write tool queues a reindex of the file it wrote. Edits, moves and canvas writes go through a temporary file and a rename. `edit_note` with `dryRun: true` returns a diff and a preview id; `apply_edit_preview` writes it if the file did not change since. Previews expire after 5 minutes. Frontmatter edits change only the lines of the keys they set or remove. `move_note` rewrites the links that point at the moved note.
 
-Field-by-field:
+## The watcher
 
-- `vX.Y.Z` — server version (matches `package.json:version`).
-- `Node vN.N.N` — runtime Node version.
-- `NODE_MODULE_VERSION ABI` — Node's native-module ABI number. Mismatches against built native modules (`better-sqlite3`, `sqlite-vec`) cause the `ERR_DLOPEN_FAILED` class — same banner makes it trivial to spot.
-- `npm vN.N.N` — npm CLI version (`n/a` if npm isn't on PATH).
-- `os-arch` — `darwin-arm64`, `linux-x64`, etc.
-- `debug=on|off` — whether `OBSIDIAN_BRAIN_DEBUG=1` is set (gates the synchronous startup trace; see `src/util/debug-log.ts`).
-
-Emitted via `fs.writeSync(2, …)` (not `process.stderr.write`) so the bytes always reach the pipe before any subsequent crash; see `src/preflight.ts`.
-
-## Why local embeddings
-
-The default model is `Xenova/bge-small-en-v1.5`, run locally via `@huggingface/transformers` with `dtype: 'q8'` quantization (`src/embeddings/embedder.ts`).
-
-**Preset resolver.** Rather than requiring users to memorise HF model paths, `src/embeddings/presets.ts` maps six named presets (`english`, `english-fast`, `english-quality`, `multilingual`, `multilingual-quality`, `multilingual-ollama`) to concrete model ids. `createEmbedder()` in `src/embeddings/factory.ts` always calls `resolveEmbeddingModel(process.env)` to determine which checkpoint to load, honouring the precedence `EMBEDDING_MODEL > EMBEDDING_PRESET > stored metadata > first-boot auto-recommend > default (english)`. First-boot auto-recommend (in `src/embeddings/auto-recommend.ts`) samples Unicode blocks across the vault's `.md` files to pick `english` vs `multilingual` automatically when neither env var is set and the DB is fresh — "it just works" on first run without config. Tests that construct `TransformersEmbedder` directly bypass the factory and therefore bypass the preset resolver — the `DEFAULT_MODEL` constant in `embedder.ts` intentionally stays at `all-MiniLM-L6-v2` so those tests remain deterministic regardless of env state.
-
-**Metadata resolution chain.** Per-model metadata (output dim, max tokens, query / document prefix) is no longer hardcoded. After the preset resolver picks a model id and `embedder.init()` loads the weights, `src/embeddings/metadata-resolver.ts` runs through a six-step chain to populate the metadata that `embedder.embed()` and the chunker need:
-
-0. **User override** — `~/.config/obsidian-brain/model-overrides.json` (managed via `obsidian-brain models add` / `models override`). Topmost layer; survives `npm update obsidian-brain`. When the override fully specifies all three load-bearing fields (`maxTokens`, `queryPrefix`, `documentPrefix`), the resolver short-circuits the entire rest of the chain — no HF round-trip on first use. Partial overrides patch fields on top of whatever the lower layers resolved.
-1. **`embedder_capability` cache hit** (cache-forever — see metadata-cache.ts header). The cached fields are immutable for a given HF revision, so silent background refetches would burn quota for negligible benefit. Users invalidate explicitly via `obsidian-brain models refresh-cache [--model <id>]`.
-2. **Cache miss + seed hit** (`data/seed-models.json`, with two possible sources: `~/.config/obsidian-brain/seed-models.json` if a user ran `models fetch-seed` to pull from upstream `main`, otherwise the bundled npm-tarball copy). The bundled seed is regenerated at every release from MTEB's Python registry by `scripts/build-seed.py` — zero HF API calls for the bulk path, plus a targeted ~107 single-model GETs to `config_sentence_transformers.json` for instruction-aware models whose MTEB entry lacks a `model_prompts` dict (Qwen3-Embedding family, e5-mistral-7b-instruct, Snowflake/snowflake-arctic-embed-l, etc.). Currently ships 349 dense, text-only, open-weights models (341 from MTEB filter + 8 hand-aliased Ollama tags / Xenova mirrors). Copy seed entry into the cache.
-3. **Seed miss + live HF fetch** (`src/embeddings/hf-metadata.ts` reads `config.json` + `tokenizer_config.json` + `sentence_bert_config.json` + `config_sentence_transformers.json` + `modules.json` in parallel, plus the upstream `base_model`'s same JSON when the direct repo lacks `prompts`; Tier 3 README fingerprinting fills in the gap when sentence-transformers configs ship without a `prompts` field).
-4. **HF unreachable + embedder loaded** → probe dim from the loaded pipeline; assume symmetric; 512 max tokens.
-5. **All fail** → safe defaults + stderr warning. Boot continues — offline-first promise preserved.
-
-The chain replaces three hardcoded tables that previously lived in the codebase: a `getTransformersPrefix(modelId, taskType)` if/else family-pattern chain, a `KNOWN_MAX_TOKENS` validation map, and `dim / symmetric / sizeMb / lang` columns on each `EMBEDDING_PRESETS` row. Single source of truth becomes upstream HF configs (or the user's own override file); wrong-prefix bugs from hand-curated tables become impossible — and when an upstream value IS wrong, `models override` lets users correct it locally without a fork.
-
-Why not an API like OpenAI's `text-embedding-3-small`:
-
-- **Zero egress.** Vault content never leaves the machine. For people whose notes include journal entries, client names, medical notes, or anything else they'd rather not mail to an LLM vendor, this is the whole game.
-- **No API key, no quota, no billing.** Important for a tool that re-embeds on every file save without anyone thinking about it.
-- **~34 MB one-time model download** for the default `bge-small-en-v1.5`, then tens of ms per note on CPU. Fast enough that the first full index of a 10k-note vault completes in minutes and incremental re-indexing is imperceptible.
-
-Tradeoff: quality is measurably below modern API embeddings on hard semantic-similarity benchmarks. The embedder is pluggable behind an `Embedder` interface (`src/embeddings/types.ts`). `src/embeddings/factory.ts` selects the backend on `EMBEDDING_PROVIDER` (`transformers` default; `ollama` alternative); each backend reads `EMBEDDING_MODEL` to pick the specific checkpoint. The `index_metadata` table stores the active `embedding_model` + `embedding_dim` + `embedding_provider`; on startup `src/pipeline/bootstrap.ts` compares them against the current embedder's `modelIdentifier()`/`dimensions()` and auto-clears the chunk + vec tables if they've changed, so switching models is safe — **no manual `--drop` required**. Bootstrap also compares `OllamaEmbedder.identityHash()` (the manifest digest from `/api/tags`) against the stored value, so silent `ollama pull` weight swaps under the same tag also trigger a reindex. The Ollama backend (`src/embeddings/ollama.ts`) wires the resolver chain's authoritative prefix through `setMetadata` (so `models override` / `models add` flow correctly to Ollama models); the hardcoded family heuristics (`nomic` → `search_query: ` / `search_document: `; `e5-` → `query: ` / `passage: `; `qwen` → `Query: `; `mxbai` / `mixedbread` → `Represent this sentence for searching relevant passages: `) remain only as the init-time-probe fallback before `setMetadata` runs and for tests. The canonical `multilingual-ollama` preset (`qwen3-embedding:0.6b`) ships its instruction-aware query prompt from the seed.
-
-## Why incremental mtime sync
-
-Incremental mtime-based sync is the foundation both the live watcher and the scheduled fallback share. `src/pipeline/indexer.ts:41` implements the full-vault pipeline: parse vault, diff against `sync` state, upsert the diff, and delete the nodes of files that no longer exist.
-
-Why mtime-keyed incrementality:
-
-- **Incremental is cheap.** The indexer checks `stat.mtimeMs` against the stored mtime in `sync` (`src/pipeline/indexer.ts:159`); if the file hasn't changed it skips re-parsing and re-embedding entirely. A full re-scan of an already-indexed 10k-note vault costs roughly a `stat()` per file.
-- **The per-file primitive is shared between live and batch.** `indexSingleNote` (`src/pipeline/indexer.ts:87`) is what the watcher calls per debounced change; `index()` loops it across the whole vault. Both read the same mtime state, so any path can be reindexed from either entry point without drift.
-- **Robust to sleep/resume.** `systemd` with `Persistent=true` catches up on missed timer fires after the machine wakes; `launchd` with `StartInterval` does the equivalent on macOS. See `docs/launchd.md` and `docs/systemd.md` for the scheduled-fallback configs.
-- **The fallback exists because watchers across macOS / Linux / iCloud-synced folders are a known rabbit hole.** FSEvents silently drops events under high churn, inotify watchers die on move/rename under some filesystems, and iCloud Drive materialises files lazily. If the watcher misses an event on your setup, disable it (`OBSIDIAN_BRAIN_NO_WATCH=1`) and run `obsidian-brain index` on a timer instead.
-
-Default behaviour: the watcher keeps the index live as you edit. If you disable it or your vault lives somewhere it can't observe, the scheduled-index timer fills the gap. For an ad-hoc refresh after a big manual edit, call the `reindex` MCP tool from chat (`src/tools/reindex.ts`) or run `obsidian-brain index` directly.
-
-## Live sync
-
-The scheduled-index model above is still the fallback. The default is a chokidar watcher spawned inside `obsidian-brain server`. See `src/pipeline/watcher.ts`. Chokidar uses the native platform API (FSEvents on macOS, inotify on Linux, ReadDirectoryChangesW on Windows), not polling, so idle CPU cost is effectively zero.
-
-Each change event is keyed by path and fed through a per-file debounce (`src/pipeline/watcher.ts:DEFAULT_DEBOUNCE_MS`, 3000 ms). Obsidian writes files on a ~2s autosave cadence, often multiple times during a single editing burst; the debounce collapses those into a single reindex per pause. When the debounce fires we call `indexSingleNote` (`src/pipeline/indexer.ts:indexSingleNote`) — the same primitive the write tools use, so incremental and batch paths share one code path: parse frontmatter + inline Dataview fields + wiki-links, re-embed, upsert node + edges.
-
-Flow in one line: Obsidian saves file → chokidar emits `change` → 3 s debounce → `indexSingleNote` parses, embeds, upserts node + edges.
-
-When to disable (`OBSIDIAN_BRAIN_NO_WATCH=1`): vault on SMB/NFS/iCloud where FSEvents/inotify don't fire reliably; shared-tenancy machines where you'd rather pay CPU on a fixed schedule than at edit time; or you already run a dedicated `obsidian-brain index` job and don't want two sources of writes.
-
-**Write-safety infrastructure.** Three tool modules support the `dryRun` / `apply_edit_preview` / `edits[]` / `from_buffer` flow:
-
-- `src/tools/preview-store.ts` — in-memory `Map<previewId, PendingEdit>` with 5-minute TTL and 50-entry cap. Process-global (stdio MCP is single-client per process).
-- `src/tools/apply-edit-preview.ts` — one of the MCP tools. Reads the cached preview, guards against file-changed-since-preview, writes via temp+rename, reindexes.
-- `src/tools/edit-buffer.ts` — per-path buffer (30-min TTL, 20-entry cap, 512 KB per entry) of last-failed `replace_window` content for `from_buffer: true` retries.
-- `src/vault/editor.ts` exports `applyEdit` + `bulkEditNote`; the latter chains edit modes in memory and writes atomically at the end.
-- New runtime dependency: `diff@^8` (kpdecker/jsdiff) for unified-diff generation.
-
-## Why modular file layout
-
-The directory layout is:
-
-- `src/server.ts` — MCP server bootstrap over stdio. Opens the vaults, registers the tools, connects `StdioServerTransport`, and starts the watchers. Exports the per-vault helpers (`registerTools`, `runStartupIndex`, `closeContext`).
-- `src/vaults.ts` — opens, indexes, watches and closes a set of vaults, and `VaultTools`, which adds the required `vault` argument to every tool and routes each call.
-- `src/http-server.ts` — `server --transport http`: the same vaults and tools over stateless streamable HTTP at `/mcp`.
-- `src/config.ts` / `src/context.ts` — env parsing and the shared `ServerContext` object (DB handle, embedder, vault path, pipeline, writer, search) passed to every tool.
-- `src/cli/` — the `obsidian-brain` CLI entry point: `server`, `http`, `index`, `watch`, `search` subcommands.
-- `src/store/` — SQLite schema and per-table CRUD (`db`, `nodes`, `edges`, `embeddings`, `fulltext`, `sync`).
-- `src/embeddings/` — embedder backends (`embedder.ts` for TransformersEmbedder + `ollama.ts` for OllamaEmbedder), the metadata-resolution chain (`metadata-resolver.ts`, `metadata-cache.ts`, `seed-loader.ts`, `hf-metadata.ts`), the user-config layer (`overrides.ts`, `user-config.ts`), the chunker (`chunker.ts`), the auto-recommend heuristic (`auto-recommend.ts`), the preset table (`presets.ts`), the embedder factory (`factory.ts`), and per-model adaptive capacity (`capacity.ts`).
-- `src/graph/` — graph construction (`builder`), centrality (`centrality`), shortest paths (`pathfinding`), and the graphology-compat shim.
-- `src/vault/` — reading, writing, parsing, and editing `.md` files on disk; wiki-link resolution; fuzzy filename matching.
-- `src/search/` — unified semantic + full-text search surface.
-- `src/resolve/` — fuzzy note-name resolution used by tools that accept human-typed note titles.
-- `src/pipeline/` — the indexing orchestrator (`indexer.ts`) that stitches vault parsing, store writes, and embedding together; plus the chokidar watcher (`watcher.ts`) that drives `indexSingleNote` on debounced file-change events.
-- `src/tools/` — one file per MCP tool. `register.ts` is the shared Zod/schema helper + the `{data, context}` envelope wrapper — tools that return a `ContextualResult` get their `context.next_actions` serialised alongside `data`; tools that return a plain payload stay unchanged for backcompat. `hints.ts` holds the per-tool hint generators (`search`, `read_note`, `find_connections`, `delete_note` opt in).
-
-Why this shape:
-
-- **The original obra `graph.ts` was 324 lines** mixing graph construction, pathfinding, and centrality into one module. Every change required re-reading the whole file to make sure you hadn't broken something in an unrelated concern. Splitting it along the natural algorithm boundaries made each piece independently greppable, testable, and swappable.
-- **Swap surface area is small and local.** You can replace `src/graph/centrality.ts` with an approximate-pagerank variant without touching anything else; you can replace `src/store/embeddings.ts` with a HNSW-backed implementation without touching the graph code. Tools never reach into stores directly except via the exported functions.
-- **The tool layer is flat on purpose.** `src/tools/*.ts` is one-file-per-tool because it matches the MCP surface 1:1 — when a user asks "what does `find_connections` do?", you open exactly one file.
-
-## Appendix: the rmcp / SSE bug in detail
-
-This is the bug hiding behind decision #1. Understanding it makes the stdio choice feel less arbitrary.
-
-The shape of the bug:
-
-- MCP's Streamable HTTP spec allows a POST /mcp response to return either `application/json` (one-shot) or `text/event-stream` (SSE). Servers choose.
-- The TypeScript MCP SDK's `StreamableHTTPServerTransport` defaults to SSE, emitting one frame per response and then closing the stream.
-- rmcp's (Rust) client reads the first frame correctly but mis-handles the stream close as a transport-level disconnect rather than a normal end-of-response. Every subsequent request then fails with "Transport closed."
-- Fixed upstream in [rust-sdk PR #467](https://github.com/modelcontextprotocol/rust-sdk/pull/467), tracked in [rust-sdk#468](https://github.com/modelcontextprotocol/rust-sdk/issues/468). As of this writing the fix has not shipped in Jan 0.7.9, so any rmcp-client + TS-SDK-SSE-server pairing breaks. `docs/jan.md` covers the workaround when you hit it.
-
-Why stdio sidesteps this entirely: there is no stream framing to disagree about. stdio MCP is line-delimited JSON-RPC over a pipe. The transport has essentially no surface area to get wrong. As a class of bug, "SSE framing interop" cannot exist here.
-
-This is also the general argument for stdio over HTTP for local tools: the protocol surface you get with stdio is small enough that implementations tend to agree, and the failure modes when they don't are obvious (the pipe dies, the child exits) rather than subtle (request 2 silently times out).
+The watcher uses the notify crate, which uses inotify on Linux and FSEvents on macOS. [Live updates](watching.md) describes the debounce.

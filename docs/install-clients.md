@@ -1,290 +1,123 @@
----
-title: Install in your MCP client
-description: Wire obsidian-brain into Claude Desktop, Cursor, VS Code, Jan, Claude Code, Cline, Zed, LM Studio, JetBrains, Opencode, Codex CLI, Gemini CLI, Warp, Windsurf, or anything else speaking MCP.
----
-
 # Install in your MCP client
 
-obsidian-brain is a **local, stdio-only** MCP server. No API key. No hosted endpoint. No remote URL. Your vault content never leaves your machine. Every snippet below runs the same process locally and differs only in how your client expects the config to be shaped.
+Every client starts the same process: the `obsidian-brain` binary with `server --vault <name>=<path>`. The configs below differ only in the shape each client expects.
 
-Replace `/absolute/path/to/your/vault` everywhere with the real path to your vault.
+## The binary path
 
-On first boot the server auto-indexes the vault and downloads the default embedding model (~34 MB) — initial `tools/list` may block for 30–60 s, subsequent starts are instant.
+Install the binary with `nix profile add github:martijnarts/obsidian-brain`, then find its path:
 
-> **Embedding preset knob.** Any config below accepts `EMBEDDING_PRESET` in an `env` block as an optional upgrade. Valid values: `english` (default), `english-fast`, `english-quality`, `multilingual`, `multilingual-quality`, `multilingual-ollama`. Example: add `"EMBEDDING_PRESET": "multilingual"` alongside the `--vault` argument to switch to a multilingual model. See [Models](models.md) for the full preset table, MTEB ranking, and BYOM recipes.
+```bash
+command -v obsidian-brain
+```
 
-> **Auto-update.** Every snippet below uses `obsidian-brain@latest` — the `@latest` tag forces npx to re-resolve the newest published version on every launch so future releases auto-propagate after a client restart. Drop `@latest` (or pin to e.g. `obsidian-brain@1.6.0`) if you'd rather cache a known-good version and update on your own schedule.
+That is usually `~/.nix-profile/bin/obsidian-brain`. Use the absolute path in client configs: desktop apps do not always see the `PATH` of your shell. The examples use `/home/you/.nix-profile/bin/obsidian-brain`; replace it with your path, and replace `/absolute/path/to/your/vault` with the path of your vault.
 
-No system-level prerequisites beyond Node 22.12+. `npm install` bundles every native binding — `better-sqlite3` (with its own statically-linked SQLite build), the `sqlite-vec` extension, and the ONNX runtime for local embeddings — as prebuilt binaries for macOS, Linux, and Windows. You don't need `brew install sqlite`, Xcode Command Line Tools, or Python unless you land in the rare case where no prebuilt matches your Node version (see [Troubleshooting → ERR_DLOPEN_FAILED](troubleshooting.md#err_dlopen_failed-node_module_version-mismatch)).
+A client can also start the server through Nix, with `nix` as the command and `run github:martijnarts/obsidian-brain -- server --vault notes=/path` as the arguments. The first start then waits for the build or download.
 
-??? info "Claude Desktop"
+On the first start the server downloads the embedding model and indexes the vault in the background. Tools answer at once; semantic search reports that it is preparing until the model is ready.
 
-    Open the config file (create it if missing):
+Each config takes an `env` block for the variables in [Configuration](configuration.md), such as `"EMBEDDING_PRESET": "multilingual"`.
 
-    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+## Claude Desktop
 
-    Or from the app: **Settings → Developer → Edit Config**. Add under `mcpServers`:
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, or open Settings, Developer, Edit Config:
 
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
+```json
+{
+  "mcpServers": {
+    "obsidian-brain": {
+      "command": "/home/you/.nix-profile/bin/obsidian-brain",
+      "args": ["server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
-    ```
+  }
+}
+```
 
-    Fully quit Claude Desktop (⌘Q on macOS) and relaunch. If it can't find `npx`, swap for the absolute path (`/opt/homebrew/bin/npx` on macOS Homebrew). [Claude Desktop MCP quickstart](https://modelcontextprotocol.io/quickstart/user).
+Quit Claude Desktop and start it again.
 
-??? info "Claude Code"
+## Claude Code
 
-    ```bash
-    claude mcp add --scope user --transport stdio obsidian-brain \
-      -- npx -y obsidian-brain@latest server --vault notes="$HOME/path/to/your/vault"
-    ```
+```bash
+claude mcp add --scope user --transport stdio obsidian-brain \
+  -- /home/you/.nix-profile/bin/obsidian-brain server --vault notes="$HOME/path/to/your/vault"
+```
 
-    All flags (`--scope`, `--transport`) come before the server name. `--` separates the name from the launch command. To raise the startup timeout for the first-boot auto-index, prefix the `claude` CLI with `MCP_TIMEOUT=60000`. [Claude Code MCP docs](https://code.claude.com/docs/en/mcp).
+## Cursor, Windsurf, Cline, LM Studio, JetBrains AI Assistant, Gemini CLI
 
-??? info "Cursor"
+These clients use the `mcpServers` shape of Claude Desktop. The config files are:
 
-    Fastest: **Cursor Settings → MCP → Add new MCP server**. Or edit `~/.cursor/mcp.json` (global) / `.cursor/mcp.json` (project):
+| Client | File |
+|---|---|
+| Cursor | `~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Cline | `cline_mcp_settings.json`, from the MCP Servers panel |
+| LM Studio | `~/.lmstudio/mcp.json` |
+| JetBrains AI Assistant | Settings, Tools, AI Assistant, Model Context Protocol, Add, As JSON |
+| Gemini CLI | `~/.gemini/settings.json` |
 
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
+## VS Code
+
+`.vscode/mcp.json` in a workspace uses `servers` and `type`:
+
+```json
+{
+  "servers": {
+    "obsidian-brain": {
+      "type": "stdio",
+      "command": "/home/you/.nix-profile/bin/obsidian-brain",
+      "args": ["server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
-    ```
+  }
+}
+```
 
-    Reload Cursor; the server appears under Settings → MCP with its 41 tools. [Cursor MCP docs](https://cursor.com/docs/context/mcp).
+## Zed
 
-??? info "VS Code (GitHub Copilot)"
+`~/.config/zed/settings.json` uses `context_servers`:
 
-    VS Code 1.102+ with Copilot. CLI:
-
-    ```bash
-    code --add-mcp '{"name":"obsidian-brain","command":"npx","args":["-y","obsidian-brain@latest","server","--vault","notes=/absolute/path/to/your/vault"]}'
-    ```
-
-    Or create `.vscode/mcp.json` in your workspace (note: top-level key is `servers`, with `type: "stdio"`):
-
-    ```json
-    {
-      "servers": {
-        "obsidian-brain": {
-          "type": "stdio",
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
+```json
+{
+  "context_servers": {
+    "obsidian-brain": {
+      "source": "custom",
+      "command": "/home/you/.nix-profile/bin/obsidian-brain",
+      "args": ["server", "--vault", "notes=/absolute/path/to/your/vault"]
     }
-    ```
+  }
+}
+```
 
-    Open Copilot Chat in **Agent** mode. [VS Code MCP docs](https://code.visualstudio.com/docs/copilot/customization/mcp-servers).
+## Opencode
 
-??? info "Windsurf"
+`opencode.json` uses `mcp`, with the command as an array:
 
-    Cascade → **MCP** icon (top right) → **Manage MCPs** → **View raw config**, or edit `~/.codeium/windsurf/mcp_config.json`:
-
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "obsidian-brain": {
+      "type": "local",
+      "command": ["/home/you/.nix-profile/bin/obsidian-brain", "server", "--vault", "notes=/absolute/path/to/your/vault"],
+      "enabled": true
     }
-    ```
+  }
+}
+```
 
-    Click **Refresh** in the MCP panel (no full Windsurf restart needed). [Windsurf MCP docs](https://docs.windsurf.com/windsurf/cascade/mcp).
+## Codex CLI
 
-??? info "Jan"
+```bash
+codex mcp add obsidian-brain -- /home/you/.nix-profile/bin/obsidian-brain server --vault notes="$HOME/path/to/your/vault"
+```
 
-    **Settings → MCP Servers → + Add**. Transport: `STDIO (local process)`. Command: `npx` (or absolute path if Jan can't find it). Arguments: `-y`, `obsidian-brain@latest`, `server`, `--vault`, `notes=/absolute/path/to/your/vault`. Save and toggle on.
+## Jan
 
-    Jan places server entries at the top level of its MCP config — there is no `mcpServers` wrapper, unlike Claude Desktop.
+In Settings, MCP Servers, add a server with the `STDIO` transport. The command is the binary path; the arguments are `server`, `--vault` and `notes=/absolute/path/to/your/vault`.
 
-    Equivalent JSON (Jan writes this itself under `~/Library/Application Support/Jan/data/mcp_config.json` on macOS, `~/.config/Jan/data/mcp_config.json` on Linux, `%APPDATA%\Jan\data\mcp_config.json` on Windows):
+## A remote server over HTTP
 
-    ```json
-    {
-      "obsidian-brain": {
-        "command": "npx",
-        "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-      }
-    }
-    ```
+Run the server with `--transport http` behind an authenticating proxy, as the README describes. Then give the client the proxy URL ending in `/mcp`. The exact config depends on the client and the proxy.
 
-    **Use STDIO, not HTTP.** Jan 0.7.x's rmcp client has an open bug with Streamable-HTTP that kills `tools/list` right after `initialize` ([rust-sdk#468](https://github.com/modelcontextprotocol/rust-sdk/issues/468)). obsidian-brain is stdio-only anyway, but don't wrap it in an HTTP proxy for Jan or you'll trip the bug. Full walkthrough: [Jan integration](jan.md).
+## Check the connection
 
-??? info "Cline"
-
-    Click the MCP Servers icon in Cline's nav bar → **Installed** → **Configure MCP Servers** to open `cline_mcp_settings.json`. Paste:
-
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
-          "disabled": false,
-          "autoApprove": []
-        }
-      }
-    }
-    ```
-
-    On Windows, swap to `"command": "cmd"`, `"args": ["/c", "npx", "-y", "obsidian-brain@latest", "server"]` so `npx.cmd` is resolved. [Cline MCP docs](https://docs.cline.bot/mcp/configuring-mcp-servers).
-
-??? info "Zed"
-
-    Agent Panel → settings gear → **Add Custom Server**, or edit `~/.config/zed/settings.json` directly (`%APPDATA%\Zed\settings.json` on Windows). Zed uses `context_servers` with `"source": "custom"`:
-
-    ```json
-    {
-      "context_servers": {
-        "obsidian-brain": {
-          "source": "custom",
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
-    }
-    ```
-
-    A green dot next to the server in the Agent Panel means it's live. [Zed MCP docs](https://zed.dev/docs/ai/mcp).
-
-??? info "LM Studio"
-
-    Right sidebar → **Program** tab → **Install** → **Edit mcp.json** (`~/.lmstudio/mcp.json` on macOS/Linux, `%USERPROFILE%\.lmstudio\mcp.json` on Windows):
-
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
-    }
-    ```
-
-    LM Studio spawns the server automatically on save. [LM Studio MCP docs](https://lmstudio.ai/docs/app/plugins/mcp).
-
-??? info "JetBrains AI Assistant"
-
-    IntelliJ / PyCharm / WebStorm 2025.1+ with AI Assistant 251.26094.80.5+. **Settings → Tools → AI Assistant → Model Context Protocol (MCP) → Add → As JSON**:
-
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-        }
-      }
-    }
-    ```
-
-    Pick Global or Project scope, enable the row; the Status column turns green when the stdio subprocess is live. [JetBrains MCP docs](https://www.jetbrains.com/help/ai-assistant/configure-an-mcp-server.html).
-
-??? info "Opencode"
-
-    Add to `opencode.json` (project root) or `~/.config/opencode/opencode.json` (global). Note the shape: top-level `mcp`, `type: "local"`, `command` is an array, env lives under `environment`:
-
-    ```json
-    {
-      "$schema": "https://opencode.ai/config.json",
-      "mcp": {
-        "obsidian-brain": {
-          "type": "local",
-          "command": ["npx", "-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
-          "enabled": true
-        }
-      }
-    }
-    ```
-
-    [Opencode MCP docs](https://opencode.ai/docs/mcp-servers).
-
-??? info "OpenAI Codex CLI"
-
-    ```bash
-    codex mcp add obsidian-brain -- npx -y obsidian-brain@latest server --vault notes="$HOME/path/to/your/vault"
-    ```
-
-    Then bump the startup timeout in `~/.codex/config.toml` — the default 10 s is too short for first-boot auto-indexing:
-
-    ```toml
-    [mcp_servers.obsidian-brain]
-    command = "npx"
-    args = ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-    startup_timeout_sec = 60
-    ```
-
-    [Codex MCP docs](https://developers.openai.com/codex/mcp).
-
-??? info "Gemini CLI"
-
-    No `mcp add` subcommand — edit `~/.gemini/settings.json` and merge into `mcpServers`:
-
-    ```json
-    {
-      "mcpServers": {
-        "obsidian-brain": {
-          "command": "npx",
-          "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=$HOME/path/to/your/vault"],
-          "timeout": 60000
-        }
-      }
-    }
-    ```
-
-    Gemini expands `$VAR` in the string values of `settings.json`, so `$HOME` works inside `args`; `timeout` is in milliseconds. [Gemini CLI MCP docs](https://www.geminicli.com/docs/tools/mcp-server).
-
-??? info "Warp"
-
-    **Settings → AI → Manage MCP servers → + Add → CLI Server (Command)**. Paste:
-
-    ```json
-    {
-      "obsidian-brain": {
-        "command": "npx",
-        "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"],
-        "working_directory": null
-      }
-    }
-    ```
-
-    Warp launches the command on startup and shuts it down on exit. [Warp MCP docs](https://docs.warp.dev/agent-platform/warp-agents/agent-context/mcp).
-
-??? info "Any other client"
-
-    The common shape across almost every client is:
-
-    ```json
-    {
-      "command": "npx",
-      "args": ["-y", "obsidian-brain@latest", "server", "--vault", "notes=/absolute/path/to/your/vault"]
-    }
-    ```
-
-    Wrap it in whatever top-level key your client expects (`mcpServers`, `servers`, `mcp`, `context_servers`, etc.). No API key, no remote URL, no auth header — none of that applies to a local stdio server.
-
-    On Windows, if `npx` isn't found, swap `"command": "npx"` for `"command": "cmd"` and prepend `/c` to the args: `["/c", "npx", "-y", "obsidian-brain@latest", "server"]`.
-
-## Verifying the connection
-
-Once your client restarts, obsidian-brain should appear in its MCP/tool list with 41 tools. Try:
-
-> *"Use `search` to find notes about the most recent thing I wrote."*
-
-If nothing happens, check [Troubleshooting](troubleshooting.md) — most first-run issues are solved in two lines.
+After a restart, the client lists the server with 41 tools. Ask it to call `list_vaults`: the answer names each vault and its index state. If the server does not appear, see [Troubleshooting](troubleshooting.md).
