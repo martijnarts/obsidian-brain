@@ -68,7 +68,12 @@ pub fn all() -> Vec<ToolSpec> {
     .into_iter()
     .flatten()
     .collect();
-    let rank = |t: &ToolSpec| ORDER.iter().position(|n| *n == t.name).unwrap_or(ORDER.len());
+    let rank = |t: &ToolSpec| {
+        ORDER
+            .iter()
+            .position(|n| *n == t.name)
+            .unwrap_or(ORDER.len())
+    };
     tools.sort_by_key(rank);
     tools
 }
