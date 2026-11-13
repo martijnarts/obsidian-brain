@@ -15,8 +15,6 @@ mod read_canvas;
 mod reindex;
 mod set_task_status;
 
-use serde::de::{Deserialize, Deserializer, Error as _};
-
 use crate::mcp::tool::ToolSpec;
 
 pub fn specs() -> Vec<ToolSpec> {
@@ -32,37 +30,4 @@ pub fn specs() -> Vec<ToolSpec> {
         set_task_status::spec(),
         ensure_block_id::spec(),
     ]
-}
-
-/// zod's `.int().positive()`: an integer of at least 1.
-fn positive<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
-    let n = u64::deserialize(d)?;
-    if n == 0 {
-        return Err(D::Error::custom("expected a positive integer, got 0"));
-    }
-    Ok(n)
-}
-
-/// [`positive`] for an optional field; use with `#[serde(default)]`.
-fn opt_positive<'de, D: Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
-    Option::<u64>::deserialize(d)?
-        .map(|n| {
-            if n == 0 {
-                Err(D::Error::custom("expected a positive integer, got 0"))
-            } else {
-                Ok(n)
-            }
-        })
-        .transpose()
-}
-
-/// zod's `.min(1)` on a string.
-fn non_empty<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
-    let s = String::deserialize(d)?;
-    if s.is_empty() {
-        return Err(D::Error::custom(
-            "expected a string of at least 1 character",
-        ));
-    }
-    Ok(s)
 }

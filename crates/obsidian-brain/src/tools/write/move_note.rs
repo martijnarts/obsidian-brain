@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::{basename_md, require_non_empty};
+use super::basename_md;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::resolve_single_note;
 use crate::store::edges::get_edges_by_target;
@@ -39,7 +39,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("move_note", DESCRIPTION, |ctx, args| async move {
-        require_non_empty("destination", &args.destination)?;
         let dry_run = args.dry_run == Some(true);
         let job = ctx.clone();
         let out = ctx

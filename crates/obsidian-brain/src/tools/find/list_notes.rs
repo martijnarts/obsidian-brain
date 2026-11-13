@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::{check_range, utf16_cmp};
+use super::utf16_cmp;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::{all_node_ids, get_node, is_stub};
 use crate::store::sync::all_sync_mtimes;
@@ -38,7 +38,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("list_notes", DESCRIPTION, |ctx, args| async move {
-        check_range("limit", args.limit, 1, None)?;
         ctx.db.run(move |c| list_notes(c, args)).await
     })
 }

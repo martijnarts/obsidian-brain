@@ -3,6 +3,7 @@
 
 pub mod http;
 pub mod tool;
+mod validate;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -19,7 +20,8 @@ use serde_json::{Value, json};
 use crate::context::VaultContext;
 use crate::util::js;
 use crate::vaults::Vaults;
-use tool::{JsonObject, ToolSpec};
+use tool::{InvalidArguments, JsonObject, ToolSpec};
+use validate::ArgsValidator;
 
 pub const SERVER_NAME: &str = "obsidian-brain";
 
@@ -32,15 +34,22 @@ const VAULT_ARG_DESCRIPTION: &str = "The vault to work in. `list_vaults` describ
 pub struct Server {
     vaults: Arc<Vaults>,
     tools: Arc<Vec<ToolSpec>>,
+    /// The input schema of each tool in `tools`, with `vault`.
+    validators: Arc<Vec<ArgsValidator>>,
     by_name: Arc<BTreeMap<&'static str, usize>>,
 }
 
 impl Server {
     pub fn new(vaults: Arc<Vaults>, tools: Vec<ToolSpec>) -> Self {
         let by_name = tools.iter().enumerate().map(|(i, t)| (t.name, i)).collect();
+        let validators = tools
+            .iter()
+            .map(|t| ArgsValidator::new(Value::Object(input_schema(&vaults, t))))
+            .collect();
         Self {
             vaults,
             tools: Arc::new(tools),
+            validators: Arc::new(validators),
             by_name: Arc::new(by_name),
         }
     }
@@ -58,24 +67,8 @@ impl Server {
             LIST_VAULTS_DESCRIPTION,
             Arc::new(tool::input_schema_for::<tool::NoArgs>()),
         )];
-        let vault_arg = json!({
-            "type": "string",
-            "enum": self.vaults.names(),
-            "description": VAULT_ARG_DESCRIPTION,
-        });
         for spec in self.tools.iter() {
-            let mut schema = spec.input_schema.clone();
-            let mut props = JsonObject::new();
-            props.insert("vault".into(), vault_arg.clone());
-            if let Some(Value::Object(rest)) = schema.remove("properties") {
-                props.extend(rest);
-            }
-            schema.insert("properties".into(), Value::Object(props));
-            let mut required = vec![Value::from("vault")];
-            if let Some(Value::Array(rest)) = schema.remove("required") {
-                required.extend(rest);
-            }
-            schema.insert("required".into(), Value::Array(required));
+            let schema = input_schema(&self.vaults, spec);
             out.push(Tool::new(spec.name, spec.description, Arc::new(schema)));
         }
         out
@@ -90,29 +83,39 @@ impl Server {
             Ok(value) => {
                 CallToolResult::success(vec![ContentBlock::text(js::json_stringify_pretty(&value))])
             }
-            Err(err) => CallToolResult::error(vec![ContentBlock::text(format!("Error: {err:#}"))]),
+            Err(err) => {
+                let text = match err.downcast_ref::<InvalidArguments>() {
+                    Some(InvalidArguments(problems)) => format!(
+                        "MCP error -32602: Input validation error: Invalid arguments for tool {name}: {problems}"
+                    ),
+                    None => format!("Error: {err:#}"),
+                };
+                CallToolResult::error(vec![ContentBlock::text(text)])
+            }
         }
     }
 
-    async fn dispatch(&self, name: &str, mut args: JsonObject) -> anyhow::Result<Value> {
+    async fn dispatch(&self, name: &str, args: JsonObject) -> anyhow::Result<Value> {
         if name == LIST_VAULTS {
             return Ok(self.vaults.describe());
         }
-        let spec = self
+        let &i = self
             .by_name
             .get(name)
-            .map(|&i| self.tools[i].clone())
             .ok_or_else(|| anyhow::anyhow!("Tool {name} not found"))?;
-        let vault = match args.remove("vault") {
-            Some(Value::String(v)) => v,
-            _ => return Err(tool::InvalidArguments("`vault` is required".into()).into()),
+        let spec = self.tools[i].clone();
+        let args = Value::Object(args);
+        if let Some(problems) = self.validators[i].check(&args) {
+            return Err(InvalidArguments(problems).into());
+        }
+        let Value::Object(mut args) = args else {
+            unreachable!("built as an object")
         };
-        let ctx: Arc<VaultContext> = self.vaults.get(&vault).ok_or_else(|| {
-            tool::InvalidArguments(format!(
-                "`vault` must be one of {}, not {vault:?}",
-                self.vaults.names().join(", ")
-            ))
-        })?;
+        // The schema made `vault` one of the names.
+        let ctx: Arc<VaultContext> = args
+            .remove("vault")
+            .and_then(|v| self.vaults.get(v.as_str()?))
+            .ok_or_else(|| InvalidArguments("Invalid input at vault".into()))?;
         let timeout = tool_timeout(name);
         match tokio::time::timeout(timeout, spec.call(ctx, args)).await {
             Ok(result) => result,
@@ -122,6 +125,30 @@ impl Server {
             )),
         }
     }
+}
+
+/// The input schema of `spec` with the required `vault` argument first.
+fn input_schema(vaults: &Vaults, spec: &ToolSpec) -> JsonObject {
+    let mut schema = spec.input_schema.clone();
+    let mut props = JsonObject::new();
+    props.insert(
+        "vault".into(),
+        json!({
+            "type": "string",
+            "enum": vaults.names(),
+            "description": VAULT_ARG_DESCRIPTION,
+        }),
+    );
+    if let Some(Value::Object(rest)) = schema.remove("properties") {
+        props.extend(rest);
+    }
+    schema.insert("properties".into(), Value::Object(props));
+    let mut required = vec![Value::from("vault")];
+    if let Some(Value::Array(rest)) = schema.remove("required") {
+        required.extend(rest);
+    }
+    schema.insert("required".into(), Value::Array(required));
+    schema
 }
 
 /// `OBSIDIAN_BRAIN_TOOL_TIMEOUT_MS_<TOOL>`, then

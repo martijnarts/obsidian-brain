@@ -172,7 +172,7 @@ async fn read_refuses_paths_outside_the_vault() {
     );
     assert_matches(
         &f.read_err(json!({ "path": "" })).await,
-        "at least 1 character",
+        "^MCP error -32602: Input validation error: Invalid arguments for tool read_canvas: Too small: expected string to have >=1 characters at path$",
     );
 
     let outside = tempfile::tempdir().unwrap();
@@ -395,7 +395,7 @@ async fn add_refuses_a_non_positive_size() {
             json!({ "path": "Board.canvas", "operation": "add_node", "type": "group", "width": 0 }),
         )
         .await;
-    assert_matches(&e, "positive number");
+    assert_matches(&e, "Too small: expected number to be >0 at width$");
 }
 
 // edit_canvas update_node

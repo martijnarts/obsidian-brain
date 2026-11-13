@@ -12,7 +12,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::{blocking, require_non_empty, write_note};
+use super::{blocking, write_note};
 use crate::context::VaultContext;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
@@ -43,8 +43,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("rename_heading", DESCRIPTION, |ctx, args| async move {
-        require_non_empty("from", &args.from)?;
-        require_non_empty("to", &args.to)?;
         blocking(ctx, move |ctx| run(ctx, args)).await
     })
 }

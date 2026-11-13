@@ -10,7 +10,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::check_range;
 use super::json_logic::{self, JsVal};
 use super::list_notes::iso_from_ms;
 use crate::mcp::tool::ToolSpec;
@@ -111,7 +110,6 @@ const FILTER_ERROR: &str = "filter must be a JsonLogic object with exactly one o
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("query_notes", DESCRIPTION, |ctx, args| async move {
-        check_range("limit", args.limit, 1, Some(500))?;
         if !json_logic::is_logic(&args.filter) {
             bail!(FILTER_ERROR);
         }

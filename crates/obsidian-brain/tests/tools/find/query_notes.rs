@@ -250,9 +250,13 @@ async fn skips_notes_the_index_has_but_the_disk_does_not() {
 #[tokio::test]
 async fn rejects_a_filter_that_is_not_one_operator() {
     let f = vault();
-    for filter in [json!({}), json!({"a": 1, "b": 2}), json!([1]), Value::Null] {
+    for filter in [json!({}), json!({"a": 1, "b": 2})] {
         let e = f.err("query_notes", json!({ "filter": filter })).await;
         assert!(e.contains("exactly one operator"), "{e}");
+    }
+    // zod's `z.record` refuses anything but an object.
+    for filter in [json!([1]), Value::Null] {
+        assert!(!f.accepts("query_notes", json!({ "filter": filter })).await);
     }
 }
 

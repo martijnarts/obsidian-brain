@@ -11,7 +11,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::mcp::tool::ToolSpec;
-use crate::util::js;
 use crate::vault::canvas::{
     CanvasDocument, CanvasItem, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, canvas_path,
     content_fields, generate_canvas_id, place_right_of, read_canvas, write_canvas,
@@ -123,23 +122,10 @@ fn nullable<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D
     Ok(Some(Option::deserialize(d)?))
 }
 
-/// zod's `.positive()` on a number.
-fn opt_positive_number<'de, D: Deserializer<'de>>(d: D) -> Result<Option<f64>, D::Error> {
-    use serde::de::Error;
-    match Option::<f64>::deserialize(d)? {
-        Some(x) if x <= 0.0 => Err(D::Error::custom(format!(
-            "expected a positive number, got {}",
-            js::number_to_string(x)
-        ))),
-        other => Ok(other),
-    }
-}
-
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Args {
     /// Vault-relative path of the `.canvas` file. The extension is optional.
-    #[serde(deserialize_with = "super::non_empty")]
     #[schemars(length(min = 1))]
     path: String,
     operation: Operation,
@@ -168,11 +154,9 @@ struct Args {
     x: Option<f64>,
     y: Option<f64>,
     /// Default 400.
-    #[serde(default, deserialize_with = "opt_positive_number")]
     #[schemars(extend("exclusiveMinimum" = 0))]
     width: Option<f64>,
     /// Default 200.
-    #[serde(default, deserialize_with = "opt_positive_number")]
     #[schemars(extend("exclusiveMinimum" = 0))]
     height: Option<f64>,
     /// Edge start node id (`connect`).

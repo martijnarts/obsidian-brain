@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::{blocking, require_non_empty, write_note};
+use super::{blocking, write_note};
 use crate::context::VaultContext;
 use crate::mcp::tool::ToolSpec;
 use crate::tools::support::background_reindex::run_background_reindex;
@@ -53,7 +53,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("search_and_replace", DESCRIPTION, |ctx, args| async move {
-        require_non_empty("pattern", &args.pattern)?;
         blocking(ctx, move |ctx| run(ctx, args)).await
     })
 }
@@ -649,7 +648,7 @@ mod tests {
             ("(a+)+", "quantified group"),
             ("[", "Invalid regex"),
             (long.as_str(), "too long"),
-            ("", "at least 1 character"),
+            ("", "Too small: expected string to have >=1 characters"),
         ] {
             let err = fx
                 .err(

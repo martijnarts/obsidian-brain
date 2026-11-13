@@ -34,7 +34,6 @@ struct Args {
     )]
     metric: Option<Metric>,
     /// Max results to return. Default 20.
-    #[serde(default, deserialize_with = "super::opt_positive")]
     #[schemars(range(min = 1))]
     limit: Option<u64>,
     /// Default `false`. Set `true` to include unresolved wiki-link target stubs (`frontmatter._stub: true`) in the ranked set. With stubs in, popular link targets dominate eigenvector-style centrality even when they have no real content behind them.

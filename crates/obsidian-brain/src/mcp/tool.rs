@@ -16,7 +16,9 @@ pub type JsonObject = Map<String, Value>;
 pub type ToolFuture = Pin<Box<dyn Future<Output = anyhow::Result<Value>> + Send>>;
 type Handler = Arc<dyn Fn(Arc<VaultContext>, JsonObject) -> ToolFuture + Send + Sync>;
 
-/// Why a call never reached the handler.
+/// Why a call never reached the handler: the arguments do not match the
+/// tool's input schema. The server reports it as the TS SDK did, with
+/// `MCP error -32602: Input validation error: ...` and no `Error: `.
 #[derive(Debug, thiserror::Error)]
 #[error("Input validation error: {0}")]
 pub struct InvalidArguments(pub String);
@@ -47,7 +49,7 @@ impl ToolSpec {
             handler: Arc::new(move |ctx, args| {
                 let handler = handler.clone();
                 Box::pin(async move {
-                    let args: A = serde_json::from_value(Value::Object(args))
+                    let args: A = serde_json::from_value(js_integers(Value::Object(args)))
                         .map_err(|e| InvalidArguments(e.to_string()))?;
                     handler(ctx, args).await
                 })
@@ -57,6 +59,19 @@ impl ToolSpec {
 
     pub fn call(&self, ctx: Arc<VaultContext>, args: JsonObject) -> ToolFuture {
         (self.handler)(ctx, args)
+    }
+}
+
+/// Integral floats as integers: JS has one number type, so zod took `5.0`
+/// wherever it took `5`, and serde must too.
+fn js_integers(value: Value) -> Value {
+    match value {
+        Value::Number(n) if n.is_f64() => crate::util::js::number_value(n.as_f64().unwrap_or(0.0)),
+        Value::Array(items) => Value::Array(items.into_iter().map(js_integers).collect()),
+        Value::Object(map) => {
+            Value::Object(map.into_iter().map(|(k, v)| (k, js_integers(v))).collect())
+        }
+        other => other,
     }
 }
 

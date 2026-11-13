@@ -25,7 +25,6 @@ struct Args {
     /// Path or fuzzy match of the note.
     name: String,
     /// 1-based line inside the block.
-    #[serde(default, deserialize_with = "super::opt_positive")]
     #[schemars(range(min = 1))]
     line: Option<u64>,
     /// Heading text; the id goes on that heading line.

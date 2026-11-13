@@ -11,12 +11,14 @@ use serde_json::{Map, Value};
 use crate::config::VaultConfig;
 use crate::context::VaultContext;
 use crate::embeddings::{Embedder, TaskType, share_embedder};
+use crate::mcp::Server;
 use crate::mcp::tool::ToolSpec;
 use crate::pipeline::indexer::materialise_stubs;
 use crate::store::Db;
 use crate::store::edges::insert_edge;
 use crate::store::nodes::upsert_node;
 use crate::vault::parser::parse_vault;
+use crate::vaults::Vaults;
 
 struct ZeroEmbedder;
 
@@ -88,12 +90,24 @@ impl Fixture {
         self.ctx.background_reindex_count()
     }
 
-    /// The tool's result, or its error message.
+    /// The tool's result through the MCP server, or its error message.
     pub async fn call(&self, spec: &ToolSpec, args: Value) -> Result<Value, String> {
-        let args: Map<String, Value> = args.as_object().cloned().unwrap_or_default();
-        let out = spec.call(self.ctx.clone(), args).await;
+        let mut args: Map<String, Value> = args.as_object().cloned().unwrap_or_default();
+        args.insert("vault".into(), self.ctx.config.name.clone().into());
+        let vaults = Arc::new(Vaults::single(self.ctx.clone()));
+        let result = Server::new(vaults, vec![spec.clone()])
+            .call(spec.name, args)
+            .await;
         self.ctx.wait_for_background_reindex().await;
-        out.map_err(|e| e.to_string())
+        let text: String = result
+            .content
+            .iter()
+            .filter_map(|c| c.as_text().map(|t| t.text.as_str()))
+            .collect();
+        if result.is_error == Some(true) {
+            return Err(text.strip_prefix("Error: ").unwrap_or(&text).to_string());
+        }
+        Ok(serde_json::from_str(&text).unwrap_or(Value::String(text)))
     }
 
     pub async fn ok(&self, spec: &ToolSpec, args: Value) -> Value {

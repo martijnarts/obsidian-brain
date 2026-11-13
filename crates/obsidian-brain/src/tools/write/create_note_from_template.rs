@@ -16,7 +16,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::{basename_md, invalid, require_non_empty};
+use super::basename_md;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::{migrate_stub_to_real, upsert_node};
 use crate::tools::support::run_background_reindex;
@@ -62,18 +62,14 @@ pub fn spec() -> ToolSpec {
         "create_note_from_template",
         DESCRIPTION,
         |ctx, args| async move {
-            require_non_empty("template", &args.template)?;
-            require_non_empty("title", &args.title)?;
             // `Object.keys` order: index-like keys first.
             let mut variables = args.variables.unwrap_or_default();
             js::js_object_order(&mut variables);
-            let mut vars: HashMap<String, String> = HashMap::new();
-            for (k, v) in &variables {
-                let Value::String(s) = v else {
-                    return Err(invalid(format!("`variables.{k}` must be a string")));
-                };
-                vars.insert(k.clone(), s.clone());
-            }
+            // The schema made every value a string.
+            let vars: HashMap<String, String> = variables
+                .iter()
+                .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
+                .collect();
 
             let title = args.title;
             let directory = args

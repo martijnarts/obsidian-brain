@@ -185,7 +185,7 @@ async fn pages_with_limit_and_offset() {
     assert!(
         err(&ctx, "list_tasks", json!({ "limit": 1001 }))
             .await
-            .contains("1 to 1000")
+            .contains("Too big: expected number to be <=1000 at limit")
     );
 }
 

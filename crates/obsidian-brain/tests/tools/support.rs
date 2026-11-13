@@ -24,7 +24,7 @@ use serde_json::{Map, Value, json};
 pub use fakes::{FakeEmbedder, context, copy_dir, fixture_vault, write};
 
 /// The start of every argument error.
-pub const INVALID: &str = "Input validation error";
+pub const INVALID: &str = "MCP error -32602: Input validation error: Invalid arguments for tool ";
 
 /// A temp directory with the vault in `vault/` and the data in `data/`.
 pub struct Vault {

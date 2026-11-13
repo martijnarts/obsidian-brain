@@ -11,7 +11,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::invalid;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::resolve_single_note;
 use crate::store::edges::{count_edges_by_source, count_edges_by_target, get_edges_by_source};
@@ -28,6 +27,7 @@ struct Args {
     name: String,
     /// Must literally be `true` to execute. Guards against accidental deletion.
     #[schemars(extend("const" = true))]
+    #[allow(dead_code)]
     confirm: bool,
     /// If true, report what would be deleted without removing any files.
     dry_run: Option<bool>,
@@ -35,9 +35,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("delete_note", DESCRIPTION, |ctx, args| async move {
-        if !args.confirm {
-            return Err(invalid("`confirm` must be true"));
-        }
         let dry_run = args.dry_run == Some(true);
         let job = ctx.clone();
         let out = ctx

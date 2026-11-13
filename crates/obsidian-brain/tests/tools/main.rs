@@ -5,4 +5,5 @@ mod files;
 mod find;
 mod graph;
 mod support;
+mod validation;
 mod write;

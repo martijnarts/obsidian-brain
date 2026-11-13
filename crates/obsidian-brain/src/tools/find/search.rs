@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::check_range;
 use crate::mcp::tool::ToolSpec;
 use crate::search::SearchUnique;
 use crate::tools::support::{SearchHintHit, compute_search_hints, describe_embedder_preparing};
@@ -46,7 +45,6 @@ const FULLTEXT_HINT: &str =
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("search", DESCRIPTION, |ctx, args| async move {
-        check_range("limit", args.limit, 1, None)?;
         let mode = args.mode.unwrap_or(Mode::Hybrid);
         let limit = args.limit.unwrap_or(20) as usize;
         let query = args.query;

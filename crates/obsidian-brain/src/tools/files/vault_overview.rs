@@ -21,11 +21,9 @@ const DESCRIPTION: &str = "One-call orientation for an unfamiliar vault: note an
 #[serde(rename_all = "camelCase")]
 struct Args {
     /// Tags to include. Default 15.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     top_tags: Option<u64>,
     /// Recently modified notes to include. Default 10.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     recent: Option<u64>,
 }

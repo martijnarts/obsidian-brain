@@ -24,16 +24,6 @@ enum Wanted {
     All,
 }
 
-fn limit<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
-    use serde::de::Error;
-    match Option::<u64>::deserialize(d)? {
-        Some(n) if !(1..=1000).contains(&n) => Err(D::Error::custom(format!(
-            "expected an integer from 1 to 1000, got {n}"
-        ))),
-        other => Ok(other),
-    }
-}
-
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Args {
@@ -44,7 +34,6 @@ struct Args {
     /// Default `open`: every status but `x`, `X` and `-`. `done`: `x`/`X`. `all` adds cancelled (`-`).
     status: Option<Wanted>,
     /// Max tasks to return. Default 200, max 1000.
-    #[serde(default, deserialize_with = "limit")]
     #[schemars(range(min = 1, max = 1000))]
     limit: Option<u64>,
     /// Tasks to skip, for paging. Default 0.

@@ -84,5 +84,8 @@ async fn refuses_a_depth_of_zero() {
         json!({ "name": "a.md", "depth": 0 }),
     )
     .await;
-    assert!(e.contains("positive"), "{e}");
+    assert!(
+        e.ends_with("find_connections: Too small: expected number to be >=1 at depth"),
+        "{e}"
+    );
 }

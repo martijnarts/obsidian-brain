@@ -34,11 +34,9 @@ struct Args {
     /// Return only attachments no note references.
     unreferenced_only: Option<bool>,
     /// Max results. Default 100.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     limit: Option<u64>,
     /// Results to skip, for paging. Default 0.
-    #[serde(default, deserialize_with = "args::opt_non_negative")]
     offset: Option<u64>,
 }
 

@@ -30,7 +30,6 @@ struct Args {
     /// Vault-relative folder path.
     path: String,
     /// Must literally be `true` to execute. Guards against accidental deletion.
-    #[serde(deserialize_with = "args::literal_true")]
     #[schemars(extend("const" = true))]
     #[allow(dead_code)]
     confirm: bool,

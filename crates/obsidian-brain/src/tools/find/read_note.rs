@@ -6,7 +6,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::check_range;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
 use crate::store::edges::{
@@ -40,7 +39,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("read_note", DESCRIPTION, |ctx, args| async move {
-        check_range("maxContentLength", args.max_content_length, 1, None)?;
         ctx.db.run(move |c| read_note(c, args)).await
     })
 }

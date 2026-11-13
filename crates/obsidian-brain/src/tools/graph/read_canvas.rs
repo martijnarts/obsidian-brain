@@ -14,7 +14,6 @@ const DESCRIPTION: &str = "Read an Obsidian canvas (JSON Canvas) and return its 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct Args {
     /// Vault-relative path of the `.canvas` file. The extension is optional.
-    #[serde(deserialize_with = "super::non_empty")]
     #[schemars(length(min = 1))]
     path: String,
 }

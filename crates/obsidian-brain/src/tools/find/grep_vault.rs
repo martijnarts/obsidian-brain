@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{check_non_empty, check_range, utf16_cmp};
+use super::utf16_cmp;
 use crate::mcp::tool::ToolSpec;
 use crate::util::js;
 use crate::util::safe_regex::{UserRegex, compile_user_regex};
@@ -105,10 +105,6 @@ fn clip(line: &str, at: usize) -> String {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("grep_vault", DESCRIPTION, |ctx, args| async move {
-        check_non_empty("query", &args.query)?;
-        check_range("contextLines", args.context_lines, 0, Some(10))?;
-        check_range("limit", args.limit, 1, Some(200))?;
-        check_range("maxMatchesPerFile", args.max_matches_per_file, 1, Some(100))?;
         let root = ctx.config.vault_path.clone();
         let origin = Instant::now();
         tokio::task::spawn_blocking(move || {
