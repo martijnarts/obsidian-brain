@@ -3,7 +3,6 @@
 mod create_attachment;
 mod file_info;
 mod folders;
-mod harness;
 mod list_attachments;
 mod list_bookmarks;
 mod list_property_values;

@@ -7,10 +7,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::invalid;
-use super::patch::create_patch;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::resolve_single_note;
+use crate::tools::support::patch::create_patch;
 use crate::tools::support::{
     BufferEntry, EDIT_BUFFER, PREVIEW_STORE, PendingEdit, run_background_reindex,
 };
@@ -170,7 +169,6 @@ impl Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("edit_note", DESCRIPTION, |ctx, args| async move {
-        validate(&args)?;
         let name = args.name.clone();
         let note_path = ctx
             .db
@@ -345,26 +343,6 @@ pub fn spec() -> ToolSpec {
         run_background_reindex(&ctx);
         Ok(Value::Object(out))
     })
-}
-
-/// The range checks of the TS schema.
-fn validate(args: &Args) -> Result<()> {
-    let check = |prefix: &str, threshold: Option<f64>, line: Option<u64>| -> Result<()> {
-        if threshold.is_some_and(|t| !(0.0..=1.0).contains(&t)) {
-            return Err(invalid(format!(
-                "`{prefix}fuzzyThreshold` must be between 0 and 1"
-            )));
-        }
-        if line == Some(0) {
-            return Err(invalid(format!("`{prefix}line` must be greater than 0")));
-        }
-        Ok(())
-    };
-    check("", args.fuzzy_threshold, args.line)?;
-    for (i, item) in args.edits.iter().flatten().enumerate() {
-        check(&format!("edits[{i}]."), item.fuzzy_threshold, item.line)?;
-    }
-    Ok(())
 }
 
 fn read_for_dry_run(abs: &std::path::Path, note_path: &str) -> Result<String> {

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use crate::context::VaultContext;
-use crate::mcp::tool::{InvalidArguments, ToolSpec};
+use crate::mcp::tool::ToolSpec;
 use crate::util::errors::node_fs_error_message;
 
 pub fn specs() -> Vec<ToolSpec> {
@@ -34,17 +34,6 @@ where
     F: FnOnce(&Arc<VaultContext>) -> anyhow::Result<Value> + Send + 'static,
 {
     tokio::task::spawn_blocking(move || f(&ctx)).await?
-}
-
-/// The check zod's `.min(1)` made on a required string.
-fn require_non_empty(field: &str, value: &str) -> anyhow::Result<()> {
-    if value.is_empty() {
-        return Err(InvalidArguments(format!(
-            "{field}: String must contain at least 1 character(s)"
-        ))
-        .into());
-    }
-    Ok(())
 }
 
 /// `writeFileAtomic`, with the error message Node.js gave the failed step:

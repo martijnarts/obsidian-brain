@@ -6,11 +6,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::patch::create_patch;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
 use crate::store::nodes::all_node_ids;
 use crate::tools::support::background_reindex::run_background_reindex;
+use crate::tools::support::patch::create_patch;
+use crate::util::js::basename_md;
 use crate::vault::block_id::{
     BLOCK_ID, all_block_ids, attach_block_id, existing_block_id, find_heading_lines,
     generate_block_id, locate_block,
@@ -25,7 +26,6 @@ struct Args {
     /// Path or fuzzy match of the note.
     name: String,
     /// 1-based line inside the block.
-    #[serde(default, deserialize_with = "super::opt_positive")]
     #[schemars(range(min = 1))]
     line: Option<u64>,
     /// Heading text; the id goes on that heading line.
@@ -57,15 +57,6 @@ fn heading_target(lines: &[&str], heading: &str, path: &str) -> Result<usize> {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-    }
-}
-
-/// `path.posix.basename(path, ".md")`.
-fn basename_md(path: &str) -> &str {
-    let base = path.rsplit('/').next().unwrap_or(path);
-    match base.strip_suffix(".md") {
-        Some(stem) if !stem.is_empty() => stem,
-        _ => base,
     }
 }
 

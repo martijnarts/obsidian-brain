@@ -13,13 +13,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::args::iso_time;
 use crate::mcp::tool::ToolSpec;
 use crate::store::edges::{count_edges_by_target, get_edges_by_source};
 use crate::store::nodes::get_node;
 use crate::types::Frontmatter;
 use crate::util::errors::node_fs_error_message;
 use crate::util::js;
+use crate::util::js::iso_time;
 use crate::vault::frontmatter;
 use crate::vault::note_parts::{count_tasks, extract_headings};
 use crate::vault::parser::extract_inline_tags;

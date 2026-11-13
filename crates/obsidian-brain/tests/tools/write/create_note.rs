@@ -17,7 +17,7 @@ fn guarded() -> (Vault, std::path::PathBuf) {
     std::fs::create_dir(&outside).unwrap();
     v.write("A.md", "# A\n");
     std::os::unix::fs::symlink(&outside, v.path().join("linked")).unwrap();
-    v.node("A.md", "A");
+    v.row("A.md", "A");
     (v, outside)
 }
 

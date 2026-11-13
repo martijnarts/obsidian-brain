@@ -8,12 +8,12 @@ use std::time::{Duration, Instant};
 use obsidian_brain::store::nodes::get_node;
 use serde_json::{Value, json};
 
-use crate::support::{TestEmbedder, Vault};
+use crate::support::{FakeEmbedder, Vault};
 
 /// A vault indexed with a ready embedder, then a fresh context over the
 /// same files whose embedder is still loading.
-async fn loading_vault(files: &[(&str, &str)]) -> (Vault, Arc<TestEmbedder>) {
-    let embedder = Arc::new(TestEmbedder::gated());
+async fn loading_vault(files: &[(&str, &str)]) -> (Vault, Arc<FakeEmbedder>) {
+    let embedder = Arc::new(FakeEmbedder::instant().gated());
     let v = Vault::with_embedder(embedder.clone());
     for (rel, content) in files {
         v.write(rel, content);
@@ -35,7 +35,7 @@ async fn check(files: &[(&str, &str)], tool: &str, args: Value, indexed: &str) {
     assert!(!v.ctx.embedder_ready());
     assert_eq!(v.ctx.background_reindex_count(), 1);
 
-    embedder.release();
+    embedder.release_init(Ok(()));
     tokio::time::timeout(Duration::from_secs(10), v.ctx.wait_for_background_reindex())
         .await
         .expect("the reindex finishes once the embedder is ready");

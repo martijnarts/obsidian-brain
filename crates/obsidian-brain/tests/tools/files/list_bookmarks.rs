@@ -2,9 +2,9 @@
 
 use serde_json::{Value, json};
 
-use super::harness::{Harness, assert_contains};
+use crate::support::{Vault, assert_contains};
 
-fn write_bookmarks(h: &Harness, content: &Value) {
+fn write_bookmarks(h: &Vault, content: &Value) {
     let text = match content {
         Value::String(s) => s.clone(),
         other => other.to_string(),
@@ -40,7 +40,7 @@ fn sample() -> Value {
 
 #[tokio::test]
 async fn returns_an_empty_list_with_a_note_when_the_file_is_absent() {
-    let h = Harness::new();
+    let h = Vault::new();
     let out = h.ok("list_bookmarks", json!({})).await;
     assert_eq!(out["items"], json!([]));
     assert_eq!(out["totalItems"], 0);
@@ -49,7 +49,7 @@ async fn returns_an_empty_list_with_a_note_when_the_file_is_absent() {
 
 #[tokio::test]
 async fn returns_an_empty_list_with_a_note_when_the_file_is_malformed() {
-    let h = Harness::new();
+    let h = Vault::new();
     for content in [json!("{not json"), json!({ "nope": true }), json!("null")] {
         write_bookmarks(&h, &content);
         let out = h.ok("list_bookmarks", json!({})).await;
@@ -59,7 +59,7 @@ async fn returns_an_empty_list_with_a_note_when_the_file_is_malformed() {
 
 #[tokio::test]
 async fn returns_the_hierarchy_with_known_fields_only_and_drops_unknown_types() {
-    let h = Harness::new();
+    let h = Vault::new();
     write_bookmarks(&h, &sample());
     let out = h.ok("list_bookmarks", json!({})).await;
     assert!(out.get("note").is_none());
@@ -91,7 +91,7 @@ async fn returns_the_hierarchy_with_known_fields_only_and_drops_unknown_types() 
 
 #[tokio::test]
 async fn types_without_group_flattens_group_contents() {
-    let h = Harness::new();
+    let h = Vault::new();
     write_bookmarks(&h, &sample());
     let out = h
         .ok("list_bookmarks", json!({ "types": ["file", "block"] }))
@@ -108,7 +108,7 @@ async fn types_without_group_flattens_group_contents() {
 
 #[tokio::test]
 async fn types_with_group_keeps_groups_and_filters_their_children() {
-    let h = Harness::new();
+    let h = Vault::new();
     write_bookmarks(&h, &sample());
     let out = h
         .ok("list_bookmarks", json!({ "types": ["group", "folder"] }))
@@ -126,7 +126,7 @@ async fn types_with_group_keeps_groups_and_filters_their_children() {
 
 #[tokio::test]
 async fn a_group_without_items_gets_an_empty_items_array() {
-    let h = Harness::new();
+    let h = Vault::new();
     write_bookmarks(
         &h,
         &json!({ "items": [{ "type": "group", "title": "Empty" }] }),

@@ -8,4 +8,3 @@ mod list_notes;
 mod query_notes;
 mod read_note;
 mod search;
-mod support;

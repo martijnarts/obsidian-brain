@@ -11,8 +11,8 @@ use crate::support::Vault;
 async fn removed_edges_wrap_the_result_in_a_next_actions_envelope() {
     let v = Vault::new();
     v.write("target.md", "# Target\n");
-    v.node("target.md", "Target");
-    v.node("other.md", "Other");
+    v.row("target.md", "Target");
+    v.row("other.md", "Other");
     v.edge("target.md", "other.md", "");
     let out = v
         .ok(
@@ -40,7 +40,7 @@ async fn removed_edges_wrap_the_result_in_a_next_actions_envelope() {
 async fn no_removed_edges_give_the_bare_result() {
     let v = Vault::new();
     v.write("lonely.md", "# Lonely\n");
-    v.node("lonely.md", "Lonely");
+    v.row("lonely.md", "Lonely");
     let out = v
         .ok(
             "delete_note",
@@ -61,10 +61,10 @@ async fn no_removed_edges_give_the_bare_result() {
 async fn a_dry_run_reports_without_deleting() {
     let v = Vault::new();
     v.write("victim.md", "# Victim\n");
-    v.node("victim.md", "Victim");
-    v.node("other.md", "Other");
+    v.row("victim.md", "Victim");
+    v.row("other.md", "Other");
     v.edge("victim.md", "other.md", "");
-    v.node("_stub/Ghost.md", "Ghost");
+    v.row("_stub/Ghost.md", "Ghost");
     v.edge("victim.md", "_stub/Ghost.md", "");
     let out = v
         .ok(
@@ -93,7 +93,7 @@ async fn a_dry_run_reports_without_deleting() {
 async fn confirm_must_be_true() {
     let v = Vault::new();
     v.write("keep.md", "# Keep\n");
-    v.node("keep.md", "Keep");
+    v.row("keep.md", "Keep");
     let err = v
         .err(
             "delete_note",

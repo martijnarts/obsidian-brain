@@ -63,7 +63,7 @@ async fn excludes_stub_neighbours_unless_asked() {
         json!({ "name": "a.md", "depth": 1 }),
     )
     .await;
-    assert!(!ids(&default["data"]).contains(&"_stub/Ghost.md"));
+    assert!(!ids(&default["data"]).contains(&"_stub/Ghost.md".into()));
     let with_stubs = ok(
         &ctx,
         "find_connections",
@@ -71,8 +71,8 @@ async fn excludes_stub_neighbours_unless_asked() {
     )
     .await;
     let found = ids(&with_stubs["data"]);
-    assert!(found.contains(&"b.md"));
-    assert!(found.contains(&"_stub/Ghost.md"));
+    assert!(found.contains(&"b.md".into()));
+    assert!(found.contains(&"_stub/Ghost.md".into()));
 }
 
 #[tokio::test]
@@ -84,5 +84,8 @@ async fn refuses_a_depth_of_zero() {
         json!({ "name": "a.md", "depth": 0 }),
     )
     .await;
-    assert!(e.contains("positive"), "{e}");
+    assert!(
+        e.ends_with("find_connections: Too small: expected number to be >=1 at depth"),
+        "{e}"
+    );
 }

@@ -1,8 +1,8 @@
 use serde_json::json;
 
-use crate::support::{Fixture, fixture, write};
+use crate::support::{Vault, fixture, write};
 
-fn vault() -> Fixture {
+fn vault() -> Vault {
     fixture(&[
         (
             "Alpha.md",
@@ -165,7 +165,7 @@ async fn folder_restricts_the_scan_recursively() {
 async fn clips_very_long_lines_around_the_match() {
     let f = vault();
     let long = format!("{}NEEDLE{}\nshort\n", "x".repeat(2000), "y".repeat(2000));
-    f.write(&[("Long.md", &long)]);
+    f.write_all(&[("Long.md", &long)]);
     let out = f.ok("grep_vault", json!({"query": "needle"})).await;
     let file = out["files"]
         .as_array()
@@ -196,8 +196,8 @@ async fn rejects_unsafe_and_invalid_regexes() {
 async fn refuses_folders_outside_the_vault_including_through_a_symlink() {
     let f = vault();
     let outside = tempfile::tempdir().unwrap();
-    write(outside.path(), &[("secret.md", "widget secret\n")]);
-    std::os::unix::fs::symlink(outside.path(), f.vault().join("Escape")).unwrap();
+    write(outside.path(), "secret.md", "widget secret\n");
+    std::os::unix::fs::symlink(outside.path(), f.path().join("Escape")).unwrap();
     for (folder, want) in [
         ("Escape", "outside the vault"),
         ("../x", "outside the vault"),

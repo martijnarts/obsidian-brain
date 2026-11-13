@@ -12,10 +12,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::tools::support::background_reindex::run_background_reindex;
 use crate::util::errors::node_fs_error_message;
+use crate::util::js;
 use crate::vault::mover::delete_note;
 use crate::vault::vault_path::resolve_vault_path;
 
@@ -30,7 +30,6 @@ struct Args {
     /// Vault-relative folder path.
     path: String,
     /// Must literally be `true` to execute. Guards against accidental deletion.
-    #[serde(deserialize_with = "args::literal_true")]
     #[schemars(extend("const" = true))]
     #[allow(dead_code)]
     confirm: bool,
@@ -82,7 +81,7 @@ pub fn spec() -> ToolSpec {
 
         if args.dry_run == Some(true) {
             let mut paths: Vec<&String> = folders.iter().chain(&files).collect();
-            paths.sort_by(|a, b| args::utf16_cmp(a, b));
+            paths.sort_by(|a, b| js::utf16_cmp(a, b));
             let mut out = Map::new();
             out.insert("dryRun".into(), true.into());
             out.insert("path".into(), rel.clone().into());

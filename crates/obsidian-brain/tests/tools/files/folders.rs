@@ -4,7 +4,7 @@ use obsidian_brain::store::edges::{count_edges_by_source, count_edges_by_target}
 use obsidian_brain::store::nodes::get_node;
 use serde_json::json;
 
-use super::harness::{Harness, INVALID, assert_contains, outside, symlink};
+use crate::support::{INVALID, Vault, assert_contains, outside, symlink};
 
 fn is_empty_dir(p: &std::path::Path) -> bool {
     std::fs::read_dir(p).unwrap().next().is_none()
@@ -12,7 +12,7 @@ fn is_empty_dir(p: &std::path::Path) -> bool {
 
 #[tokio::test]
 async fn create_folder_creates_a_nested_folder_chain() {
-    let h = Harness::new();
+    let h = Vault::new();
     let out = h.ok("create_folder", json!({ "path": "A/B/C" })).await;
     assert_eq!(out, json!({ "path": "A/B/C", "created": true }));
     assert!(h.abs("A/B/C").is_dir());
@@ -20,7 +20,7 @@ async fn create_folder_creates_a_nested_folder_chain() {
 
 #[tokio::test]
 async fn create_folder_is_idempotent_and_normalises_slashes() {
-    let h = Harness::new();
+    let h = Vault::new();
     h.ok("create_folder", json!({ "path": "A" })).await;
     assert_eq!(
         h.ok("create_folder", json!({ "path": "A/" })).await,
@@ -34,7 +34,7 @@ async fn create_folder_is_idempotent_and_normalises_slashes() {
 
 #[tokio::test]
 async fn create_folder_refuses_the_root_an_existing_file_and_escapes() {
-    let h = Harness::new();
+    let h = Vault::new();
     h.write("file.txt", "x");
     for path in ["", "./"] {
         assert_contains(
@@ -52,12 +52,12 @@ async fn create_folder_refuses_the_root_an_existing_file_and_escapes() {
             &["outside the vault"],
         );
     }
-    assert!(!h.vault.join("../escape").exists());
+    assert!(!h.path().join("../escape").exists());
 }
 
 #[tokio::test]
 async fn create_folder_refuses_to_create_through_a_symlink_that_leaves_the_vault() {
-    let h = Harness::new();
+    let h = Vault::new();
     let out = outside();
     symlink(out.path(), &h.abs("out"));
     assert_contains(
@@ -73,8 +73,8 @@ async fn create_folder_refuses_to_create_through_a_symlink_that_leaves_the_vault
     );
 }
 
-fn delete_harness() -> Harness {
-    let h = Harness::new();
+fn delete_harness() -> Vault {
+    let h = Vault::new();
     h.write("Proj/A.md", "# A\n[[Keep]] [[Ghost]]\n");
     h.write("Proj/Sub/B.md", "# B\n");
     h.write("Proj/Sub/pic.png", "png");
@@ -84,13 +84,13 @@ fn delete_harness() -> Harness {
     h.node("Proj/Stale.md", "Stale", "", json!({}));
     h.node("Keep.md", "Keep", "", json!({}));
     h.node("_stub/Ghost.md", "Ghost", "", json!({ "_stub": true }));
-    h.edge("Proj/A.md", "Keep.md");
-    h.edge("Proj/A.md", "_stub/Ghost.md");
-    h.edge("Keep.md", "Proj/A.md");
+    h.edge("Proj/A.md", "Keep.md", "");
+    h.edge("Proj/A.md", "_stub/Ghost.md", "");
+    h.edge("Keep.md", "Proj/A.md", "");
     h
 }
 
-fn indexed(h: &Harness, id: &str) -> bool {
+fn indexed(h: &Vault, id: &str) -> bool {
     h.ctx.db.with(|c| get_node(c, id)).unwrap().is_some()
 }
 

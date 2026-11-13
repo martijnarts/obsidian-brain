@@ -7,8 +7,8 @@ use obsidian_brain::store::chunks::{upsert_chunk_row, upsert_chunk_vector};
 use obsidian_brain::types::Chunk;
 use serde_json::json;
 
-use super::support::FakeEmbedder;
 use super::{context, err, node, ok};
+use crate::support::FakeEmbedder;
 
 fn setup() -> (tempfile::TempDir, Arc<VaultContext>) {
     let dir = tempfile::tempdir().unwrap();

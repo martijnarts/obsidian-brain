@@ -8,9 +8,9 @@
 /// and prefix `*` keep working. Anything else is phrase-quoted, with inner
 /// double quotes doubled.
 pub fn escape_fts5_query(query: &str) -> String {
-    let plain = query
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '*' || super::is_js_space(c));
+    let plain = query.chars().all(|c| {
+        c.is_ascii_alphanumeric() || c == '_' || c == '*' || crate::util::js::is_js_whitespace(c)
+    });
     if query.is_empty() || plain {
         return query.to_string();
     }

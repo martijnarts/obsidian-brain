@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Result, now_ms};
+use super::Result;
+use crate::util::js::now_ms;
 
 /// The last indexed mtime (ms, possibly fractional) of `path`.
 pub fn get_sync_mtime(conn: &Connection, path: &str) -> Result<Option<f64>> {

@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::{check_non_empty, check_range};
 use crate::mcp::tool::ToolSpec;
 use crate::types::Frontmatter;
 use crate::util::js;
@@ -136,8 +135,6 @@ pub fn note_aliases(fm: &Frontmatter) -> Vec<String> {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("find_notes_by_name", DESCRIPTION, |ctx, args| async move {
-        check_non_empty("query", &args.query)?;
-        check_range("limit", args.limit, 1, Some(100))?;
         ctx.db.run(move |c| find(c, args)).await
     })
 }
@@ -214,7 +211,7 @@ fn find(c: &rusqlite::Connection, args: Args) -> anyhow::Result<Value> {
             row.insert("matchedOn".into(), h.matched_on.as_str().into());
             // Math.round(score * 1000) / 1000
             let rounded = (h.score * 1000.0 + 0.5).floor() / 1000.0;
-            row.insert("score".into(), js::number_value(rounded));
+            row.insert("score".into(), rounded.into());
             if let Some(alias) = &h.alias {
                 row.insert("alias".into(), alias.clone().into());
             }

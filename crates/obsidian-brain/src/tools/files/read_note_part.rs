@@ -7,7 +7,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
 use crate::util::errors::node_fs_error_message;
@@ -35,11 +34,9 @@ struct Args {
     /// For `heading`: heading text, or a nested path like `Parent > Child`.
     heading: Option<String>,
     /// For `lines`: first line, 1-based, inclusive.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     start_line: Option<u64>,
     /// For `lines`: last line, inclusive. Default and maximum: the end of the note.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     end_line: Option<u64>,
     /// For `block`: the block id, with or without the leading `^`.

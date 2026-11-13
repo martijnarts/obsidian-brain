@@ -19,7 +19,6 @@ struct Args {
     /// Starting note (path or fuzzy match).
     name: String,
     /// Number of hops to traverse. Default 1, max 3.
-    #[serde(default, deserialize_with = "super::opt_positive")]
     #[schemars(range(min = 1))]
     depth: Option<u64>,
     /// Return all edges in the neighborhood as a full subgraph instead of a flat list.

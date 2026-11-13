@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::harness::{Harness, INVALID, assert_contains};
+use crate::support::{INVALID, Vault, assert_contains};
 
 const NOTE: &[&str] = &[
     "---",                // 1
@@ -38,18 +38,18 @@ const NOTE: &[&str] = &[
     "",
 ];
 
-fn harness() -> Harness {
-    let h = Harness::new();
+fn harness() -> Vault {
+    let h = Vault::new();
     h.write("Plan.md", NOTE.join("\n"));
     h.node("Plan.md", "Plan", "", json!({}));
     h
 }
 
-async fn part(h: &Harness, args: serde_json::Value) -> serde_json::Value {
+async fn part(h: &Vault, args: serde_json::Value) -> serde_json::Value {
     h.ok("read_note_part", args).await
 }
 
-async fn fail(h: &Harness, args: serde_json::Value) -> String {
+async fn fail(h: &Vault, args: serde_json::Value) -> String {
     h.err("read_note_part", args).await
 }
 

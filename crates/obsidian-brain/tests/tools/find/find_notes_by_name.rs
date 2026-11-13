@@ -1,8 +1,8 @@
 use serde_json::json;
 
-use crate::support::{Fixture, fixture, paths};
+use crate::support::{Vault, fixture, paths};
 
-fn vault() -> Fixture {
+fn vault() -> Vault {
     let f = fixture(&[
         (
             "Finance/Kelly criterion.md",
@@ -19,7 +19,7 @@ fn vault() -> Fixture {
         ("People/Robert Jones.md", "hi\n"),
         ("Inbox/Robbery report.md", "hi\n"),
     ]);
-    f.index();
+    f.seed_index();
     f
 }
 

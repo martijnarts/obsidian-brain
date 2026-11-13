@@ -31,7 +31,7 @@ async fn a_link_adds_the_edge_and_the_line() {
 async fn a_dry_run_returns_the_line_without_writing() {
     let v = Vault::new();
     v.write("A.md", "# A\n");
-    v.node("A.md", "A");
+    v.row("A.md", "A");
     let out = v
         .ok(
             "link_notes",
@@ -56,7 +56,7 @@ async fn a_dry_run_returns_the_line_without_writing() {
 async fn an_empty_context_is_refused() {
     let v = Vault::new();
     v.write("A.md", "# A\n");
-    v.node("A.md", "A");
+    v.row("A.md", "A");
     let err = v
         .err(
             "link_notes",

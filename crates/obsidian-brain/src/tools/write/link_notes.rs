@@ -6,7 +6,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::require_non_empty;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::resolve_single_note;
 use crate::tools::support::run_background_reindex;
@@ -29,7 +28,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("link_notes", DESCRIPTION, |ctx, args| async move {
-        require_non_empty("context", &args.context)?;
         let Args {
             source,
             target,

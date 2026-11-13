@@ -5,10 +5,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::{basename_md, require_non_empty};
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::migrate_stub_to_real;
 use crate::tools::support::run_background_reindex;
+use crate::util::js::basename_md;
 use crate::vault::writer::CreateNodeOptions;
 
 const DESCRIPTION: &str = "Create a new note in the vault with a title, body, and optional YAML frontmatter. The new note is indexed immediately so semantic search and graph tools can find it. Auto-injects a `title:` field into frontmatter matching the note title unless frontmatter already has one.";
@@ -28,7 +28,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("create_note", DESCRIPTION, |ctx, args| async move {
-        require_non_empty("title", &args.title)?;
         let title = args.title.clone();
         let job = ctx.clone();
         let path = ctx

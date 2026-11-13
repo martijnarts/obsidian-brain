@@ -134,8 +134,8 @@ async fn reports_placeholders_it_could_not_fill() {
 #[tokio::test]
 async fn migrates_a_forward_reference_stub() {
     let v = vault();
-    v.node("Other.md", "Other");
-    v.node("_stub/Linked.md", "Linked");
+    v.row("Other.md", "Other");
+    v.row("_stub/Linked.md", "Linked");
     v.edge("Other.md", "_stub/Linked.md", "[[Linked]]");
     v.ok(
         "create_note_from_template",

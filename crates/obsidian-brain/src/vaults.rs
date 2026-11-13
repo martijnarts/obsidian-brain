@@ -100,6 +100,18 @@ impl Vaults {
         Ok(out)
     }
 
+    /// A set of one context that is already open, under its config name.
+    pub fn single(ctx: Arc<VaultContext>) -> Self {
+        Self {
+            shared: ctx.shared_embedder().clone(),
+            vaults: vec![Vault {
+                name: ctx.config.name.clone(),
+                ctx,
+                watcher: Mutex::new(None),
+            }],
+        }
+    }
+
     pub fn names(&self) -> Vec<String> {
         self.vaults.iter().map(|v| v.name.clone()).collect()
     }

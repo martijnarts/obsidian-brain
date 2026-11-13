@@ -3,8 +3,8 @@ use std::sync::Arc;
 use obsidian_brain::context::VaultContext;
 use serde_json::{Value, json};
 
-use super::support::write;
 use super::{context, err, node, ok};
+use crate::support::write;
 
 const PROJECT: &str = "---
 title: Project
@@ -185,7 +185,7 @@ async fn pages_with_limit_and_offset() {
     assert!(
         err(&ctx, "list_tasks", json!({ "limit": 1001 }))
             .await
-            .contains("1 to 1000")
+            .contains("Too big: expected number to be <=1000 at limit")
     );
 }
 

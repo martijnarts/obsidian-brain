@@ -3,13 +3,13 @@ use obsidian_brain::store::nodes::upsert_node;
 use obsidian_brain::types::{ParsedEdge, ParsedNode};
 use serde_json::{Value, json};
 
-use crate::support::{Fixture, fixture};
+use crate::support::{Vault, fixture};
 
 fn has(list: &Value, key: &str, id: &str) -> bool {
     list.as_array().unwrap().iter().any(|e| e[key] == id)
 }
 
-fn edge(f: &Fixture, source: &str, target: &str, context: &str) {
+fn edge(f: &Vault, source: &str, target: &str, context: &str) {
     f.db()
         .with(|c| {
             insert_edge(

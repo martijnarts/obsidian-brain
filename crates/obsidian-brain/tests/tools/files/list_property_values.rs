@@ -2,10 +2,10 @@
 
 use serde_json::json;
 
-use super::harness::{Harness, INVALID, assert_contains};
+use crate::support::{INVALID, Vault, assert_contains};
 
-fn harness() -> Harness {
-    let h = Harness::new();
+fn harness() -> Vault {
+    let h = Vault::new();
     h.node(
         "Work/a.md",
         "a",

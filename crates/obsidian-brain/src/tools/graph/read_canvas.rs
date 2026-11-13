@@ -14,7 +14,6 @@ const DESCRIPTION: &str = "Read an Obsidian canvas (JSON Canvas) and return its 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct Args {
     /// Vault-relative path of the `.canvas` file. The extension is optional.
-    #[serde(deserialize_with = "super::non_empty")]
     #[schemars(length(min = 1))]
     path: String,
 }
@@ -24,8 +23,6 @@ pub fn spec() -> ToolSpec {
         let path = canvas_path(&args.path);
         let doc = read_canvas(&ctx.config.vault_path, &path)?
             .ok_or_else(|| anyhow!("Canvas not found: {path}"))?;
-        Ok(super::js_numbers(
-            json!({ "path": path, "nodes": doc.nodes, "edges": doc.edges }),
-        ))
+        Ok(json!({ "path": path, "nodes": doc.nodes, "edges": doc.edges }))
     })
 }

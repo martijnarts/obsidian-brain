@@ -11,7 +11,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::{blocking, require_non_empty, write_note};
+use super::{blocking, write_note};
 use crate::context::VaultContext;
 use crate::mcp::tool::ToolSpec;
 use crate::tools::support::background_reindex::run_background_reindex;
@@ -39,8 +39,6 @@ struct Args {
 
 pub fn spec() -> ToolSpec {
     ToolSpec::new::<Args, _, _>("rename_tag", DESCRIPTION, |ctx, args| async move {
-        require_non_empty("from", &args.from)?;
-        require_non_empty("to", &args.to)?;
         blocking(ctx, move |ctx| run(ctx, args)).await
     })
 }
@@ -452,7 +450,10 @@ mod tests {
             (json!({"from": "123", "to": "x"}), "Invalid tag \"123\""),
             (json!({"from": "a", "to": "b c"}), "Invalid tag \"b c\""),
             (json!({"from": "a", "to": "#a"}), "the same tag"),
-            (json!({"from": "", "to": "a"}), "at least 1 character"),
+            (
+                json!({"from": "", "to": "a"}),
+                "Too small: expected string to have >=1 characters",
+            ),
         ];
         for (args, msg) in cases {
             let err = fx.err(&spec(), args).await;

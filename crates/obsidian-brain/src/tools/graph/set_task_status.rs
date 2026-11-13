@@ -22,7 +22,6 @@ struct Args {
     /// Path or fuzzy match of the note.
     name: String,
     /// 1-based line of the task, as `list_tasks` returns it.
-    #[serde(deserialize_with = "super::positive")]
     #[schemars(range(min = 1))]
     line: u64,
     /// `open` (space), `done` (`x`), or one raw status character such as `/` or `-`.

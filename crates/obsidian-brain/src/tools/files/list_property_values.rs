@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::all_notes;
 use crate::util::js::{json_stringify, locale_compare};
@@ -14,13 +13,11 @@ const DESCRIPTION: &str = "List the distinct values of one frontmatter property 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct Args {
     /// Frontmatter key, e.g. `status`.
-    #[serde(deserialize_with = "args::non_empty")]
     #[schemars(length(min = 1))]
     key: String,
     /// Only notes under this folder.
     folder: Option<String>,
     /// Max distinct values to return. Default 100.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     limit: Option<u64>,
 }

@@ -8,7 +8,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::resolve::single_note::resolve_single_note;
 use crate::store::nodes::get_node;
@@ -20,11 +19,9 @@ const DESCRIPTION: &str = "Read up to 20 notes in one call. Returns one entry pe
 #[serde(rename_all = "camelCase")]
 struct Args {
     /// Paths, filenames, or fuzzy matches of the notes to read.
-    #[serde(deserialize_with = "args::one_to_twenty")]
     #[schemars(length(min = 1, max = 20))]
     names: Vec<String>,
     /// Max body chars per note before truncation. Default 2000.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     max_content_length: Option<u64>,
 }

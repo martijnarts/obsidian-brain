@@ -1,7 +1,7 @@
 use serde_json::json;
 
-use super::support::{copy_dir, fixture_vault};
 use super::{context, ok};
+use crate::support::{copy_dir, fixture_vault};
 
 #[tokio::test]
 async fn indexes_the_vault_and_records_the_manual_reason() {

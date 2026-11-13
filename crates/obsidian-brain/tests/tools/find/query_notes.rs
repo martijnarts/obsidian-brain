@@ -2,18 +2,18 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
-use crate::support::{Fixture, fixture, paths};
+use crate::support::{Vault, fixture, paths};
 
-fn set_mtime(f: &Fixture, rel: &str, iso_secs: u64) {
+fn set_mtime(f: &Vault, rel: &str, iso_secs: u64) {
     let file = std::fs::File::options()
         .write(true)
-        .open(f.vault().join(rel))
+        .open(f.path().join(rel))
         .unwrap();
     file.set_modified(UNIX_EPOCH + Duration::from_secs(iso_secs))
         .unwrap();
 }
 
-fn vault() -> Fixture {
+fn vault() -> Vault {
     let f = fixture(&[
         (
             "Books/Dune.md",
@@ -30,13 +30,13 @@ fn vault() -> Fixture {
         ("Areas/Work.md", "---\ntags: [area/work]\n---\nbody\n"),
         ("Root.md", "plain note\n"),
     ]);
-    f.index();
+    f.seed_index();
     set_mtime(&f, "Root.md", 1_577_836_800); // 2020-01-01T00:00:00Z
     set_mtime(&f, "Books/Dune.md", 1_717_200_000); // 2024-06-01T00:00:00Z
     f
 }
 
-async fn query(f: &Fixture, args: Value) -> Value {
+async fn query(f: &Vault, args: Value) -> Value {
     f.ok("query_notes", args).await
 }
 
@@ -49,7 +49,7 @@ async fn filters_on_a_frontmatter_value_and_returns_the_note_record() {
     )
     .await;
     assert_eq!(out["total"], 1);
-    let size = std::fs::metadata(f.vault().join("Books/Dune.md"))
+    let size = std::fs::metadata(f.path().join("Books/Dune.md"))
         .unwrap()
         .len();
     assert_eq!(
@@ -250,9 +250,13 @@ async fn skips_notes_the_index_has_but_the_disk_does_not() {
 #[tokio::test]
 async fn rejects_a_filter_that_is_not_one_operator() {
     let f = vault();
-    for filter in [json!({}), json!({"a": 1, "b": 2}), json!([1]), Value::Null] {
+    for filter in [json!({}), json!({"a": 1, "b": 2})] {
         let e = f.err("query_notes", json!({ "filter": filter })).await;
         assert!(e.contains("exactly one operator"), "{e}");
+    }
+    // zod's `z.record` refuses anything but an object.
+    for filter in [json!([1]), Value::Null] {
+        assert!(!f.accepts("query_notes", json!({ "filter": filter })).await);
     }
 }
 

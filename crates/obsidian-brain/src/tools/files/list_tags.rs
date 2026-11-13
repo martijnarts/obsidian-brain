@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::args;
 use crate::mcp::tool::ToolSpec;
 use crate::store::nodes::all_notes;
 use crate::util::js::locale_compare;
@@ -25,7 +24,6 @@ struct Args {
     /// Default `count` (descending). `name` sorts alphabetically.
     sort: Option<Sort>,
     /// Max tags to return. Default 100.
-    #[serde(default, deserialize_with = "args::opt_positive")]
     #[schemars(range(min = 1))]
     limit: Option<u64>,
     /// Only tags starting with this text, e.g. `project/`.

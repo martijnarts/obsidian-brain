@@ -3,8 +3,9 @@
 use rusqlite::{Connection, params};
 
 use super::nodes::get_node;
-use super::{Result, js_trim, utf16_len, utf16_prefix, vector_blob};
+use super::{Result, vector_blob};
 use crate::types::SearchResult;
+use crate::util::js::{trim as js_trim, utf16_len, utf16_prefix};
 
 /// Insert or replace the embedding of `node_id`. A no-op when the node is
 /// missing.

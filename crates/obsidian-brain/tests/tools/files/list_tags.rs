@@ -2,10 +2,10 @@
 
 use serde_json::{Value, json};
 
-use super::harness::Harness;
+use crate::support::Vault;
 
-fn harness() -> Harness {
-    let h = Harness::new();
+fn harness() -> Vault {
+    let h = Vault::new();
     h.node(
         "a.md",
         "a",
@@ -93,7 +93,7 @@ async fn limit_truncates_and_reports_it() {
 
 #[tokio::test]
 async fn returns_an_empty_list_for_a_vault_without_tags() {
-    let h = Harness::new();
+    let h = Vault::new();
     assert_eq!(
         h.ok("list_tags", json!({})).await,
         json!({ "totalTags": 0, "truncated": false, "tags": [] })

@@ -32,6 +32,10 @@ pub fn spec() -> ToolSpec {
   `Value::String` is sent as plain text; anything else is pretty-printed
   JSON. An `Err` becomes `Error: <message>` with `isError`. These match the
   TS `registerTool` in `src/tools/register.ts`.
+- The MCP layer checks the arguments against the input schema before the
+  handler runs, as the SDK checked them against zod. Write no range or
+  length checks in a handler; check only what the schema cannot say, such
+  as a rule across two fields.
 - Field doc comments become schema descriptions. A doc comment on the
   struct itself is dropped. Use `#[schemars(description = "...")]` when the
   exact text is awkward as a doc comment.

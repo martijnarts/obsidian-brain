@@ -1,6 +1,7 @@
-//! jsdiff 9's `createPatch`: a unified diff of two texts, line by line,
-//! with four lines of context. The edit script follows jsdiff's Myers
-//! variant, so the hunks match the TypeScript server's byte for byte.
+//! jsdiff 9's `createPatch` (the npm `diff` package): a unified diff of two
+//! texts, line by line, with four lines of context. The edit script
+//! follows jsdiff's Myers variant, so the hunks match the TypeScript
+//! server's byte for byte.
 
 /// One run of equal, added or removed tokens, linked to the run before it.
 #[derive(Clone, Copy)]
@@ -350,6 +351,24 @@ pub fn create_patch(
 #[cfg(test)]
 mod tests {
     use super::create_patch;
+    use serde_json::Value;
+
+    /// Cases captured from `createPatch` of the npm `diff` package 9.0.0.
+    #[test]
+    fn matches_the_npm_diff_package() {
+        let cases: Vec<Value> = serde_json::from_str(include_str!("diff_cases.json")).unwrap();
+        assert!(!cases.is_empty());
+        for case in cases {
+            let got = create_patch(
+                case["file"].as_str().unwrap(),
+                case["old"].as_str().unwrap(),
+                case["new"].as_str().unwrap(),
+                "original",
+                "proposed",
+            );
+            assert_eq!(got, case["patch"].as_str().unwrap(), "case {case}");
+        }
+    }
 
     #[test]
     fn a_one_line_change_in_the_middle() {

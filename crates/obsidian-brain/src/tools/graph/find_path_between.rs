@@ -20,7 +20,6 @@ struct Args {
     /// Target note (path or fuzzy match).
     to: String,
     /// Maximum path length in hops. Default 3.
-    #[serde(default, deserialize_with = "super::opt_positive")]
     #[schemars(range(min = 1))]
     max_depth: Option<u64>,
     /// Also return notes that both `from` and `to` link to (shared neighbors).

@@ -152,52 +152,141 @@ pub fn to_js_string(v: &Value) -> String {
     }
 }
 
-/// `JSON.stringify(v)`: compact, with JS number formatting.
+/// `JSON.stringify(v)`: compact, with JS number formatting and JS key order.
 pub fn json_stringify(v: &Value) -> String {
-    let mut out = String::new();
-    write_json(&mut out, v);
-    out
+    write_js_json(v, serde_json::ser::CompactFormatter)
 }
 
-fn write_json(out: &mut String, v: &Value) {
-    match v {
-        Value::Null => out.push_str("null"),
-        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64().filter(|i| i.unsigned_abs() <= 1 << 53) {
-                out.push_str(&i.to_string());
-            } else {
-                let x = as_f64(n);
-                out.push_str(&if x.is_finite() {
-                    number_to_string(x)
-                } else {
-                    "null".into()
-                });
-            }
-        }
-        Value::String(s) => out.push_str(&serde_json::to_string(s).expect("strings serialize")),
-        Value::Array(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
+/// `JSON.stringify(v, null, 2)`.
+pub fn json_stringify_pretty(v: &Value) -> String {
+    write_js_json(v, serde_json::ser::PrettyFormatter::new())
+}
+
+fn write_js_json<F: serde_json::ser::Formatter>(v: &Value, inner: F) -> String {
+    use serde::Serialize;
+    let mut out = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut out, JsFormatter(inner));
+    JsOrder(v)
+        .serialize(&mut ser)
+        .expect("a JSON value serializes");
+    String::from_utf8(out).expect("serde_json writes UTF-8")
+}
+
+/// A value serialized with its object keys in JS order: array-index keys
+/// first in ascending order, then the rest in insertion order.
+struct JsOrder<'a>(&'a Value);
+
+impl serde::Serialize for JsOrder<'_> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeSeq};
+        match self.0 {
+            Value::Array(items) => {
+                let mut seq = s.serialize_seq(Some(items.len()))?;
+                for item in items {
+                    seq.serialize_element(&JsOrder(item))?;
                 }
-                write_json(out, item);
+                seq.end()
             }
-            out.push(']');
-        }
-        Value::Object(map) => {
-            out.push('{');
-            for (i, (k, item)) in map.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
+            Value::Object(map) => {
+                let mut index: Vec<(u64, &String, &Value)> = map
+                    .iter()
+                    .filter(|(k, _)| is_array_index(k))
+                    .map(|(k, v)| (k.parse().unwrap_or(0), k, v))
+                    .collect();
+                index.sort_by_key(|(n, _, _)| *n);
+                let mut out = s.serialize_map(Some(map.len()))?;
+                for (_, k, v) in index {
+                    out.serialize_entry(k, &JsOrder(v))?;
                 }
-                out.push_str(&serde_json::to_string(k).expect("strings serialize"));
-                out.push(':');
-                write_json(out, item);
+                for (k, v) in map.iter().filter(|(k, _)| !is_array_index(k)) {
+                    out.serialize_entry(k, &JsOrder(v))?;
+                }
+                out.end()
             }
-            out.push('}');
+            other => other.serialize(s),
         }
+    }
+}
+
+/// A serde_json formatter that writes numbers as `JSON.stringify` does:
+/// the digits of [`number_to_string`], and integers past 2^53 rounded to
+/// the nearest double first.
+struct JsFormatter<F>(F);
+
+const MAX_EXACT: u64 = 1 << 53;
+
+impl<F: serde_json::ser::Formatter> JsFormatter<F> {
+    fn number<W: ?Sized + std::io::Write>(&mut self, w: &mut W, x: f64) -> std::io::Result<()> {
+        if x.is_finite() {
+            w.write_all(number_to_string(x).as_bytes())
+        } else {
+            w.write_all(b"null")
+        }
+    }
+}
+
+macro_rules! delegate {
+    ($($name:ident($($arg:ident: $ty:ty),*);)*) => {
+        $(
+            fn $name<W: ?Sized + std::io::Write>(&mut self, w: &mut W $(, $arg: $ty)*) -> std::io::Result<()> {
+                self.0.$name(w $(, $arg)*)
+            }
+        )*
+    };
+}
+
+impl<F: serde_json::ser::Formatter> serde_json::ser::Formatter for JsFormatter<F> {
+    fn write_i64<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: i64) -> std::io::Result<()> {
+        if v.unsigned_abs() <= MAX_EXACT {
+            self.0.write_i64(w, v)
+        } else {
+            self.number(w, v as f64)
+        }
+    }
+
+    fn write_u64<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: u64) -> std::io::Result<()> {
+        if v <= MAX_EXACT {
+            self.0.write_u64(w, v)
+        } else {
+            self.number(w, v as f64)
+        }
+    }
+
+    fn write_i128<W: ?Sized + std::io::Write>(
+        &mut self,
+        w: &mut W,
+        v: i128,
+    ) -> std::io::Result<()> {
+        self.number(w, v as f64)
+    }
+
+    fn write_u128<W: ?Sized + std::io::Write>(
+        &mut self,
+        w: &mut W,
+        v: u128,
+    ) -> std::io::Result<()> {
+        self.number(w, v as f64)
+    }
+
+    fn write_f32<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: f32) -> std::io::Result<()> {
+        self.number(w, f64::from(v))
+    }
+
+    fn write_f64<W: ?Sized + std::io::Write>(&mut self, w: &mut W, v: f64) -> std::io::Result<()> {
+        self.number(w, v)
+    }
+
+    delegate! {
+        begin_array();
+        end_array();
+        begin_array_value(first: bool);
+        end_array_value();
+        begin_object();
+        end_object();
+        begin_object_key(first: bool);
+        end_object_key();
+        begin_object_value();
+        end_object_value();
     }
 }
 
@@ -263,6 +352,77 @@ pub fn utf16_slice(s: &str, start: usize, end: usize) -> String {
     let end = end.min(units.len());
     let start = start.min(end);
     String::from_utf16_lossy(&units[start..end])
+}
+
+/// `new Date(ms).toISOString()` for a whole number of milliseconds;
+/// years outside 0 to 9999 get a sign and six digits.
+pub fn iso_string(ms: i64) -> String {
+    let days = ms.div_euclid(86_400_000);
+    let rem = ms.rem_euclid(86_400_000);
+    // civil_from_days
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    let year = if (0..=9999).contains(&y) {
+        format!("{y:04}")
+    } else {
+        format!("{}{:06}", if y < 0 { '-' } else { '+' }, y.abs())
+    };
+    format!(
+        "{year}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rem / 3_600_000,
+        rem / 60_000 % 60,
+        rem / 1000 % 60,
+        rem % 1000
+    )
+}
+
+/// `new Date(ms).toISOString()`; the fraction of a millisecond is dropped.
+/// `None` where JS throws: NaN and times past the `Date` range.
+pub fn iso_from_ms(ms: f64) -> Option<String> {
+    (ms.abs() <= 8.64e15).then(|| iso_string(ms.trunc() as i64))
+}
+
+/// `date.toISOString()` for a file time, as `fs.Stats` gives it.
+pub fn iso_time(t: std::time::SystemTime) -> String {
+    let ms = match t.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs_f64() * 1000.0,
+        Err(e) => -(e.duration().as_secs_f64() * 1000.0),
+    };
+    iso_from_ms(ms).unwrap_or_default()
+}
+
+/// JS `<` on strings, and the default `sort()` order: by UTF-16 code units.
+pub fn utf16_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
+/// `s.slice(0, max)` on UTF-16 units, as a `&str`: a cut inside a
+/// surrogate pair drops the whole character.
+pub fn utf16_prefix(s: &str, max: usize) -> &str {
+    &s[..utf16_to_byte(s, max)]
+}
+
+/// `path.posix.basename(p, '.md')`.
+pub fn basename_md(p: &str) -> &str {
+    basename(p, ".md")
+}
+
+/// `path.posix.basename(p, ext)`: the last segment, trailing slashes
+/// ignored, without `ext` unless `ext` is all of it.
+pub fn basename<'a>(p: &'a str, ext: &str) -> &'a str {
+    let trimmed = p.trim_end_matches('/');
+    let base = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    match base.strip_suffix(ext) {
+        Some(stem) if !stem.is_empty() && !ext.is_empty() => stem,
+        _ => base,
+    }
 }
 
 /// The process environment as a map, the shape of `process.env`.
@@ -360,6 +520,61 @@ mod tests {
         );
     }
 
+    /// Expected texts captured from Node's `JSON.stringify`.
+    #[test]
+    fn json_stringify_numbers_match_node() {
+        let floats = [
+            (1.9169625785304565e-6, "0.0000019169625785304565"),
+            (1e0, "1"),
+            (-1e0, "-1"),
+            (5e-1, "0.5"),
+            (1e21, "1e+21"),
+            (1e-7, "1e-7"),
+            (9.999999999999999e20, "999999999999999900000"),
+            (1.5e-7, "1.5e-7"),
+            (1.23456e2, "123.456"),
+            (0.0, "0"),
+            (-0.0, "0"),
+            (3.0000000000000004e-1, "0.30000000000000004"),
+            (5e-324, "5e-324"),
+            (1.7976931348623157e308, "1.7976931348623157e+308"),
+            (1e-6, "0.000001"),
+            (1.2345678901234568e20, "123456789012345680000"),
+            (9.007199254740992e15, "9007199254740992"),
+            (1.8446744073709552e19, "18446744073709552000"),
+            (-1e-7, "-1e-7"),
+            (1.234e-6, "0.000001234"),
+        ];
+        for (x, want) in floats {
+            let v = Value::Number(serde_json::Number::from_f64(x).unwrap());
+            assert_eq!(json_stringify(&v), want, "{x:e}");
+            assert_eq!(json_stringify_pretty(&v), want, "{x:e}");
+        }
+        assert_eq!(json_stringify(&json!(u64::MAX)), "18446744073709552000");
+        assert_eq!(
+            json_stringify(&json!(9007199254740993i64)),
+            "9007199254740992"
+        );
+        assert_eq!(
+            json_stringify(&json!(-9007199254740992i64)),
+            "-9007199254740992"
+        );
+        assert_eq!(json_stringify(&json!(42)), "42");
+    }
+
+    /// `JSON.stringify(v, null, 2)` in Node, for the same value.
+    #[test]
+    fn json_stringify_pretty_matches_node() {
+        let v = json!({
+            "b": [1.5, {"2": "x", "a": null, "1": true}],
+            "s": "\u{2028}\u{2029}\u{7f}\u{1}\u{1f}\u{8}\t\"\\/é😀",
+            "e": [],
+            "o": {},
+        });
+        let want = "{\n  \"b\": [\n    1.5,\n    {\n      \"1\": true,\n      \"2\": \"x\",\n      \"a\": null\n    }\n  ],\n  \"s\": \"\u{2028}\u{2029}\u{7f}\\u0001\\u001f\\b\\t\\\"\\\\/é😀\",\n  \"e\": [],\n  \"o\": {}\n}";
+        assert_eq!(json_stringify_pretty(&v), want);
+    }
+
     #[test]
     fn object_order_puts_index_keys_first() {
         let mut m = json!({"b": 1, "2": 2, "a": 3, "1": 4, "01": 5})
@@ -390,6 +605,30 @@ mod tests {
         assert_eq!(byte_to_utf16(s, 5), 3);
         assert_eq!(trim("\u{feff} x \u{a0}"), "x");
         assert_eq!(trim("\u{85}x"), "\u{85}x");
+    }
+
+    #[test]
+    fn iso_strings_match_date_to_iso_string() {
+        assert_eq!(iso_string(0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(iso_string(-1), "1969-12-31T23:59:59.999Z");
+        assert_eq!(iso_string(253402300800000), "+010000-01-01T00:00:00.000Z");
+        assert_eq!(
+            iso_from_ms(1.9).as_deref(),
+            Some("1970-01-01T00:00:00.001Z")
+        );
+        assert_eq!(iso_from_ms(f64::NAN), None);
+        assert_eq!(iso_from_ms(8.64e15 + 1.0), None);
+    }
+
+    #[test]
+    fn basename_is_node_posix_basename() {
+        assert_eq!(basename("a/b.md", ".md"), "b");
+        assert_eq!(basename("b.md", ".md"), "b");
+        assert_eq!(basename("a/.md", ".md"), ".md");
+        assert_eq!(basename("a/b/", ""), "b");
+        assert_eq!(basename("a\\b.md", ".md"), "a\\b");
+        assert_eq!(utf16_prefix("a🎉b", 2), "a");
+        assert_eq!(utf16_prefix("a🎉b", 3), "a🎉");
     }
 
     #[test]
