@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["cargo", "github-actions", "nix"],
+  "timezone": "Europe/Amsterdam",
+  "schedule": ["before 6am on monday"],
+  "automerge": true,
+  "automergeSchedule": ["after 8am and before 9am"],
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "Mend adds a rule before this config that holds every update for approval on the Dependency Dashboard. Later rules win, so this one lets Renovate open the PRs itself.",
+      "matchPackageNames": ["*"],
+      "dependencyDashboardApproval": false
+    },
+    {
+      "description": "One weekly pull request for the minor and patch updates of the crates.",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "crates"
+    }
+  ]
+}
